@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>天晟急診排班系統</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;background:#f0f2f5;color:#333;font-size:14px;}
+#header{background:#1a4a7a;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+#header h1{font-size:17px;font-weight:700;flex:1;min-width:120px;}
+.nav-btn{background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:13px;}
+.nav-btn:hover{background:rgba(255,255,255,0.35);}
+#month-label{font-size:16px;font-weight:600;min-width:90px;text-align:center;}
+.action-btn{border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;}
+.btn-red{background:#e74c3c;}.btn-green{background:#27ae60;}.btn-blue{background:#2980b9;}.btn-orange{background:#e67e22;}.btn-gray{background:#6c757d;}.btn-purple{background:#8e44ad;}
+#tabs{background:#fff;border-bottom:2px solid #ddd;display:flex;flex-wrap:wrap;}
+.tab{padding:10px 16px;cursor:pointer;font-weight:500;color:#666;border-bottom:2px solid transparent;margin-bottom:-2px;font-size:13px;}
+.tab.active{color:#1a4a7a;border-bottom-color:#1a4a7a;font-weight:700;}
+.tab:hover{color:#1a4a7a;}
+#content{padding:10px;}
+.tab-pane{display:none;}.tab-pane.active{display:block;}
+/* ===== CALENDAR ===== */
+#cal-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;font-size:12px;}
+.split-control{display:inline-flex;align-items:center;gap:6px;background:#fff;padding:4px 10px;border-radius:4px;border:1px solid #ddd;font-size:12px;}
+.split-control label{color:#555;font-weight:600;}
+.split-control select{padding:2px 6px;border:1px solid #ccc;border-radius:3px;font-size:12px;}
+#calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-weekday{background:#1a4a7a;color:#fff;text-align:center;padding:5px;font-size:12px;font-weight:700;border-radius:3px;}
+.cal-weekday.weekend{background:#c0392b;}
+.cal-day{background:#fff;border:1px solid #ddd;border-radius:4px;min-height:135px;padding:4px;cursor:pointer;transition:border-color .15s;position:relative;}
+.cal-day:hover{border-color:#1a4a7a;box-shadow:0 0 0 2px rgba(26,74,122,0.12);}
+.cal-day.holiday{background:#fff5f5;}
+.cal-day.empty{background:transparent;border:none;cursor:default;}
+.day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;}
+.day-num{font-size:12px;font-weight:700;}
+.day-num.weekend-num{color:#c0392b;}
+.day-badges{display:flex;gap:2px;align-items:center;flex-wrap:wrap;}
+.badge-hol{font-size:9px;background:#c0392b;color:#fff;padding:1px 4px;border-radius:2px;cursor:pointer;}
+.badge-sethol{font-size:9px;background:#eee;color:#666;padding:1px 4px;border-radius:2px;cursor:pointer;display:none;}
+.cal-day:hover .badge-sethol{display:inline;}
+.badge-split{font-size:9px;background:#3498db;color:#fff;padding:1px 4px;border-radius:2px;cursor:pointer;}
+.shift-row{display:flex;align-items:center;gap:3px;margin-bottom:3px;min-height:20px;}
+.slot-tag{width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;border-radius:2px;flex-shrink:0;}
+.tag-主白{background:#fff8e1;color:#e65100;border:1px solid #ffcc02;}
+.tag-早班{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+.tag-晚班{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;}
+.tag-大夜{background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;}
+.shift-doc{flex:1;padding:2px 5px;border-radius:3px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;min-width:0;gap:2px;}
+.shift-doc .doc-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;}
+.shift-doc .doc-time{font-size:9px;opacity:0.85;flex-shrink:0;white-space:nowrap;}
+.shift-doc.empty-slot{color:#bbb;font-style:italic;background:#f9f9f9;border:1px dashed #ddd;}
+.shift-doc.empty-slot .doc-name{font-size:11px;}
+.shift-doc.empty-slot:hover{background:#e3f2fd;border-color:#90caf9;}
+.pr-badge-row{margin-top:2px;display:flex;flex-wrap:wrap;gap:1px;}
+.pr-badge{font-size:8px;background:#9b59b6;color:#fff;padding:1px 3px;border-radius:2px;}
+/* ===== DOCTOR TABLE ===== */
+#doctor-table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);}
+#doctor-table th{background:#1a4a7a;color:#fff;padding:7px 8px;text-align:left;font-size:11px;}
+#doctor-table td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px;vertical-align:middle;}
+#doctor-table tr:hover td{background:#f5f9ff;}
+.color-dot{width:14px;height:14px;border-radius:50%;display:inline-block;vertical-align:middle;}
+.pref-badge{display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:700;margin:1px;}
+.pref-more{background:#d4edda;color:#155724;}.pref-less{background:#f8d7da;color:#721c24;}
+.btn-sm{padding:3px 7px;border:none;border-radius:3px;cursor:pointer;font-size:10px;margin:1px;}
+.btn-edit{background:#3498db;color:#fff;}.btn-del{background:#e74c3c;color:#fff;}.btn-link{background:#8e44ad;color:#fff;}
+/* ===== MODAL ===== */
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal{background:#fff;border-radius:8px;padding:18px;max-width:580px;width:95%;max-height:92vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+.modal h2{font-size:15px;margin-bottom:12px;color:#1a4a7a;border-bottom:2px solid #1a4a7a;padding-bottom:5px;}
+.modal h3{font-size:13px;margin:10px 0 5px;color:#555;font-weight:700;}
+.form-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap;}
+.form-row label{min-width:110px;font-size:11px;font-weight:700;color:#555;}
+.form-row input,.form-row select{padding:4px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px;}
+.pref-slider{display:flex;align-items:center;gap:5px;flex:1;}
+.pref-slider input[type=range]{flex:1;}
+.pref-value{min-width:36px;text-align:center;font-size:11px;background:#eee;padding:2px 5px;border-radius:3px;}
+.check-row{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:5px;}
+.modal-actions{margin-top:12px;display:flex;justify-content:flex-end;gap:8px;}
+.btn-primary{background:#1a4a7a;color:#fff;border:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:13px;}
+.btn-secondary{background:#95a5a6;color:#fff;border:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:13px;}
+/* ===== PRE-REQUEST ===== */
+#pre-req-panel{background:#fff;border-radius:6px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.1);}
+.pr-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+.pr-form>div>div:first-child{font-size:10px;color:#888;margin-bottom:2px;}
+.pr-form select,.pr-form input{padding:4px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px;}
+#pre-req-list table{width:100%;border-collapse:collapse;}
+#pre-req-list th{background:#f5f5f5;padding:5px 7px;font-size:11px;text-align:left;border-bottom:2px solid #ddd;}
+#pre-req-list td{padding:4px 7px;font-size:11px;border-bottom:1px solid #eee;}
+/* ===== STATS ===== */
+.stats-wrap{overflow-x:auto;}
+#stats-table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);min-width:900px;font-size:11px;}
+#stats-table th{background:#1a4a7a;color:#fff;padding:6px 8px;text-align:center;white-space:nowrap;}
+#stats-table th.sub-hd{background:#2980b9;}
+#stats-table td{padding:5px 8px;border-bottom:1px solid #eee;text-align:center;}
+#stats-table tr:hover td{background:#f5f9ff;}
+.alert{padding:7px 12px;border-radius:4px;margin-bottom:7px;font-size:12px;}
+.alert-warn{background:#fff3cd;border:1px solid #ffc107;color:#856404;}
+.alert-ok{background:#d4edda;border:1px solid #c3e6cb;color:#155724;}
+/* ===== DAY MODAL TABLE ===== */
+.day-slot-table{width:100%;border-collapse:collapse;margin-bottom:10px;}
+.day-slot-table th{background:#f0f2f5;padding:6px;font-size:11px;text-align:center;}
+.day-slot-table td{padding:5px 6px;font-size:12px;border-bottom:1px solid #eee;vertical-align:middle;}
+.day-slot-table td:first-child{font-weight:700;}
+/* ===== DOC LEGEND ===== */
+#doc-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:3px;}
+.legend-item{display:inline-flex;align-items:center;gap:3px;font-size:11px;}
+/* ===== PERSONAL PAGE ===== */
+#personal-page-wrap{max-width:700px;margin:0 auto;}
+.personal-card{background:#fff;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.1);}
+.personal-card h3{font-size:14px;color:#1a4a7a;margin-bottom:10px;font-weight:700;display:flex;align-items:center;gap:6px;}
+.doc-link-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eee;flex-wrap:wrap;}
+.doc-link-row:last-child{border-bottom:none;}
+.doc-tag{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;}
+/* ===== PERSONAL VIEW (standalone) ===== */
+#pv-wrap{max-width:660px;margin:20px auto;padding:0 12px;}
+#pv-header{background:#1a4a7a;color:#fff;padding:14px 20px;border-radius:8px 8px 0 0;margin-bottom:0;}
+#pv-header h1{font-size:18px;}
+#pv-header p{font-size:12px;opacity:.8;margin-top:3px;}
+#pv-body{background:#fff;border-radius:0 0 8px 8px;padding:18px;box-shadow:0 4px 16px rgba(0,0,0,.15);}
+.pv-section{margin-bottom:18px;}
+.pv-section h2{font-size:14px;color:#1a4a7a;font-weight:700;margin-bottom:10px;padding-bottom:5px;border-bottom:2px solid #e0e7ef;}
+.pv-pr-table{width:100%;border-collapse:collapse;font-size:12px;}
+.pv-pr-table th{background:#f0f4f8;padding:6px 8px;text-align:left;}
+.pv-pr-table td{padding:5px 8px;border-bottom:1px solid #eee;}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🏥 天晟急診排班系統</h1>
+  <button class="nav-btn" onclick="changeMonth(-1)">&#9664; 上月</button>
+  <span id="month-label"></span>
+  <button class="nav-btn" onclick="changeMonth(1)">下月 &#9654;</button>
+  <button class="action-btn btn-green" onclick="autoSchedule()">⚡ 自動排班</button>
+  <button class="action-btn btn-orange" onclick="clearSchedule()">🗑 清空</button>
+  <button class="action-btn btn-blue" onclick="exportCSV()">📊 匯出CSV</button>
+  <button class="action-btn btn-red" onclick="saveData()">💾 儲存</button>
+  <button class="action-btn btn-gray" onclick="loadData()">📂 載入</button>
+</div>
+
+<div id="tabs">
+  <div class="tab active" onclick="switchTab('schedule')">📅 排班表</div>
+  <div class="tab" onclick="switchTab('doctors')">👨‍⚕️ 醫師設定</div>
+  <div class="tab" onclick="switchTab('prereq')">📝 預假/預班</div>
+  <div class="tab" onclick="switchTab('stats')">📈 統計報表</div>
+  <div class="tab" onclick="switchTab('personal')">👤 個人頁面</div>
+</div>
+
+<div id="content">
+
+  <!-- ======= 排班表 ======= -->
+  <div id="tab-schedule" class="tab-pane active">
+    <div id="cal-header">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:11px">
+          <span class="slot-tag tag-主白" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">主白</span>08:00-20:00(12h)
+          &nbsp;
+          <span class="slot-tag tag-早班" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">早班</span>08:00-切割點
+          &nbsp;
+          <span class="slot-tag tag-晚班" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">晚班</span>切割點-02:00
+          &nbsp;
+          <span class="slot-tag tag-大夜" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">大夜</span>20:00-08:00(12h)
+        </span>
+        <div class="split-control">
+          <label>預設切割點：</label>
+          <select id="default-split" onchange="state.defaultSplit=parseInt(this.value)">
+            <option value="14">14:00</option><option value="15">15:00</option>
+            <option value="16">16:00</option><option value="17">17:00</option>
+            <option value="18">18:00</option><option value="19">19:00</option>
+            <option value="20" selected>20:00</option>
+          </select>
+          <span style="font-size:10px;color:#888">(自動排班初始值)</span>
+        </div>
+      </div>
+      <div id="doc-legend"></div>
+    </div>
+    <div id="calendar-grid"></div>
+  </div>
+
+  <!-- ======= 醫師設定 ======= -->
+  <div id="tab-doctors" class="tab-pane">
+    <div style="margin-bottom:8px;display:flex;justify-content:flex-end;">
+      <button class="action-btn btn-green" onclick="openDocModal()">+ 新增醫師</button>
+    </div>
+    <table id="doctor-table">
+      <thead>
+        <tr>
+          <th>色</th><th>姓名</th><th>類型</th><th>白班(08上班)</th><th>小夜(-02)</th><th>大夜(20-08)</th>
+          <th>假日</th><th>目標時數</th><th>連班上限</th><th>特殊</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="doctor-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ======= 預假/預班 ======= -->
+  <div id="tab-prereq" class="tab-pane">
+    <div id="pre-req-panel">
+      <h3 style="margin-bottom:8px">新增預假/預班</h3>
+      <div class="pr-form">
+        <div><div>醫師</div><select id="pr-doc"></select></div>
+        <div><div>開始日期</div><input type="date" id="pr-date-start"></div>
+        <div><div>結束日期（可選，連選）</div><input type="date" id="pr-date-end" placeholder="同開始日期"></div>
+        <div><div>類型</div>
+          <select id="pr-type" onchange="onPRTypeChange()">
+            <option value="OFF">當天OFF</option>
+            <option value="OFF_NO_BIG">當天OFF + 前天不排大夜</option>
+            <option value="OFF_NO_NIGHT">當天OFF + 前天不排晚班/大夜</option>
+            <option value="WORK_主白">預上班 - 主白(08-20)</option>
+            <option value="WORK_早班">預上班 - 早班</option>
+            <option value="WORK_晚班">預上班 - 晚班</option>
+            <option value="WORK_大夜">預上班 - 大夜(20-08)</option>
+            <option value="WORK_CUSTOM">預上班 - 自訂時間</option>
+          </select>
+        </div>
+        <div id="custom-div" style="display:none">
+          <div>自訂時段 (HH-HH)</div>
+          <input type="text" id="pr-custom" placeholder="例: 08-17 或 17-02" style="width:110px">
+        </div>
+        <div><div>備註</div><input type="text" id="pr-note" style="width:110px" placeholder="(可留空)"></div>
+        <button class="action-btn btn-green" onclick="addPR()">新增</button>
+      </div>
+      <h3 style="margin-bottom:6px">預假/預班清單</h3>
+      <div id="pre-req-list">
+        <table>
+          <thead><tr><th>日期</th><th>醫師</th><th>類型</th><th>備註</th><th>操作</th></tr></thead>
+          <tbody id="pr-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= 統計報表 ======= -->
+  <div id="tab-stats" class="tab-pane">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+      <strong>統計月份：</strong><span id="stats-month"></span>
+      <button class="action-btn btn-blue" onclick="renderStats()">重新計算</button>
+    </div>
+    <div class="stats-wrap">
+      <table id="stats-table">
+        <thead>
+          <tr>
+            <th rowspan="2">醫師</th>
+            <th colspan="3">主白 08-20</th>
+            <th colspan="3">早班</th>
+            <th colspan="3">晚班</th>
+            <th colspan="3">大夜 20-08</th>
+            <th rowspan="2">總時數</th>
+            <th colspan="3">假日各班時數</th>
+            <th colspan="3">點值</th>
+            <th rowspan="2">轉班次</th>
+            <th rowspan="2">最長連班</th>
+          </tr>
+          <tr>
+            <th class="sub-hd">次</th><th class="sub-hd">平日h</th><th class="sub-hd">假日h</th>
+            <th class="sub-hd">次</th><th class="sub-hd">平日h</th><th class="sub-hd">假日h</th>
+            <th class="sub-hd">次</th><th class="sub-hd">平日h</th><th class="sub-hd">假日h</th>
+            <th class="sub-hd">次</th><th class="sub-hd">平日h</th><th class="sub-hd">假日h</th>
+            <th class="sub-hd" style="background:#e67e22">假日白h</th>
+            <th class="sub-hd" style="background:#e67e22">假日小夜h</th>
+            <th class="sub-hd" style="background:#e67e22">假日大夜h</th>
+            <th class="sub-hd">平日</th><th class="sub-hd">假日</th><th class="sub-hd">合計</th>
+          </tr>
+        </thead>
+        <tbody id="stats-tbody"></tbody>
+      </table>
+    </div>
+    <div id="stats-violations" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- ======= 個人頁面 ======= -->
+  <div id="tab-personal" class="tab-pane">
+    <div id="personal-page-wrap">
+      <div class="personal-card">
+        <h3>📋 各醫師個人連結</h3>
+        <p style="font-size:11px;color:#666;margin-bottom:10px">點「開啟個人頁面」可讓醫師在自己的瀏覽器中填寫設定與預假。醫師填完後可「匯出個人資料」，管理員再用下方「匯入醫師資料」更新。</p>
+        <div id="personal-doc-links"></div>
+      </div>
+      <div class="personal-card">
+        <h3>📥 匯入醫師回傳資料</h3>
+        <p style="font-size:11px;color:#666;margin-bottom:8px">醫師匯出的JSON檔案，管理員載入後即可更新該醫師的設定及預假/預班。</p>
+        <button class="action-btn btn-purple" onclick="importDoctorData()">匯入醫師資料 (JSON)</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ======= DAY MODAL ======= -->
+<div id="day-modal" class="modal-overlay">
+  <div class="modal" style="max-width:520px">
+    <h2 id="day-modal-title"></h2>
+    <div id="day-modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('day-modal')">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======= DOCTOR MODAL ======= -->
+<div id="doctor-modal" class="modal-overlay">
+  <div class="modal">
+    <h2 id="doc-modal-title">醫師設定</h2>
+    <input type="hidden" id="doc-id">
+    <div class="form-row"><label>姓名</label><input type="text" id="doc-name"></div>
+    <div class="form-row"><label>類型</label>
+      <select id="doc-type">
+        <option value="full">專任 (參與自動排班)</option>
+        <option value="part">兼任 (僅手動/預班)</option>
+      </select>
+    </div>
+    <div class="form-row"><label>顏色</label><input type="color" id="doc-color" style="width:55px;height:28px;padding:2px;"></div>
+    <h3>班別偏好 (-2 少 → 0 普通 → +2 多)</h3>
+    <div class="form-row"><label>白班偏好 (08上班)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-白班" min="-2" max="2" step="1" value="0" oninput="updPV('白班',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-白班">0</span></div></div>
+    <div class="form-row"><label>小夜偏好 (迄02:00)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-小夜" min="-2" max="2" step="1" value="0" oninput="updPV('小夜',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-小夜">0</span></div></div>
+    <div class="form-row"><label>大夜偏好 (20-08)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-大夜" min="-2" max="2" step="1" value="0" oninput="updPV('大夜',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-大夜">0</span></div></div>
+    <div class="form-row"><label>假日偏好</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-hol" min="-2" max="2" step="1" value="0" oninput="updPV('hol',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-hol">0</span></div></div>
+    <h3>時數與連班</h3>
+    <div class="form-row"><label>目標時數 最少</label><input type="number" id="pref-hmin" value="140" min="0" max="300" style="width:70px"><label style="min-width:30px">最多</label><input type="number" id="pref-hmax" value="220" min="0" max="300" style="width:70px"></div>
+    <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
+    <h3>特殊選項</h3>
+    <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(>10h)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-cnight"><label for="pref-cnight">夜班連上 (偏好連續大夜)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">週末夜班 (僅五六日排大夜)</label></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('doctor-modal')">取消</button>
+      <button class="btn-primary" onclick="saveDoc()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  year: new Date().getFullYear(),
+  month: new Date().getMonth(),
+  holidays: new Set(),
+  defaultSplit: 20,
+  schedule: {},
+  preRequests: {},
+  doctors: [
+    {id:'d1',name:'陳孝綱',type:'full',color:'#1565c0',prefs:defPrefs()},
+    {id:'d2',name:'賴雨濃',type:'full',color:'#2e7d32',prefs:defPrefs()},
+    {id:'d3',name:'鄧世達',type:'full',color:'#e65100',prefs:defPrefs()},
+    {id:'d4',name:'方智鴻',type:'full',color:'#6a1b9a',prefs:defPrefs()},
+    {id:'d5',name:'許景棠',type:'full',color:'#00695c',prefs:defPrefs()},
+    {id:'d6',name:'楊尚衡',type:'full',color:'#c62828',prefs:defPrefs()},
+    {id:'d7',name:'謝見杰',type:'part',color:'#4e342e',prefs:defPrefs()},
+  ],
+};
+let _idCnt = 8;
+
+function defPrefs(){
+  return {'白班':0,'小夜':0,'大夜':0,hol:0,hMin:140,hMax:220,maxConsec:6,long:false,cNight:false,wkNight:false};
+}
+// Map a slot to its preference category
+function slotPrefKey(slot){
+  if(slot==='主白'||slot==='早班') return '白班';
+  if(slot==='晚班') return '小夜';
+  return '大夜'; // 大夜
+}
+
+// ============================================================
+// DATE HELPERS
+// ============================================================
+function fmtDate(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
+function getDOW(dateStr){
+  const[y,mo,d]=dateStr.split('-').map(Number);
+  const raw=new Date(Date.UTC(y,mo-1,d)).getUTCDay();
+  return (raw+6)%7; // Mon=0 ... Sun=6
+}
+function addDays(dateStr,n){
+  const[y,mo,d]=dateStr.split('-').map(Number);
+  const dt=new Date(Date.UTC(y,mo-1,d));
+  dt.setUTCDate(dt.getUTCDate()+n);
+  return dt.toISOString().slice(0,10);
+}
+function isWeekend(dateStr){const dow=getDOW(dateStr);return dow===5||dow===6;}
+function isHoliday(dateStr){return state.holidays.has(dateStr)||isWeekend(dateStr);}
+function monthDates(y,m){const a=[];for(let d=1;d<=daysInMonth(y,m);d++)a.push(fmtDate(y,m,d));return a;}
+
+// ============================================================
+// SLOT / SHIFT HELPERS
+// ============================================================
+const SLOTS = ['主白','早班','晚班','大夜'];
+
+function slotRange(slot, split){
+  switch(slot){
+    case '主白': return {s:8, e:20, h:12};
+    case '早班': return {s:8, e:split, h:split-8};
+    case '晚班': return {s:split, e:26, h:26-split};
+    case '大夜': return {s:20, e:32, h:12};
+  }
+}
+
+function slotTimeStr(slot, split){
+  const {s,e}=slotRange(slot,split);
+  const fh=h=>`${String(h%24).padStart(2,'0')}:00`;
+  return `${fh(s)}-${fh(e)}`;
+}
+
+function slotHours(slot, split){ return slotRange(slot,split).h; }
+
+function calcSlotPoints(slot, split, startDate){
+  const {s,e}=slotRange(slot,split);
+  const nextDate=addDays(startDate,1);
+  let pts=0;
+  for(let h=s;h<e;h++){
+    const actualH=h%24;
+    const d=h>=24?nextDate:startDate;
+    const isHol=isHoliday(d);
+    if(actualH>=2&&actualH<8)       pts+=isHol?2.0:1.6;
+    else if(actualH>=8&&actualH<16) pts+=isHol?1.2:1.0;
+    else                             pts+=isHol?1.4:1.2;
+  }
+  return Math.round(pts*10)/10;
+}
+
+function zoneHours(slot, split, startDate){
+  const {s,e}=slotRange(slot,split);
+  const nextDate=addDays(startDate,1);
+  let bai=0,sn=0,bn=0;
+  for(let h=s;h<e;h++){
+    const ah=h%24;
+    const d=h>=24?nextDate:startDate;
+    const hol=isHoliday(d);
+    if(ah>=2&&ah<8)       {if(hol)bn++;}
+    else if(ah>=8&&ah<16) {if(hol)bai++;}
+    else                   {if(hol)sn++;}
+  }
+  return {bai,sn,bn};
+}
+
+function getDaySplit(dateStr){
+  return (state.schedule[dateStr]&&state.schedule[dateStr].split) || state.defaultSplit;
+}
+
+function getShiftEndTime(slot, split, startDate){
+  const {e}=slotRange(slot,split);
+  if(e<=24) return {date:startDate, hour:e};
+  return {date:addDays(startDate,1), hour:e%24};
+}
+
+function hoursBetween(d1,h1,d2,h2){
+  const a=new Date(d1+'T00:00:00Z').getTime()+h1*3600000;
+  const b=new Date(d2+'T00:00:00Z').getTime()+h2*3600000;
+  return (b-a)/3600000;
+}
+
+// Parse custom time string like "08-17" or "14-02"
+// Returns {slot, split} or null
+function parseCustomShift(custom){
+  if(!custom) return null;
+  const m=custom.match(/^(\d{1,2})-(\d{1,2})$/);
+  if(!m) return null;
+  let s=parseInt(m[1]), e=parseInt(m[2]);
+  // Normalize: if e<s, it crosses midnight (e.g. 20-08 means 20-32, 17-02 means 17-26)
+  if(e<=s) e+=24;
+  // Identify slot
+  if(s===8&&e===20) return {slot:'主白', split:null};
+  if(s===20&&e===32) return {slot:'大夜', split:null};
+  if(s===8&&e>=14&&e<=20) return {slot:'早班', split:e};
+  if(s>=14&&s<=20&&e===26) return {slot:'晚班', split:s};
+  // Fallback: best-effort mapping
+  if(s===8&&e>8&&e<20) return {slot:'早班', split:e};
+  if(s>8&&s<26&&e===26) return {slot:'晚班', split:s};
+  return null;
+}
+
+// ============================================================
+// ELIGIBILITY
+// ============================================================
+function getLastAssigned(docId, beforeDate, sched){
+  const dates=Object.keys(sched).filter(d=>d<beforeDate).sort();
+  let last=null;
+  for(const d of dates){
+    const ds=sched[d];
+    const sp=ds.split||state.defaultSplit;
+    for(const sl of SLOTS){
+      if(ds[sl]===docId) last={date:d,slot:sl,split:sp};
+    }
+  }
+  return last;
+}
+
+function canWork(docId, date, slot, sched){
+  const doc=state.doctors.find(d=>d.id===docId);
+  if(!doc||doc.type==='part') return false;
+  const split=getDaySplit(date);
+  const ds=sched[date]||{};
+  if(SLOTS.some(s=>ds[s]===docId)) return false;
+  const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
+  for(const pr of prs){
+    if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;
+  }
+  const last=getLastAssigned(docId,date,sched);
+  if(last){
+    const end=getShiftEndTime(last.slot,last.split,last.date);
+    const startH=slotRange(slot,split).s;
+    const rest=hoursBetween(end.date,end.hour,date,startH);
+    if(rest<12) return false;
+  }
+  if(slot==='主白'||slot==='早班'){
+    const d2=addDays(date,-2), d1=addDays(date,-1);
+    const s2=sched[d2]||{}, s1=sched[d1]||{};
+    if(s2['大夜']===docId && !SLOTS.some(s=>s1[s]===docId)) return false;
+  }
+  let consec=0, cur=addDays(date,-1);
+  for(let i=0;i<20;i++){
+    const cs=sched[cur]||{};
+    if(SLOTS.some(s=>cs[s]===docId)){consec++;cur=addDays(cur,-1);}
+    else break;
+  }
+  if(consec>=(doc.prefs.maxConsec||6)) return false;
+  if(doc.prefs.wkNight&&slot==='大夜'){
+    const dow=getDOW(date);
+    if(![4,5,6].includes(dow)) return false;
+  }
+  const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
+  for(const pr of nextDayPRs){
+    if((pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')&&slot==='大夜') return false;
+    if(pr.type==='OFF_NO_NIGHT'&&slot==='晚班') return false;
+  }
+  return true;
+}
+
+function canWorkRelaxed(docId, date, slot, sched){
+  const doc=state.doctors.find(d=>d.id===docId);
+  if(!doc||doc.type==='part') return false;
+  const split=getDaySplit(date);
+  const ds=sched[date]||{};
+  if(SLOTS.some(s=>ds[s]===docId)) return false;
+  const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
+  for(const pr of prs){if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;}
+  const last=getLastAssigned(docId,date,sched);
+  if(last){
+    const end=getShiftEndTime(last.slot,last.split,last.date);
+    const startH=slotRange(slot,split).s;
+    if(hoursBetween(end.date,end.hour,date,startH)<12) return false;
+  }
+  let consec=0, cur=addDays(date,-1);
+  for(let i=0;i<20;i++){
+    const cs=sched[cur]||{};
+    if(SLOTS.some(s=>cs[s]===docId)){consec++;cur=addDays(cur,-1);}
+    else break;
+  }
+  if(consec>=(doc.prefs.maxConsec||6)+3) return false;
+  return true;
+}
+
+// ============================================================
+// SCORING
+// ============================================================
+function calcDocHours(docId, sched){
+  let h=0;
+  for(const[d,ds]of Object.entries(sched)){
+    const sp=ds.split||state.defaultSplit;
+    for(const sl of SLOTS) if(ds[sl]===docId) h+=slotHours(sl,sp);
+  }
+  return h;
+}
+
+function avgHours(sched){
+  const full=state.doctors.filter(d=>d.type==='full');
+  if(!full.length) return 0;
+  return full.reduce((s,d)=>s+calcDocHours(d.id,sched),0)/full.length;
+}
+
+function scoreDoc(docId, date, slot, sched){
+  const doc=state.doctors.find(d=>d.id===docId);
+  const split=getDaySplit(date);
+  let score=Math.random()*2;
+  const myH=calcDocHours(docId,sched);
+  const avg=avgHours(sched);
+  score+=(avg-myH)*1.5;
+  score+=(doc.prefs[slotPrefKey(slot)]||0)*6;
+  if(isHoliday(date)) score+=(doc.prefs.hol||0)*5;
+  const last=getLastAssigned(docId,date,sched);
+  if(last&&last.slot===slot) score+=5;
+  else if(last) score-=3;
+  if(doc.prefs.cNight&&slot==='大夜'){
+    const yd=addDays(date,-1);
+    if((sched[yd]||{})['大夜']===docId) score+=10;
+  }
+  if(doc.prefs.long&&slotHours(slot,split)>10) score+=5;
+  const addH=slotHours(slot,split);
+  const hMax=doc.prefs.hMax||220;
+  const hMin=doc.prefs.hMin||140;
+  if(myH+addH>hMax) score-=50;
+  if(myH+addH>hMax+24) score-=100;
+  if(myH<hMin) score+=8;
+  return score;
+}
+
+// Choose optimal split for a day given the assigned 早班 and 晚班 doctors
+function bestSplitForPair(earlyId, lateId, date, sched){
+  const earlyDoc = earlyId ? state.doctors.find(d=>d.id===earlyId) : null;
+  const lateDoc  = lateId  ? state.doctors.find(d=>d.id===lateId)  : null;
+  if(!earlyDoc && !lateDoc) return state.defaultSplit;
+
+  let bestSp = state.defaultSplit, bestSc = -Infinity;
+  for(let sp=14; sp<=20; sp++){
+    const earlyH = sp - 8;   // 早班 hours
+    const lateH  = 26 - sp;  // 晚班 hours
+    let sc = 0;
+    // Long-shift preference
+    if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 8;
+    if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 8;
+    // Hours fairness: give more hours to the doctor further below average
+    const avg = avgHours(sched);
+    if(earlyId){ const mh=calcDocHours(earlyId,sched); sc += (avg-mh) * earlyH * 0.12; }
+    if(lateId) { const mh=calcDocHours(lateId,sched);  sc += (avg-mh) * lateH  * 0.12; }
+    // Penalty if exceeds hMax
+    if(earlyDoc){ const mh=calcDocHours(earlyId,sched); if(mh+earlyH>earlyDoc.prefs.hMax) sc-=60; }
+    if(lateDoc) { const mh=calcDocHours(lateId,sched);  if(mh+lateH>lateDoc.prefs.hMax)  sc-=60; }
+    if(sc>bestSc){ bestSc=sc; bestSp=sp; }
+  }
+  return bestSp;
+}
+
+// ============================================================
+// AUTO-SCHEDULE
+// ============================================================
+function autoSchedule(){
+  if(!window.__skipConfirm && !confirm('確定要自動排班？這將覆蓋本月班表。')) return;
+  const y=state.year, m=state.month;
+  const dates=monthDates(y,m);
+  const newSched={};
+
+  for(const d of dates){
+    const existing=state.schedule[d]||{};
+    newSched[d]={split:existing.split||state.defaultSplit, 主白:null, 早班:null, 晚班:null, 大夜:null};
+  }
+
+  // Apply WORK pre-requests (including CUSTOM)
+  for(const d of dates){
+    for(const pr of (state.preRequests[d]||[])){
+      if(!pr.type.startsWith('WORK_')) continue;
+      const slKey=pr.type.replace('WORK_','');
+      if(slKey==='CUSTOM'){
+        const parsed=parseCustomShift(pr.custom);
+        if(parsed&&!newSched[d][parsed.slot]){
+          newSched[d][parsed.slot]=pr.docId;
+          if(parsed.split!==null) newSched[d].split=parsed.split;
+        }
+      } else if(SLOTS.includes(slKey)&&!newSched[d][slKey]){
+        newSched[d][slKey]=pr.docId;
+      }
+    }
+  }
+
+  // 3-pass greedy fill
+  for(let pass=0;pass<3;pass++){
+    const ordDates=pass===0?[...dates]:shuffle([...dates]);
+    for(const d of ordDates){
+      for(const slot of SLOTS){
+        if(newSched[d][slot]) continue;
+        let candidates=state.doctors.filter(doc=>{
+          if(doc.type==='part') return false;
+          if(SLOTS.some(s=>newSched[d][s]===doc.id)) return false;
+          return canWork(doc.id,d,slot,newSched);
+        });
+        if(!candidates.length){
+          candidates=state.doctors.filter(doc=>{
+            if(doc.type==='part') return false;
+            if(SLOTS.some(s=>newSched[d][s]===doc.id)) return false;
+            return canWorkRelaxed(doc.id,d,slot,newSched);
+          });
+        }
+        if(candidates.length){
+          const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
+          scored.sort((a,b)=>b.sc-a.sc);
+          newSched[d][slot]=scored[0].id;
+        }
+      }
+    }
+  }
+
+  // Auto-optimize split for each day based on assigned 早班/晚班 doctors
+  for(const d of dates){
+    // Only auto-optimize if split wasn't locked by a WORK_CUSTOM pre-request
+    const hasCustomPR = (state.preRequests[d]||[]).some(pr=>pr.type==='WORK_CUSTOM'&&pr.custom&&parseCustomShift(pr.custom)?.split!==null);
+    if(!hasCustomPR){
+      newSched[d].split = bestSplitForPair(newSched[d]['早班'], newSched[d]['晚班'], d, newSched);
+    }
+  }
+
+  state.schedule=newSched;
+  renderCalendar();
+  switchTab('schedule');
+  const empty=countEmpty(newSched);
+  showToast(empty>0?`排班完成，但有 ${empty} 個空缺，請手動補填。`:'✅ 自動排班完成！',empty>0?'warn':'ok');
+}
+
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){const j=0|Math.random()*(i+1);[arr[i],arr[j]]=[arr[j],arr[i]];}
+  return arr;
+}
+function countEmpty(sched){
+  let n=0;
+  for(const ds of Object.values(sched)){for(const sl of SLOTS)if(!ds[sl])n++;}
+  return n;
+}
+
+// ============================================================
+// RENDER CALENDAR
+// ============================================================
+function renderCalendar(){
+  const y=state.year, m=state.month;
+  document.getElementById('month-label').textContent=`${y}年${m+1}月`;
+  document.getElementById('stats-month').textContent=`${y}年${m+1}月`;
+
+  document.getElementById('doc-legend').innerHTML=
+    state.doctors.map(d=>`<span class="legend-item"><span class="color-dot" style="background:${d.color}"></span>${d.name}${d.type==='part'?'(兼)':''}</span>`).join('');
+
+  const grid=document.getElementById('calendar-grid');
+  grid.innerHTML='';
+
+  const weekLabels=['一','二','三','四','五','六','日'];
+  weekLabels.forEach((w,i)=>{
+    const h=document.createElement('div');
+    h.className='cal-weekday'+(i>=5?' weekend':'');
+    h.textContent=w;
+    grid.appendChild(h);
+  });
+
+  const firstDOW=getDOW(fmtDate(y,m,1));
+  for(let i=0;i<firstDOW;i++){
+    const e=document.createElement('div');e.className='cal-day empty';grid.appendChild(e);
+  }
+
+  const numDays=daysInMonth(y,m);
+  for(let day=1;day<=numDays;day++){
+    const dateStr=fmtDate(y,m,day);
+    const dow=getDOW(dateStr);
+    const isHol=isHoliday(dateStr);
+    const isManHol=state.holidays.has(dateStr);
+    const isWknd=dow>=5;
+    const cell=document.createElement('div');
+    cell.className='cal-day'+(isHol?' holiday':'');
+
+    const split=getDaySplit(dateStr);
+    const dowNames=['一','二','三','四','五','六','日'];
+    let badges='';
+    if(isManHol) badges+=`<span class="badge-hol" onclick="toggleHol('${dateStr}',event)" title="取消假日">假</span>`;
+    else if(!isWknd) badges+=`<span class="badge-sethol" onclick="toggleHol('${dateStr}',event)" title="設為假日">設假</span>`;
+    else badges+=`<span style="font-size:9px;color:#c0392b">${dowNames[dow]}</span>`;
+    if(split!==20) badges+=` <span class="badge-split">${split}:00切</span>`;
+
+    cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}">${day}</span><div class="day-badges">${badges}</div></div>`;
+
+    const ds=state.schedule[dateStr]||{split:state.defaultSplit};
+    const sp=ds.split||state.defaultSplit;
+    const slotInfo=[
+      {slot:'主白',tagClass:'tag-主白',tagLabel:'主'},
+      {slot:'早班',tagClass:'tag-早班',tagLabel:'早'},
+      {slot:'晚班',tagClass:'tag-晚班',tagLabel:'晚'},
+      {slot:'大夜',tagClass:'tag-大夜',tagLabel:'大'},
+    ];
+    for(const si of slotInfo){
+      const docId=ds[si.slot];
+      const doc=docId?state.doctors.find(d=>d.id===docId):null;
+      const timeStr=slotTimeStr(si.slot,sp);
+      const row=document.createElement('div');
+      row.className='shift-row';
+      const tag=`<span class="slot-tag ${si.tagClass}">${si.tagLabel}</span>`;
+      if(doc){
+        row.innerHTML=`${tag}<span class="shift-doc" style="background:${doc.color}18;border:1px solid ${doc.color}60;color:${doc.color}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${timeStr}</span></span>`;
+      } else {
+        row.innerHTML=`${tag}<span class="shift-doc empty-slot" onclick="openDayModal('${dateStr}')"><span class="doc-name">空 ${timeStr}</span></span>`;
+      }
+      cell.appendChild(row);
+    }
+
+    const prs=state.preRequests[dateStr]||[];
+    if(prs.length){
+      const prow=document.createElement('div');
+      prow.className='pr-badge-row';
+      prow.innerHTML=prs.map(pr=>`<span class="pr-badge">${getDocName(pr.docId)}:${prShortLabel(pr)}</span>`).join('');
+      cell.appendChild(prow);
+    }
+
+    cell.addEventListener('click',()=>openDayModal(dateStr));
+    grid.appendChild(cell);
+  }
+}
+
+// ============================================================
+// DAY MODAL
+// ============================================================
+function openDayModal(dateStr){
+  const[y,mo,d]=dateStr.split('-').map(Number);
+  const dow=['一','二','三','四','五','六','日'][getDOW(dateStr)];
+  const holTxt=isHoliday(dateStr)?'（假日）':'';
+  document.getElementById('day-modal-title').textContent=`${y}年${mo}月${d}日 (${dow}) ${holTxt}`;
+
+  const ds=state.schedule[dateStr]||{split:state.defaultSplit};
+  const sp=ds.split||state.defaultSplit;
+
+  let html=`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px">
+    <strong>當日切割點：</strong>
+    <select onchange="setDaySplit('${dateStr}',parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
+      ${[14,15,16,17,18,19,20].map(h=>`<option value="${h}"${h===sp?' selected':''}>${h}:00</option>`).join('')}
+    </select>
+    <span style="color:#888">早班結束 / 晚班開始</span>
+  </div>
+  <table class="day-slot-table">
+  <thead><tr><th>班別</th><th>時間</th><th>時數</th><th>點值</th><th>指派醫師</th></tr></thead>
+  <tbody>`;
+
+  for(const slot of SLOTS){
+    const timeStr=slotTimeStr(slot,sp);
+    const hrs=slotHours(slot,sp);
+    const pts=calcSlotPoints(slot,sp,dateStr);
+    const docId=ds[slot];
+    const opts=state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
+    const tagClass={'主白':'tag-主白','早班':'tag-早班','晚班':'tag-晚班','大夜':'tag-大夜'}[slot];
+    html+=`<tr>
+      <td><span class="slot-tag ${tagClass}" style="width:auto;padding:2px 6px">${slot}</span></td>
+      <td style="font-size:11px;color:#555">${timeStr}</td>
+      <td>${hrs}h</td>
+      <td>${pts}</td>
+      <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="assignDoc('${dateStr}','${slot}',this.value)">
+        <option value="">-- 空缺 --</option>${opts}
+      </select></td>
+    </tr>`;
+  }
+  html+=`</tbody></table>`;
+
+  const issues=checkConstraints(dateStr);
+  if(issues.length) html+=`<div class="alert alert-warn"><strong>⚠ 注意：</strong><br>${issues.map(i=>`• ${i}`).join('<br>')}</div>`;
+
+  const prs=state.preRequests[dateStr]||[];
+  if(prs.length) html+=`<div style="margin-top:6px"><strong style="font-size:12px">📝 預假/預班：</strong><br>${prs.map(pr=>`<span class="pr-badge">${getDocName(pr.docId)}: ${prLabel(pr)}${pr.note?' ('+pr.note+')':''}</span> `).join('')}</div>`;
+
+  document.getElementById('day-modal-body').innerHTML=html;
+  document.getElementById('day-modal').classList.add('show');
+}
+
+function setDaySplit(dateStr, val){
+  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:val,主白:null,早班:null,晚班:null,大夜:null};
+  state.schedule[dateStr].split=val;
+  renderCalendar();
+  openDayModal(dateStr);
+}
+
+function assignDoc(dateStr, slot, docId){
+  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:getDaySplit(dateStr),主白:null,早班:null,晚班:null,大夜:null};
+  state.schedule[dateStr][slot]=docId||null;
+  renderCalendar();
+}
+
+function checkConstraints(dateStr){
+  const issues=[];
+  const ds=state.schedule[dateStr]||{};
+  const sp=ds.split||state.defaultSplit;
+  for(const slot of SLOTS){
+    const docId=ds[slot]; if(!docId) continue;
+    const last=getLastAssigned(docId,dateStr,state.schedule);
+    if(last){
+      const end=getShiftEndTime(last.slot,last.split||state.defaultSplit,last.date);
+      const startH=slotRange(slot,sp).s;
+      const rest=hoursBetween(end.date,end.hour,dateStr,startH);
+      if(rest<12) issues.push(`${getDocName(docId)} 休息不足12h (${rest}h)`);
+    }
+    if(slot==='主白'||slot==='早班'){
+      const d2=addDays(dateStr,-2),d1=addDays(dateStr,-1);
+      const s2=state.schedule[d2]||{},s1=state.schedule[d1]||{};
+      if(s2['大夜']===docId&&!SLOTS.some(s=>s1[s]===docId))
+        issues.push(`${getDocName(docId)} 違反 N-OFF-D`);
+    }
+  }
+  const assigned=SLOTS.map(s=>ds[s]).filter(Boolean);
+  const dupes=assigned.filter((x,i)=>assigned.indexOf(x)!==i);
+  if(dupes.length) issues.push(`重複排班: ${[...new Set(dupes)].map(getDocName).join(',')}`);
+  return issues;
+}
+
+// ============================================================
+// HOLIDAY TOGGLE
+// ============================================================
+function toggleHol(dateStr,e){
+  e.stopPropagation();
+  if(state.holidays.has(dateStr)) state.holidays.delete(dateStr);
+  else state.holidays.add(dateStr);
+  renderCalendar();
+}
+
+// ============================================================
+// DOCTOR MANAGEMENT
+// ============================================================
+function renderDoctorTable(){
+  document.getElementById('doctor-tbody').innerHTML=state.doctors.map(doc=>{
+    const p=doc.prefs;
+    return `<tr>
+      <td><span class="color-dot" style="background:${doc.color}"></span></td>
+      <td><strong>${doc.name}</strong></td>
+      <td><span style="font-size:10px;padding:2px 5px;border-radius:8px;background:${doc.type==='full'?'#d4edda':'#fff3cd'}">${doc.type==='full'?'專任':'兼任'}</span></td>
+      <td>${p['白班']?levelStr(p['白班']):'-'}</td>
+      <td>${p['小夜']?levelStr(p['小夜']):'-'}</td>
+      <td>${p['大夜']?levelStr(p['大夜']):'-'}</td>
+      <td>${p.hol?levelStr(p.hol):'-'}</td>
+      <td>${p.hMin}-${p.hMax}h</td>
+      <td>${p.maxConsec}天</td>
+      <td>${[p.long?'長班':'',p.cNight?'夜連':'',p.wkNight?'週末夜':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>
+        <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
+        <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
+        <button class="btn-sm btn-link" onclick="openPersonalView('${doc.id}')">個人頁</button>
+        <button class="btn-sm" style="background:#16a085;color:#fff" onclick="copyPersonalLink('${doc.id}')">複製連結</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function levelStr(v){
+  return v===2?'多多':v===1?'多':v===-1?'少':v===-2?'少少':'普通';
+}
+
+function openDocModal(docId){
+  const doc=docId?state.doctors.find(d=>d.id===docId):null;
+  document.getElementById('doc-modal-title').textContent=doc?`編輯：${doc.name}`:'新增醫師';
+  document.getElementById('doc-id').value=docId||'';
+  if(doc){
+    document.getElementById('doc-name').value=doc.name;
+    document.getElementById('doc-type').value=doc.type;
+    document.getElementById('doc-color').value=doc.color;
+    const p=doc.prefs;
+    ['白班','小夜','大夜','hol'].forEach(k=>{
+      const el=document.getElementById('pref-'+k);
+      const pv=document.getElementById('pv-'+k);
+      if(el){el.value=p[k]||0;if(pv)pv.textContent=p[k]||0;}
+    });
+    document.getElementById('pref-hmin').value=p.hMin;
+    document.getElementById('pref-hmax').value=p.hMax;
+    document.getElementById('pref-consec').value=p.maxConsec;
+    document.getElementById('pref-long').checked=p.long;
+    document.getElementById('pref-cnight').checked=p.cNight;
+    document.getElementById('pref-wknight').checked=p.wkNight;
+  } else {
+    document.getElementById('doc-name').value='';
+    document.getElementById('doc-type').value='full';
+    document.getElementById('doc-color').value='#2196F3';
+    ['白班','小夜','大夜','hol'].forEach(k=>{const el=document.getElementById('pref-'+k);const pv=document.getElementById('pv-'+k);if(el){el.value=0;if(pv)pv.textContent=0;}});
+    document.getElementById('pref-hmin').value=140;
+    document.getElementById('pref-hmax').value=220;
+    document.getElementById('pref-consec').value=6;
+    document.getElementById('pref-long').checked=false;
+    document.getElementById('pref-cnight').checked=false;
+    document.getElementById('pref-wknight').checked=false;
+  }
+  document.getElementById('doctor-modal').classList.add('show');
+}
+
+function updPV(key,val){document.getElementById('pv-'+key).textContent=val;}
+
+function saveDoc(){
+  const id=document.getElementById('doc-id').value;
+  const name=document.getElementById('doc-name').value.trim();
+  if(!name){showToast('請輸入姓名','warn');return;}
+  const prefs=defPrefs();
+  ['白班','小夜','大夜','hol'].forEach(k=>{const el=document.getElementById('pref-'+k);if(el)prefs[k]=parseInt(el.value);});
+  prefs.hMin=parseInt(document.getElementById('pref-hmin').value);
+  prefs.hMax=parseInt(document.getElementById('pref-hmax').value);
+  prefs.maxConsec=parseInt(document.getElementById('pref-consec').value);
+  prefs.long=document.getElementById('pref-long').checked;
+  prefs.cNight=document.getElementById('pref-cnight').checked;
+  prefs.wkNight=document.getElementById('pref-wknight').checked;
+  if(id){
+    const doc=state.doctors.find(d=>d.id===id);
+    Object.assign(doc,{name,type:document.getElementById('doc-type').value,color:document.getElementById('doc-color').value,prefs});
+  } else {
+    state.doctors.push({id:'d'+(_idCnt++),name,type:document.getElementById('doc-type').value,color:document.getElementById('doc-color').value,prefs});
+  }
+  closeModal('doctor-modal');
+  renderDoctorTable();
+  renderCalendar();
+}
+
+function delDoc(docId){
+  if(!confirm('確定刪除？')) return;
+  state.doctors=state.doctors.filter(d=>d.id!==docId);
+  for(const ds of Object.values(state.schedule)){for(const sl of SLOTS)if(ds[sl]===docId)ds[sl]=null;}
+  renderDoctorTable(); renderCalendar();
+}
+
+// ============================================================
+// PRE-REQUESTS
+// ============================================================
+function renderPRTab(){
+  const sel=document.getElementById('pr-doc');
+  sel.innerHTML=state.doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  renderPRList();
+}
+function renderPRList(){
+  const all=[];
+  for(const[date,prs]of Object.entries(state.preRequests)){for(const pr of prs)all.push({date,...pr});}
+  all.sort((a,b)=>a.date.localeCompare(b.date));
+  document.getElementById('pr-tbody').innerHTML=all.map(pr=>`<tr>
+    <td>${pr.date}</td><td>${getDocName(pr.docId)}</td>
+    <td>${prLabel(pr)}</td><td>${pr.note||''}</td>
+    <td><button class="btn-sm btn-del" onclick="delPR('${pr.date}','${pr.docId}','${pr.type}','${pr.custom||''}')">刪除</button></td>
+  </tr>`).join('');
+}
+function addPR(){
+  const docId=document.getElementById('pr-doc').value;
+  const dateStart=document.getElementById('pr-date-start').value;
+  const dateEnd=document.getElementById('pr-date-end').value||dateStart;
+  const type=document.getElementById('pr-type').value;
+  const note=document.getElementById('pr-note').value.trim();
+  const custom=type==='WORK_CUSTOM'?document.getElementById('pr-custom').value.trim():'';
+  if(!dateStart){showToast('請選擇日期','warn');return;}
+  if(type==='WORK_CUSTOM'&&!custom){showToast('請填寫自訂時段，例如 08-17','warn');return;}
+
+  // Validate custom format
+  if(custom&&!parseCustomShift(custom)){
+    showToast('自訂時段格式有誤，請用 HH-HH，例如 08-17 或 17-02','warn');return;
+  }
+
+  // Build date range
+  let cur=dateStart;
+  let count=0;
+  while(cur<=dateEnd && count<62){
+    if(!state.preRequests[cur]) state.preRequests[cur]=[];
+    state.preRequests[cur]=state.preRequests[cur].filter(r=>!(r.docId===docId&&r.type===type&&(r.custom||'')===(custom||'')));
+    state.preRequests[cur].push({docId,type,note,custom});
+    cur=addDays(cur,1);
+    count++;
+  }
+  renderPRList(); renderCalendar();
+  showToast(`已新增 ${count} 筆預假/預班`);
+}
+function delPR(date,docId,type,custom){
+  if(!state.preRequests[date]) return;
+  state.preRequests[date]=state.preRequests[date].filter(r=>!(r.docId===docId&&r.type===type&&(r.custom||'')===(custom||'')));
+  if(!state.preRequests[date].length) delete state.preRequests[date];
+  renderPRList(); renderCalendar();
+}
+function onPRTypeChange(){
+  document.getElementById('custom-div').style.display=
+    document.getElementById('pr-type').value==='WORK_CUSTOM'?'block':'none';
+}
+function prLabel(pr){
+  if(pr.type==='WORK_CUSTOM') return `自訂班 ${pr.custom||''}`;
+  const m={OFF:'當天OFF',OFF_NO_BIG:'OFF+前天不大夜',OFF_NO_NIGHT:'OFF+前天不夜班',
+    WORK_主白:'排主白(08-20)',WORK_早班:'排早班',WORK_晚班:'排晚班',WORK_大夜:'排大夜(20-08)'};
+  return m[pr.type]||pr.type;
+}
+function prShortLabel(pr){
+  if(pr.type==='WORK_CUSTOM') return `自(${pr.custom||'?'})`;
+  const m={OFF:'假',OFF_NO_BIG:'假+',OFF_NO_NIGHT:'假++',WORK_主白:'主',WORK_早班:'早',WORK_晚班:'晚',WORK_大夜:'大'};
+  return m[pr.type]||'?';
+}
+
+// ============================================================
+// STATISTICS
+// ============================================================
+function renderStats(){
+  const dates=monthDates(state.year,state.month);
+  const st={};
+  for(const doc of state.doctors){
+    st[doc.id]={
+      cnt:{主白:[0,0],早班:[0,0],晚班:[0,0],大夜:[0,0]},
+      hrs:{主白:[0,0],早班:[0,0],晚班:[0,0],大夜:[0,0]},
+      pts:{wd:0,hol:0},
+      holZone:{bai:0,sn:0,bn:0},
+      // Track shift-type sequence for 轉班 counting
+      lastSlot:null, lastDate:null, shifts:0, consecCur:0, consecMax:0,
+    };
+  }
+
+  for(const dateStr of dates){
+    const ds=state.schedule[dateStr]||{};
+    const sp=ds.split||state.defaultSplit;
+    for(const slot of SLOTS){
+      const docId=ds[slot]; if(!docId||!st[docId]) continue;
+      const s=st[docId];
+      const hrs=slotHours(slot,sp);
+      const pts=calcSlotPoints(slot,sp,dateStr);
+      const hol=isHoliday(dateStr)?1:0;
+      s.cnt[slot][hol]++;
+      s.hrs[slot][hol]+=hrs;
+      if(hol) s.pts.hol+=pts; else s.pts.wd+=pts;
+      const z=zoneHours(slot,sp,dateStr);
+      s.holZone.bai+=z.bai; s.holZone.sn+=z.sn; s.holZone.bn+=z.bn;
+      // 轉班: only count 大夜→主白/早班 or 主白→大夜
+      if(s.lastSlot){
+        const isTurnover=
+          (s.lastSlot==='大夜'&&(slot==='主白'||slot==='早班')) ||
+          (s.lastSlot==='主白'&&slot==='大夜');
+        if(isTurnover) s.shifts++;
+      }
+      s.lastSlot=slot;
+    }
+  }
+
+  // Consecutive days
+  for(const doc of state.doctors){
+    const s=st[doc.id];
+    let cur=0;
+    for(const dateStr of dates){
+      const ds=state.schedule[dateStr]||{};
+      if(SLOTS.some(sl=>ds[sl]===doc.id)){cur++;s.consecMax=Math.max(s.consecMax,cur);}else cur=0;
+    }
+  }
+
+  document.getElementById('stats-tbody').innerHTML=state.doctors.map(doc=>{
+    const s=st[doc.id];
+    const totalH=SLOTS.reduce((sum,sl)=>sum+s.hrs[sl][0]+s.hrs[sl][1],0);
+    const totalPts=s.pts.wd+s.pts.hol;
+    const td=sl=>`<td>${s.cnt[sl][0]+s.cnt[sl][1]}</td><td>${s.hrs[sl][0]}</td><td>${s.hrs[sl][1]}</td>`;
+    return `<tr>
+      <td style="text-align:left"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
+      ${td('主白')}${td('早班')}${td('晚班')}${td('大夜')}
+      <td><strong>${totalH}</strong></td>
+      <td style="background:#fff3e0">${s.holZone.bai}</td>
+      <td style="background:#fff3e0">${s.holZone.sn}</td>
+      <td style="background:#fff3e0">${s.holZone.bn}</td>
+      <td>${s.pts.wd.toFixed(1)}</td>
+      <td>${s.pts.hol.toFixed(1)}</td>
+      <td><strong>${totalPts.toFixed(1)}</strong></td>
+      <td>${s.shifts}</td>
+      <td>${s.consecMax}天</td>
+    </tr>`;
+  }).join('');
+
+  const viols=[];
+  for(const doc of state.doctors){
+    if(doc.type!=='full') continue;
+    const s=st[doc.id];
+    const totalH=SLOTS.reduce((sum,sl)=>sum+s.hrs[sl][0]+s.hrs[sl][1],0);
+    if(totalH<doc.prefs.hMin) viols.push(`⚠ ${doc.name} 時數不足(${totalH}h < ${doc.prefs.hMin}h)`);
+    if(totalH>doc.prefs.hMax) viols.push(`⚠ ${doc.name} 時數超標(${totalH}h > ${doc.prefs.hMax}h)`);
+    if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
+  }
+  const empties=countEmpty(state.schedule);
+  if(empties>0) viols.push(`❌ 尚有 ${empties} 個空缺`);
+  document.getElementById('stats-violations').innerHTML=viols.length
+    ?`<div class="alert alert-warn"><strong>違規事項：</strong><br>${viols.map(v=>`• ${v}`).join('<br>')}</div>`
+    :`<div class="alert alert-ok">✅ 所有限制條件均符合</div>`;
+}
+
+// ============================================================
+// PERSONAL PAGE (admin view + export/import)
+// ============================================================
+function renderPersonalTab(){
+  const wrap=document.getElementById('personal-doc-links');
+  wrap.innerHTML=state.doctors.map(doc=>`
+    <div class="doc-link-row">
+      <span class="doc-tag"><span class="color-dot" style="background:${doc.color}"></span>${doc.name}</span>
+      <span style="font-size:11px;color:#888">${doc.type==='full'?'專任':'兼任'}</span>
+      <button class="btn-sm btn-link" onclick="openPersonalView('${doc.id}')">開啟個人頁面</button>
+      <button class="btn-sm" style="background:#16a085;color:#fff" onclick="copyPersonalLink('${doc.id}')">複製連結</button>
+      <button class="btn-sm btn-edit" onclick="exportDoctorData('${doc.id}')">匯出個人資料</button>
+    </div>
+  `).join('');
+}
+
+function buildPersonalLink(docId){
+  const doc=state.doctors.find(d=>d.id===docId);
+  if(!doc) return null;
+  const payload={
+    docId:doc.id, name:doc.name, color:doc.color, type:doc.type,
+    prefs:JSON.parse(JSON.stringify(doc.prefs)),
+    year:state.year, month:state.month,
+    preRequests:{},
+    holidays:[...state.holidays],
+  };
+  for(const[date,prs]of Object.entries(state.preRequests)){
+    const mine=prs.filter(p=>p.docId===docId);
+    if(mine.length) payload.preRequests[date]=mine;
+  }
+  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  return window.location.href.split('#')[0]+'#pv='+encoded;
+}
+
+function copyPersonalLink(docId){
+  const url=buildPersonalLink(docId);
+  if(!url) return;
+  navigator.clipboard.writeText(url).then(()=>{
+    showToast('連結已複製！貼給醫師即可開啟個人頁面');
+  }).catch(()=>{
+    // Fallback: prompt
+    prompt('複製此連結傳給醫師：', url);
+  });
+}
+
+// Open personal view in a new window / tab
+function openPersonalView(docId){
+  const doc=state.doctors.find(d=>d.id===docId);
+  if(!doc){showToast('找不到醫師','warn');return;}
+  // Encode minimal data for this doctor's personal view
+  const payload={
+    docId:doc.id, name:doc.name, color:doc.color, type:doc.type,
+    prefs:JSON.parse(JSON.stringify(doc.prefs)),
+    year:state.year, month:state.month,
+    preRequests:{},
+    holidays:[...state.holidays],
+  };
+  // Include only this doctor's pre-requests
+  for(const[date,prs]of Object.entries(state.preRequests)){
+    const mine=prs.filter(p=>p.docId===docId);
+    if(mine.length) payload.preRequests[date]=mine;
+  }
+  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  const url=window.location.href.split('#')[0]+'#pv='+encoded;
+  window.open(url,'_blank');
+}
+
+function exportDoctorData(docId){
+  const doc=state.doctors.find(d=>d.id===docId);
+  if(!doc) return;
+  const payload={
+    _type:'doctor_export', docId:doc.id, name:doc.name, color:doc.color, type:doc.type,
+    prefs:JSON.parse(JSON.stringify(doc.prefs)),
+    year:state.year, month:state.month,
+    preRequests:{},
+  };
+  for(const[date,prs]of Object.entries(state.preRequests)){
+    const mine=prs.filter(p=>p.docId===docId);
+    if(mine.length) payload.preRequests[date]=mine;
+  }
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`${doc.name}_${state.year}_${state.month+1}.json`;
+  a.click();
+}
+
+function importDoctorData(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{
+        const d=JSON.parse(ev.target.result);
+        if(d._type!=='doctor_export') throw new Error('格式不符');
+        // Find or match doctor
+        let doc=state.doctors.find(x=>x.id===d.docId);
+        if(!doc) doc=state.doctors.find(x=>x.name===d.name);
+        if(!doc){showToast('找不到對應醫師: '+d.name,'warn');return;}
+        // Update prefs
+        Object.assign(doc.prefs,d.prefs);
+        // Merge pre-requests (replace this doctor's entries for the given month)
+        const monthStr=`${d.year}-${String(d.month+1).padStart(2,'0')}`;
+        // Remove old PRs for this doctor in this month
+        for(const date of Object.keys(state.preRequests)){
+          if(!date.startsWith(monthStr)) continue;
+          state.preRequests[date]=state.preRequests[date].filter(p=>p.docId!==doc.id);
+          if(!state.preRequests[date].length) delete state.preRequests[date];
+        }
+        // Add new PRs
+        for(const[date,prs]of Object.entries(d.preRequests)){
+          if(!state.preRequests[date]) state.preRequests[date]=[];
+          for(const pr of prs) state.preRequests[date].push({...pr,docId:doc.id});
+        }
+        renderCalendar(); renderDoctorTable();
+        showToast(`已匯入 ${doc.name} 的設定與預假`);
+      }catch(err){showToast('匯入失敗: '+err.message,'warn');}
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+// ============================================================
+// PERSONAL VIEW (standalone page rendered via URL hash)
+// ============================================================
+function initPersonalView(encoded){
+  try{
+    const data=JSON.parse(decodeURIComponent(escape(atob(encoded))));
+    // Hijack the whole page
+    document.getElementById('header').style.display='none';
+    document.getElementById('tabs').style.display='none';
+    document.getElementById('content').style.display='none';
+
+    // Temp state for personal view
+    const pvState={
+      docId:data.docId, name:data.name, color:data.color, type:data.type,
+      prefs:data.prefs,
+      year:data.year, month:data.month,
+      preRequests:data.preRequests||{},
+      holidays:new Set(data.holidays||[]),
+    };
+
+    const pvDiv=document.createElement('div');
+    pvDiv.id='pv-wrap';
+    document.body.appendChild(pvDiv);
+    pvDiv.innerHTML=`
+      <div id="pv-header">
+        <h1>🏥 天晟急診 個人頁面</h1>
+        <p>${data.name} — ${data.year}年${data.month+1}月</p>
+      </div>
+      <div id="pv-body">
+        <div class="pv-section">
+          <h2>我的班別偏好</h2>
+          <div id="pv-prefs-form"></div>
+        </div>
+        <div class="pv-section">
+          <h2>我的預假/預班（${data.year}年${data.month+1}月）</h2>
+          <div id="pv-pr-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+            <div><div style="font-size:10px;color:#888;margin-bottom:2px">開始日期</div><input type="date" id="pv-date-start" style="padding:4px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px"></div>
+            <div><div style="font-size:10px;color:#888;margin-bottom:2px">結束日期</div><input type="date" id="pv-date-end" style="padding:4px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px"></div>
+            <div><div style="font-size:10px;color:#888;margin-bottom:2px">類型</div>
+              <select id="pv-pr-type" onchange="pvPRTypeChange()" style="padding:4px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px">
+                <option value="OFF">當天OFF</option>
+                <option value="OFF_NO_BIG">OFF + 前天不大夜</option>
+                <option value="OFF_NO_NIGHT">OFF + 前天不夜班</option>
+                <option value="WORK_主白">排主白 (08-20)</option>
+                <option value="WORK_早班">排早班</option>
+                <option value="WORK_晚班">排晚班</option>
+                <option value="WORK_大夜">排大夜 (20-08)</option>
+                <option value="WORK_CUSTOM">自訂時段</option>
+              </select>
+            </div>
+            <div id="pv-custom-div" style="display:none"><div style="font-size:10px;color:#888;margin-bottom:2px">自訂時段</div><input type="text" id="pv-custom" placeholder="例: 08-17" style="padding:4px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px;width:100px"></div>
+            <div><div style="font-size:10px;color:#888;margin-bottom:2px">備註</div><input type="text" id="pv-note" placeholder="(可留空)" style="padding:4px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px;width:110px"></div>
+            <button class="action-btn btn-green" onclick="pvAddPR()">新增</button>
+          </div>
+          <table class="pv-pr-table"><thead><tr><th>日期</th><th>類型</th><th>備註</th><th>操作</th></tr></thead><tbody id="pv-pr-tbody"></tbody></table>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:16px;justify-content:center;">
+          <button class="action-btn btn-green" onclick="pvExport()" style="font-size:14px;padding:10px 22px">✅ 完成並匯出設定</button>
+        </div>
+        <p style="text-align:center;font-size:11px;color:#888;margin-top:8px">匯出後將JSON檔案傳給排班管理員，即可更新您的設定。</p>
+      </div>`;
+
+    // Render prefs form
+    const prefsForm=document.getElementById('pv-prefs-form');
+    const PREF_LABELS={'白班':'白班偏好 (08上班)','小夜':'小夜偏好 (迄02:00)','大夜':'大夜偏好 (20-08)','hol':'假日偏好'};
+    let prefsHtml='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+    for(const [k,label] of Object.entries(PREF_LABELS)){
+      const v=pvState.prefs[k]||0;
+      prefsHtml+=`<div style="background:#f8f9fa;padding:10px;border-radius:6px;">
+        <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px">${label}</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px">少</span>
+          <input type="range" id="pvp-${k}" min="-2" max="2" step="1" value="${v}" oninput="document.getElementById('pvpv-${k}').textContent=this.value" style="flex:1">
+          <span style="font-size:10px">多</span>
+          <span id="pvpv-${k}" style="min-width:28px;text-align:center;font-size:11px;background:#eee;padding:2px 5px;border-radius:3px">${v}</span>
+        </div>
+      </div>`;
+    }
+    prefsHtml+='</div>';
+    prefsHtml+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;">
+      <div style="background:#f8f9fa;padding:10px;border-radius:6px">
+        <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">目標時數</div>
+        <div style="display:flex;align-items:center;gap:4px">
+          最少<input type="number" id="pvp-hMin" value="${pvState.prefs.hMin}" min="0" max="300" style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px">h
+          最多<input type="number" id="pvp-hMax" value="${pvState.prefs.hMax}" min="0" max="300" style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px">h
+        </div>
+      </div>
+      <div style="background:#f8f9fa;padding:10px;border-radius:6px">
+        <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">最多連班天數</div>
+        <input type="number" id="pvp-maxConsec" value="${pvState.prefs.maxConsec}" min="1" max="14" style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px">天
+      </div>
+      <div style="background:#f8f9fa;padding:10px;border-radius:6px">
+        <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">特殊選項</div>
+        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-long" ${pvState.prefs.long?'checked':''}> 偏好長班(&gt;10h)</label>
+        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-cNight" ${pvState.prefs.cNight?'checked':''}> 夜班連上</label>
+        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-wkNight" ${pvState.prefs.wkNight?'checked':''}> 週末夜班</label>
+      </div>
+    </div>`;
+    prefsForm.innerHTML=prefsHtml;
+
+    // Render PR list
+    window._pvState=pvState;
+    pvRenderPRList();
+
+    // Export function
+    window.pvExport=function(){
+      // Collect prefs from form
+      for(const k of['白班','小夜','大夜','hol']){
+        const el=document.getElementById('pvp-'+k);
+        if(el) pvState.prefs[k]=parseInt(el.value);
+      }
+      pvState.prefs.hMin=parseInt(document.getElementById('pvp-hMin').value)||140;
+      pvState.prefs.hMax=parseInt(document.getElementById('pvp-hMax').value)||220;
+      pvState.prefs.maxConsec=parseInt(document.getElementById('pvp-maxConsec').value)||6;
+      pvState.prefs.long=document.getElementById('pvp-long').checked;
+      pvState.prefs.cNight=document.getElementById('pvp-cNight').checked;
+      pvState.prefs.wkNight=document.getElementById('pvp-wkNight').checked;
+
+      const payload={
+        _type:'doctor_export', docId:pvState.docId, name:pvState.name, color:pvState.color, type:pvState.type,
+        prefs:pvState.prefs, year:pvState.year, month:pvState.month,
+        preRequests:pvState.preRequests,
+      };
+      const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=`${pvState.name}_${pvState.year}_${pvState.month+1}.json`;
+      a.click();
+      showToast('已匯出，請將JSON傳給管理員');
+    };
+
+    window.pvPRTypeChange=function(){
+      document.getElementById('pv-custom-div').style.display=
+        document.getElementById('pv-pr-type').value==='WORK_CUSTOM'?'block':'none';
+    };
+
+    window.pvAddPR=function(){
+      const ds=document.getElementById('pv-date-start').value;
+      const de=document.getElementById('pv-date-end').value||ds;
+      const type=document.getElementById('pv-pr-type').value;
+      const note=document.getElementById('pv-note').value.trim();
+      const custom=type==='WORK_CUSTOM'?document.getElementById('pv-custom').value.trim():'';
+      if(!ds){showToast('請選擇日期','warn');return;}
+      let cur=ds,cnt=0;
+      while(cur<=de&&cnt<62){
+        if(!pvState.preRequests[cur]) pvState.preRequests[cur]=[];
+        pvState.preRequests[cur]=pvState.preRequests[cur].filter(r=>!(r.docId===pvState.docId&&r.type===type));
+        pvState.preRequests[cur].push({docId:pvState.docId,type,note,custom});
+        cur=addDays(cur,1);cnt++;
+      }
+      pvRenderPRList();
+      showToast(`已新增 ${cnt} 筆`);
+    };
+
+    window.pvDelPR=function(date,type,custom){
+      if(!pvState.preRequests[date]) return;
+      pvState.preRequests[date]=pvState.preRequests[date].filter(r=>!(r.docId===pvState.docId&&r.type===type&&(r.custom||'')===(custom||'')));
+      if(!pvState.preRequests[date].length) delete pvState.preRequests[date];
+      pvRenderPRList();
+    };
+
+  }catch(e){
+    console.error(e);
+    renderCalendar();
+  }
+}
+
+function pvRenderPRList(){
+  const pvState=window._pvState;
+  const all=[];
+  for(const[date,prs]of Object.entries(pvState.preRequests)){
+    for(const pr of prs) all.push({date,...pr});
+  }
+  all.sort((a,b)=>a.date.localeCompare(b.date));
+  document.getElementById('pv-pr-tbody').innerHTML=all.map(pr=>`<tr>
+    <td>${pr.date}</td>
+    <td>${prLabel(pr)}</td>
+    <td>${pr.note||''}</td>
+    <td><button class="btn-sm btn-del" onclick="pvDelPR('${pr.date}','${pr.type}','${pr.custom||''}')">刪除</button></td>
+  </tr>`).join('');
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getDocName(id){const d=state.doctors.find(x=>x.id===id);return d?d.name:'未知';}
+
+function showToast(msg,type='ok'){
+  let t=document.getElementById('_toast');
+  if(!t){t=document.createElement('div');t.id='_toast';
+    t.style.cssText='position:fixed;bottom:20px;right:20px;padding:10px 18px;border-radius:6px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:opacity .5s;max-width:320px';
+    document.body.appendChild(t);}
+  t.style.background=type==='ok'?'#27ae60':'#e67e22';
+  t.style.color='#fff'; t.style.opacity='1';
+  t.textContent=msg;
+  clearTimeout(t._tid);
+  t._tid=setTimeout(()=>{t.style.opacity='0';},3000);
+}
+function closeModal(id){document.getElementById(id).classList.remove('show');renderCalendar();}
+function changeMonth(delta){
+  state.month+=delta;
+  if(state.month<0){state.month=11;state.year--;}
+  if(state.month>11){state.month=0;state.year++;}
+  renderCalendar();
+}
+function switchTab(name){
+  const names=['schedule','doctors','prereq','stats','personal'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='doctors') renderDoctorTable();
+  if(name==='prereq') renderPRTab();
+  if(name==='stats') renderStats();
+  if(name==='personal') renderPersonalTab();
+}
+function clearSchedule(){
+  if(!confirm('確定清空本月排班？')) return;
+  for(const d of monthDates(state.year,state.month)){
+    const sp=getDaySplit(d);
+    state.schedule[d]={split:sp,主白:null,早班:null,晚班:null,大夜:null};
+  }
+  renderCalendar();
+}
+
+// ============================================================
+// SAVE / LOAD / EXPORT
+// ============================================================
+function saveData(){
+  const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
+    holidays:[...state.holidays],year:state.year,month:state.month,defaultSplit:state.defaultSplit,idCnt:_idCnt};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`天晟排班_${state.year}_${state.month+1}.json`;
+  a.click();
+}
+function loadData(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{
+        const d=JSON.parse(ev.target.result);
+        state.doctors=d.doctors; state.schedule=d.schedule;
+        state.preRequests=d.preRequests||{};
+        state.holidays=new Set(d.holidays||[]);
+        state.year=d.year; state.month=d.month;
+        state.defaultSplit=d.defaultSplit||20;
+        if(d.idCnt) _idCnt=d.idCnt;
+        document.getElementById('default-split').value=state.defaultSplit;
+        renderCalendar(); showToast('載入成功！');
+      }catch(err){showToast('載入失敗: '+err.message,'warn');}
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+function exportCSV(){
+  const dates=monthDates(state.year,state.month);
+  const DOW=['一','二','三','四','五','六','日'];
+  const rows=[['日期','星期','假日','切割點','主白醫師','主白時間','早班醫師','早班時間','晚班醫師','晚班時間','大夜醫師','大夜時間']];
+  for(const d of dates){
+    const ds=state.schedule[d]||{};const sp=ds.split||state.defaultSplit;
+    rows.push([d,DOW[getDOW(d)],isHoliday(d)?'是':'',sp+':00',
+      getDocName(ds['主白'])||'',slotTimeStr('主白',sp),
+      getDocName(ds['早班'])||'',slotTimeStr('早班',sp),
+      getDocName(ds['晚班'])||'',slotTimeStr('晚班',sp),
+      getDocName(ds['大夜'])||'',slotTimeStr('大夜',sp),
+    ]);
+  }
+  const csv='﻿'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`天晟排班_${state.year}_${state.month+1}.csv`;
+  a.click();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.onload=()=>{
+  const hash=window.location.hash;
+  if(hash.startsWith('#pv=')){
+    initPersonalView(hash.slice(4));
+  } else {
+    renderCalendar();
+  }
+};
+</script>
+</body>
+</html>
