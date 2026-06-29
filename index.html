@@ -557,22 +557,29 @@ function canWork(docId, date, slot, sched){
     const dow=getDOW(date);
     if(![4,5,6].includes(dow)) return false;
   }
-  // General forward rest check: if this shift crosses midnight, verify
-  // no already-scheduled next-day slot starts within 12h of this shift's end
-  {
-    const {e:_e}=slotRange(slot,split);
-    if(_e>24){
-      const d1=addDays(date,1),d1Sp=getDaySplit(d1),endHr=_e%24;
-      for(const sl of SLOTS){
-        if((sched[d1]||{})[sl]===docId&&slotRange(sl,d1Sp).s-endHr<12) return false;
-      }
-    }
+  // ===== ABSOLUTE PROHIBITIONS (both backward and forward) =====
+  // 主白/早班 starts at 08:00 — must not have 大夜(ends 08:00) or 晚班(ends 02:00) yesterday
+  if(slot==='主白'||slot==='早班'){
+    const yd=addDays(date,-1);
+    const yds=sched[yd]||{};
+    if(yds['大夜']===docId) return false; // 0h rest
+    if(yds['晚班']===docId) return false; // 6h rest < 12h
   }
-  // N-OFF-D forward: 大夜→OFF→主白/早班 two days later
+  // 大夜 ends at 08:00 next day — must not have 主白/早班(starts 08:00) next day
   if(slot==='大夜'){
-    const d1=addDays(date,1),d2=addDays(date,2);
-    const d1Worked=SLOTS.some(s=>(sched[d1]||{})[s]===docId);
-    if(!d1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+    const td=addDays(date,1);
+    const tds=sched[td]||{};
+    if(tds['主白']===docId||tds['早班']===docId) return false;
+    // N-OFF-D forward: 大夜→OFF→主白/早班 two days later
+    const d2=addDays(date,2);
+    const td1Worked=SLOTS.some(s=>tds[s]===docId);
+    if(!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+  }
+  // 晚班 ends at 02:00 next day — must not have 主白/早班(starts 08:00) next day (6h rest)
+  if(slot==='晚班'){
+    const td=addDays(date,1);
+    const tds=sched[td]||{};
+    if(tds['主白']===docId||tds['早班']===docId) return false;
   }
   // Avoid same-day pairs
   for(const pair of (state.avoidPairs||[])){
@@ -609,21 +616,24 @@ function canWorkRelaxed(docId, date, slot, sched){
     else break;
   }
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
-  // General forward rest check (same absolute prohibition as canWork)
-  {
-    const {e:_e}=slotRange(slot,split);
-    if(_e>24){
-      const d1=addDays(date,1),d1Sp=getDaySplit(d1),endHr=_e%24;
-      for(const sl of SLOTS){
-        if((sched[d1]||{})[sl]===docId&&slotRange(sl,d1Sp).s-endHr<12) return false;
-      }
-    }
+  // ===== ABSOLUTE PROHIBITIONS (same as canWork, never relaxed) =====
+  if(slot==='主白'||slot==='早班'){
+    const yd=addDays(date,-1);
+    const yds=sched[yd]||{};
+    if(yds['大夜']===docId||yds['晚班']===docId) return false;
   }
-  // N-OFF-D forward: 大夜→OFF→主白/早班
   if(slot==='大夜'){
-    const d1=addDays(date,1),d2=addDays(date,2);
-    const d1Worked=SLOTS.some(s=>(sched[d1]||{})[s]===docId);
-    if(!d1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+    const td=addDays(date,1);
+    const tds=sched[td]||{};
+    if(tds['主白']===docId||tds['早班']===docId) return false;
+    const d2=addDays(date,2);
+    const td1Worked=SLOTS.some(s=>tds[s]===docId);
+    if(!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+  }
+  if(slot==='晚班'){
+    const td=addDays(date,1);
+    const tds=sched[td]||{};
+    if(tds['主白']===docId||tds['早班']===docId) return false;
   }
   // Avoid same-day pairs (enforced even in relaxed mode)
   for(const pair of (state.avoidPairs||[])){
@@ -836,6 +846,31 @@ function autoSchedule(){
           newSched[d][slot]=scored[0].id;
         }
       }
+    }
+  }
+
+  // ===== POST-PROCESSING: remove any surviving rest violations =====
+  for(const d of dates){
+    const ds=newSched[d]; if(!ds) continue;
+    // 大夜 on D → 主白/早班 on D+1: 0h rest
+    // 大夜 on D → OFF on D+1 → 主白/早班 on D+2: N-OFF-D
+    if(ds['大夜']){
+      const did=ds['大夜'];
+      const d1=addDays(d,1); const ds1=newSched[d1]||{};
+      if(ds1['主白']===did){newSched[d1]['主白']=null;}
+      if(ds1['早班']===did){newSched[d1]['早班']=null;}
+      if(!SLOTS.some(s=>ds1[s]===did)){
+        const d2=addDays(d,2); const ds2=newSched[d2]||{};
+        if(ds2['主白']===did){newSched[d2]['主白']=null;}
+        if(ds2['早班']===did){newSched[d2]['早班']=null;}
+      }
+    }
+    // 晚班 on D → 主白/早班 on D+1: 6h rest
+    if(ds['晚班']){
+      const did=ds['晚班'];
+      const d1=addDays(d,1); const ds1=newSched[d1]||{};
+      if(ds1['主白']===did){newSched[d1]['主白']=null;}
+      if(ds1['早班']===did){newSched[d1]['早班']=null;}
     }
   }
 
