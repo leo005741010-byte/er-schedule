@@ -187,7 +187,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       <thead>
         <tr>
           <th>色</th><th>姓名</th><th>類型</th><th>白班(08上班)</th><th>小夜(-02)</th><th>大夜(20-08)</th>
-          <th>假日</th><th>目標時數</th><th>連班上限</th><th>特殊</th><th>操作</th>
+          <th>假日</th><th>點值偏好</th><th>連班上限</th><th>特殊</th><th>操作</th>
         </tr>
       </thead>
       <tbody id="doctor-tbody"></tbody>
@@ -328,8 +328,8 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="form-row"><label>小夜偏好 (迄02:00)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-小夜" min="-2" max="2" step="1" value="0" oninput="updPV('小夜',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-小夜">0</span></div></div>
     <div class="form-row"><label>大夜偏好 (20-08)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-大夜" min="-2" max="2" step="1" value="0" oninput="updPV('大夜',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-大夜">0</span></div></div>
     <div class="form-row"><label>假日偏好</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-hol" min="-2" max="2" step="1" value="0" oninput="updPV('hol',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-hol">0</span></div></div>
-    <h3>時數與連班</h3>
-    <div class="form-row"><label>目標時數 最少</label><input type="number" id="pref-hmin" value="140" min="0" max="300" style="width:70px"><label style="min-width:30px">最多</label><input type="number" id="pref-hmax" value="220" min="0" max="300" style="width:70px"></div>
+    <h3>點值與連班</h3>
+    <div class="form-row"><label>點值偏好</label><div class="pref-slider"><span style="font-size:10px">少(-25pt)</span><input type="range" id="pref-ptsPref" min="-2" max="2" step="1" value="0" oninput="updPV('ptsPref',this.value)"><span style="font-size:10px">多(+25pt)</span><span class="pref-value" id="pv-ptsPref">0</span></div></div>
     <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
@@ -371,7 +371,7 @@ let state = {
 let _idCnt = 10;
 
 function defPrefs(){
-  return {'白班':0,'小夜':0,'大夜':0,hol:0,hMin:140,hMax:220,maxConsec:6,
+  return {'白班':0,'小夜':0,'大夜':0,hol:0,ptsPref:0,maxConsec:6,
           long:false,wkNight:false,cluster:false,medMeeting:false,morningReport:false};
 }
 // Map a slot to its preference category
@@ -691,6 +691,12 @@ function scoreDoc(docId, date, slot, sched){
     else score-=3;
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=5;
+  const addH=slotHours(slot,split);
+  const addPts=calcSlotPoints(slot,split,date);
+  const targetPts=avgPts+(doc.prefs.ptsPref||0)*12.5;
+  if(myPts+addPts>targetPts+25) score-=80;
+  if(myPts+addPts>targetPts+50) score-=100;
+  if(myPts<targetPts-10) score+=10;
   // 醫務會議: boost Thursday 主白/早班 if doctor still has no covered Thursday this month
   if(doc.prefs.medMeeting&&getDOW(date)===3&&(slot==='主白'||slot==='早班')){
     const hasThuCover=monthDates(state.year,state.month).some(d=>{
@@ -709,12 +715,6 @@ function scoreDoc(docId, date, slot, sched){
       if(reportThus.includes(nextDay)) score+=25;
     }
   }
-  const addH=slotHours(slot,split);
-  const hMax=doc.prefs.hMax||220;
-  const hMin=doc.prefs.hMin||140;
-  if(myH+addH>hMax) score-=50;
-  if(myH+addH>hMax+24) score-=100;
-  if(myH<hMin) score+=8;
   return score;
 }
 
@@ -736,9 +736,10 @@ function bestSplitForPair(earlyId, lateId, date, sched){
     const avg = avgHours(sched);
     if(earlyId){ const mh=calcDocHours(earlyId,sched); sc += (avg-mh) * earlyH * 0.12; }
     if(lateId) { const mh=calcDocHours(lateId,sched);  sc += (avg-mh) * lateH  * 0.12; }
-    // Penalty if exceeds hMax
-    if(earlyDoc){ const mh=calcDocHours(earlyId,sched); if(mh+earlyH>earlyDoc.prefs.hMax) sc-=60; }
-    if(lateDoc) { const mh=calcDocHours(lateId,sched);  if(mh+lateH>lateDoc.prefs.hMax)  sc-=60; }
+    // Point fairness for split selection
+    const avgPts2=avgPoints(sched);
+    if(earlyId){const mp=calcDocPoints(earlyId,sched);const tp=avgPts2+(earlyDoc?.prefs.ptsPref||0)*12.5;if(mp>tp+25)sc-=30;}
+    if(lateId) {const mp=calcDocPoints(lateId,sched); const tp=avgPts2+(lateDoc?.prefs.ptsPref||0)*12.5; if(mp>tp+25)sc-=30;}
     if(sc>bestSc){ bestSc=sc; bestSp=sp; }
   }
   return bestSp;
@@ -1085,7 +1086,7 @@ function renderDoctorTable(){
       <td>${p['小夜']?levelStr(p['小夜']):'-'}</td>
       <td>${p['大夜']?levelStr(p['大夜']):'-'}</td>
       <td>${p.hol?levelStr(p.hol):'-'}</td>
-      <td>${p.hMin}-${p.hMax}h</td>
+      <td>${p.ptsPref>0?'+'+p.ptsPref:p.ptsPref} (${(p.ptsPref*12.5>0?'+':'')+p.ptsPref*12.5}pt)</td>
       <td>${p.maxConsec}天</td>
       <td>${[p.long?'長班':'',p.wkNight?'週末夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
@@ -1115,8 +1116,8 @@ function openDocModal(docId){
       const pv=document.getElementById('pv-'+k);
       if(el){el.value=p[k]||0;if(pv)pv.textContent=p[k]||0;}
     });
-    document.getElementById('pref-hmin').value=p.hMin;
-    document.getElementById('pref-hmax').value=p.hMax;
+    const ppEl=document.getElementById('pref-ptsPref');const ppPv=document.getElementById('pv-ptsPref');
+    if(ppEl){ppEl.value=p.ptsPref||0;if(ppPv)ppPv.textContent=p.ptsPref||0;}
     document.getElementById('pref-consec').value=p.maxConsec;
     document.getElementById('pref-long').checked=p.long;
     document.getElementById('pref-wknight').checked=p.wkNight;
@@ -1128,8 +1129,8 @@ function openDocModal(docId){
     document.getElementById('doc-type').value='full';
     document.getElementById('doc-color').value='#2196F3';
     ['白班','小夜','大夜','hol'].forEach(k=>{const el=document.getElementById('pref-'+k);const pv=document.getElementById('pv-'+k);if(el){el.value=0;if(pv)pv.textContent=0;}});
-    document.getElementById('pref-hmin').value=140;
-    document.getElementById('pref-hmax').value=220;
+    const ppEl2=document.getElementById('pref-ptsPref');const ppPv2=document.getElementById('pv-ptsPref');
+    if(ppEl2){ppEl2.value=0;if(ppPv2)ppPv2.textContent=0;}
     document.getElementById('pref-consec').value=6;
     document.getElementById('pref-long').checked=false;
     document.getElementById('pref-wknight').checked=false;
@@ -1148,8 +1149,7 @@ function saveDoc(){
   if(!name){showToast('請輸入姓名','warn');return;}
   const prefs=defPrefs();
   ['白班','小夜','大夜','hol'].forEach(k=>{const el=document.getElementById('pref-'+k);if(el)prefs[k]=parseInt(el.value);});
-  prefs.hMin=parseInt(document.getElementById('pref-hmin').value);
-  prefs.hMax=parseInt(document.getElementById('pref-hmax').value);
+  prefs.ptsPref=parseInt(document.getElementById('pref-ptsPref').value)||0;
   prefs.maxConsec=parseInt(document.getElementById('pref-consec').value);
   prefs.long=document.getElementById('pref-long').checked;
   prefs.wkNight=document.getElementById('pref-wknight').checked;
@@ -1359,15 +1359,22 @@ function renderStats(){
     </tr>`;
   }).join('');
 
+  // Compute overall average points for target reference
+  const allPts=state.doctors.filter(d=>d.type==='full').map(d=>{
+    const s=st[d.id]; return s.pts.wd+s.pts.hol;
+  });
+  const overallAvgPts=allPts.length?allPts.reduce((a,b)=>a+b,0)/allPts.length:0;
+
   const viols=[];
   const reportThus=getFirstThirdThursdays(state.year,state.month);
   for(const doc of state.doctors){
     if(doc.type!=='full') continue;
     const s=st[doc.id];
     const totalH=SLOTS.reduce((sum,sl)=>sum+s.hrs[sl][0]+s.hrs[sl][1],0);
-    if(totalH<doc.prefs.hMin) viols.push(`⚠ ${doc.name} 時數不足(${totalH}h < ${doc.prefs.hMin}h)`);
-    if(totalH>doc.prefs.hMax) viols.push(`⚠ ${doc.name} 時數超標(${totalH}h > ${doc.prefs.hMax}h)`);
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
+    const totalPts2=s.pts.wd+s.pts.hol;
+    const targetPts2=overallAvgPts+(doc.prefs.ptsPref||0)*12.5;
+    if(Math.abs(totalPts2-targetPts2)>25) viols.push(`⚠ ${doc.name} 點值偏離目標(實際${totalPts2.toFixed(1)} vs 目標${targetPts2.toFixed(1)})`);
     // 醫務會議: need at least one Thursday 主白/早班
     if(doc.prefs.medMeeting){
       const hasThu=dates.some(d=>{
@@ -1601,10 +1608,12 @@ function initPersonalView(encoded){
     prefsHtml+='</div>';
     prefsHtml+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;">
       <div style="background:#f8f9fa;padding:10px;border-radius:6px">
-        <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">目標時數</div>
-        <div style="display:flex;align-items:center;gap:4px">
-          最少<input type="number" id="pvp-hMin" value="${pvState.prefs.hMin}" min="0" max="300" style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px">h
-          最多<input type="number" id="pvp-hMax" value="${pvState.prefs.hMax}" min="0" max="300" style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px">h
+        <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">點值偏好 (-2少/-1稍少/0普通/+1稍多/+2多，間距12.5pt)</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px">少</span>
+          <input type="range" id="pvp-ptsPref" min="-2" max="2" step="1" value="${pvState.prefs.ptsPref||0}" oninput="document.getElementById('pvpv-ptsPref').textContent=this.value" style="flex:1">
+          <span style="font-size:10px">多</span>
+          <span id="pvpv-ptsPref" style="min-width:28px;text-align:center;font-size:11px;background:#eee;padding:2px 5px;border-radius:3px">${pvState.prefs.ptsPref||0}</span>
         </div>
       </div>
       <div style="background:#f8f9fa;padding:10px;border-radius:6px">
@@ -1633,8 +1642,7 @@ function initPersonalView(encoded){
         const el=document.getElementById('pvp-'+k);
         if(el) pvState.prefs[k]=parseInt(el.value);
       }
-      pvState.prefs.hMin=parseInt(document.getElementById('pvp-hMin').value)||140;
-      pvState.prefs.hMax=parseInt(document.getElementById('pvp-hMax').value)||220;
+      pvState.prefs.ptsPref=parseInt(document.getElementById('pvp-ptsPref').value)||0;
       pvState.prefs.maxConsec=parseInt(document.getElementById('pvp-maxConsec').value)||6;
       pvState.prefs.long=document.getElementById('pvp-long').checked;
       pvState.prefs.wkNight=document.getElementById('pvp-wkNight').checked;
