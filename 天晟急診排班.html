@@ -677,6 +677,16 @@ function avgPoints(sched){
   return full.reduce((s,d)=>s+calcDocPoints(d.id,sched),0)/full.length;
 }
 
+function countDocOffDays(docId){
+  const prefix=`${state.year}-${String(state.month+1).padStart(2,'0')}-`;
+  let cnt=0;
+  for(const[date,prs] of Object.entries(state.preRequests)){
+    if(!date.startsWith(prefix)) continue;
+    if(prs.some(pr=>pr.docId===docId&&['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type))) cnt++;
+  }
+  return cnt;
+}
+
 function scoreDoc(docId, date, slot, sched){
   const doc=state.doctors.find(d=>d.id===docId);
   const split=getDaySplit(date);
@@ -706,6 +716,8 @@ function scoreDoc(docId, date, slot, sched){
   if(myH+addH>targetH+20) score-=80;
   if(myH+addH>targetH+40) score-=100;
   if(myH<targetH-10) score+=10;
+  // 120h minimum bonus
+  if(countDocOffDays(docId)<=20&&myH<120) score+=(120-myH)*2;
   // 醫務會議: boost Thursday 主白/早班 if doctor still has no covered Thursday this month
   if(doc.prefs.medMeeting&&getDOW(date)===3&&(slot==='主白'||slot==='早班')){
     const hasThuCover=monthDates(state.year,state.month).some(d=>{
@@ -844,6 +856,21 @@ function autoSchedule(){
           const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
           scored.sort((a,b)=>b.sc-a.sc);
           newSched[d][slot]=scored[0].id;
+        }
+      }
+    }
+  }
+
+  // 4th pass: boost doctors below 120h minimum (exempt if >20 OFF pre-request days)
+  for(const doc of state.doctors.filter(d=>d.type==='full')){
+    if(countDocOffDays(doc.id)>20) continue;
+    for(const d of dates){
+      if(calcDocHours(doc.id,newSched)>=120) break;
+      for(const slot of SLOTS){
+        if(newSched[d][slot]) continue;
+        if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue;
+        if(canWork(doc.id,d,slot,newSched)||canWorkRelaxed(doc.id,d,slot,newSched)){
+          newSched[d][slot]=doc.id; break;
         }
       }
     }
@@ -1407,6 +1434,8 @@ function renderStats(){
     const s=st[doc.id];
     const totalH=SLOTS.reduce((sum,sl)=>sum+s.hrs[sl][0]+s.hrs[sl][1],0);
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
+    const offDays=countDocOffDays(doc.id);
+    if(offDays<=20&&totalH<120) viols.push(`⚠ ${doc.name} 時數不足120h（實際${totalH}h，預假${offDays}天）`);
     const totalPts2=s.pts.wd+s.pts.hol;
     const targetH2=overallAvgPts>0?overallAvgPts:0; // unused now
     const avgHrs=state.doctors.filter(d=>d.type==='full').reduce((s,d2)=>{const st2=st[d2.id];return s+SLOTS.reduce((a,sl)=>a+st2.hrs[sl][0]+st2.hrs[sl][1],0);},0)/(state.doctors.filter(d=>d.type==='full').length||1);
