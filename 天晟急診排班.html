@@ -336,7 +336,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">週末夜班 (僅五六日排大夜)</label></div>
-    <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">上班集中 (排班盡量連上一段、連修一段)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">上班集中 (排班盡量連上一段、連休一段)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-morningReport"><label for="pref-morningReport">晨會報告 (第1、3週四08:00，需排主白/早班或週三大夜)</label></div>
     <div class="modal-actions">
@@ -618,13 +618,32 @@ function avgHours(sched){
   return full.reduce((s,d)=>s+calcDocHours(d.id,sched),0)/full.length;
 }
 
+function calcDocPoints(docId, sched){
+  let pts=0;
+  for(const[d,ds]of Object.entries(sched)){
+    const sp=ds.split||state.defaultSplit;
+    for(const sl of SLOTS) if(ds[sl]===docId) pts+=calcSlotPoints(sl,sp,d);
+  }
+  return pts;
+}
+
+function avgPoints(sched){
+  const full=state.doctors.filter(d=>d.type==='full');
+  if(!full.length) return 0;
+  return full.reduce((s,d)=>s+calcDocPoints(d.id,sched),0)/full.length;
+}
+
 function scoreDoc(docId, date, slot, sched){
   const doc=state.doctors.find(d=>d.id===docId);
   const split=getDaySplit(date);
   let score=Math.random()*2;
   const myH=calcDocHours(docId,sched);
   const avg=avgHours(sched);
-  score+=(avg-myH)*1.5;
+  score+=(avg-myH)*1.2;
+  // Point equalization: strong pull toward ±20 target
+  const myPts=calcDocPoints(docId,sched);
+  const avgPts=avgPoints(sched);
+  score+=(avgPts-myPts)*3.0;
   score+=(doc.prefs[slotPrefKey(slot)]||0)*6;
   if(isHoliday(date)) score+=(doc.prefs.hol||0)*5;
   const last=getLastAssigned(docId,date,sched);
@@ -719,6 +738,42 @@ function autoSchedule(){
       } else if(SLOTS.includes(slKey)&&!newSched[d][slKey]){
         newSched[d][slKey]=pr.docId;
       }
+    }
+  }
+
+  // Priority pass: enforce morningReport (1st & 3rd Thu) before greedy
+  const reportThus=getFirstThirdThursdays(y,m);
+  for(const doc of state.doctors.filter(d=>d.type==='full'&&d.prefs.morningReport)){
+    for(const thu of reportThus){
+      const wed=addDays(thu,-1);
+      const covered=(newSched[thu]||{})['主白']===doc.id||(newSched[thu]||{})['早班']===doc.id
+                   ||(newSched[wed]||{})['大夜']===doc.id;
+      if(covered) continue;
+      let done=false;
+      for(const slot of ['主白','早班']){
+        if(!newSched[thu][slot]&&canWork(doc.id,thu,slot,newSched)){
+          newSched[thu][slot]=doc.id; done=true; break;
+        }
+      }
+      if(!done&&!newSched[wed]['大夜']&&canWork(doc.id,wed,'大夜',newSched)){
+        newSched[wed]['大夜']=doc.id;
+      }
+    }
+  }
+
+  // Priority pass: enforce medMeeting (at least 1 Thu 主白/早班 per month)
+  for(const doc of state.doctors.filter(d=>d.type==='full'&&d.prefs.medMeeting)){
+    const thursdays=dates.filter(d=>getDOW(d)===3);
+    const hasCover=thursdays.some(d=>newSched[d]['主白']===doc.id||newSched[d]['早班']===doc.id);
+    if(hasCover) continue;
+    for(const thu of thursdays){
+      let done=false;
+      for(const slot of ['主白','早班']){
+        if(!newSched[thu][slot]&&canWork(doc.id,thu,slot,newSched)){
+          newSched[thu][slot]=doc.id; done=true; break;
+        }
+      }
+      if(done) break;
     }
   }
 
