@@ -557,11 +557,20 @@ function canWork(docId, date, slot, sched){
     const dow=getDOW(date);
     if(![4,5,6].includes(dow)) return false;
   }
-  // Forward-looking: 大夜 ends 08:00 next day — block if doctor already has 主白/早班 next day (0 rest)
-  // Also block 大夜→OFF→主白/早班 (N-OFF-D forward direction)
+  // General forward rest check: if this shift crosses midnight, verify
+  // no already-scheduled next-day slot starts within 12h of this shift's end
+  {
+    const {e:_e}=slotRange(slot,split);
+    if(_e>24){
+      const d1=addDays(date,1),d1Sp=getDaySplit(d1),endHr=_e%24;
+      for(const sl of SLOTS){
+        if((sched[d1]||{})[sl]===docId&&slotRange(sl,d1Sp).s-endHr<12) return false;
+      }
+    }
+  }
+  // N-OFF-D forward: 大夜→OFF→主白/早班 two days later
   if(slot==='大夜'){
-    const d1=addDays(date,1), d2=addDays(date,2);
-    if((sched[d1]||{})['主白']===docId||(sched[d1]||{})['早班']===docId) return false;
+    const d1=addDays(date,1),d2=addDays(date,2);
     const d1Worked=SLOTS.some(s=>(sched[d1]||{})[s]===docId);
     if(!d1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
@@ -600,10 +609,19 @@ function canWorkRelaxed(docId, date, slot, sched){
     else break;
   }
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
-  // Forward-looking: same absolute prohibition as canWork
+  // General forward rest check (same absolute prohibition as canWork)
+  {
+    const {e:_e}=slotRange(slot,split);
+    if(_e>24){
+      const d1=addDays(date,1),d1Sp=getDaySplit(d1),endHr=_e%24;
+      for(const sl of SLOTS){
+        if((sched[d1]||{})[sl]===docId&&slotRange(sl,d1Sp).s-endHr<12) return false;
+      }
+    }
+  }
+  // N-OFF-D forward: 大夜→OFF→主白/早班
   if(slot==='大夜'){
-    const d1=addDays(date,1), d2=addDays(date,2);
-    if((sched[d1]||{})['主白']===docId||(sched[d1]||{})['早班']===docId) return false;
+    const d1=addDays(date,1),d2=addDays(date,2);
     const d1Worked=SLOTS.some(s=>(sched[d1]||{})[s]===docId);
     if(!d1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
@@ -1017,12 +1035,22 @@ function checkConstraints(dateStr){
       if(s2['大夜']===docId&&!SLOTS.some(s=>s1[s]===docId))
         issues.push(`${getDocName(docId)} 違反 N-OFF-D（大夜休一天接08上班）`);
     }
+    // Forward check: cross-midnight shift → next-day rest < 12h
+    {
+      const {e:_e}=slotRange(slot,sp);
+      if(_e>24){
+        const d1=addDays(dateStr,1),d1Sp=getDaySplit(d1),endHr=_e%24;
+        for(const sl of SLOTS){
+          const s1=state.schedule[d1]||{};
+          if(s1[sl]===docId&&slotRange(sl,d1Sp).s-endHr<12)
+            issues.push(`${getDocName(docId)} ${slot}${String(endHr).padStart(2,'0')}:00下班接隔日${String(slotRange(sl,d1Sp).s).padStart(2,'0')}:00上班（休息不足12h）`);
+        }
+      }
+    }
     if(slot==='大夜'){
       const d1=addDays(dateStr,1),d2=addDays(dateStr,2);
       const s1=state.schedule[d1]||{},s2=state.schedule[d2]||{};
-      if(s1['主白']===docId||s1['早班']===docId)
-        issues.push(`${getDocName(docId)} 大夜接隔日08上班（休息0h）`);
-      else if(!SLOTS.some(s=>s1[s]===docId)&&(s2['主白']===docId||s2['早班']===docId))
+      if(!SLOTS.some(s=>s1[s]===docId)&&(s2['主白']===docId||s2['早班']===docId))
         issues.push(`${getDocName(docId)} 違反 N-OFF-D（大夜休一天接08上班）`);
     }
   }
