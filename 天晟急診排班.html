@@ -557,6 +557,14 @@ function canWork(docId, date, slot, sched){
     const dow=getDOW(date);
     if(![4,5,6].includes(dow)) return false;
   }
+  // Forward-looking: 大夜 ends 08:00 next day — block if doctor already has 主白/早班 next day (0 rest)
+  // Also block 大夜→OFF→主白/早班 (N-OFF-D forward direction)
+  if(slot==='大夜'){
+    const d1=addDays(date,1), d2=addDays(date,2);
+    if((sched[d1]||{})['主白']===docId||(sched[d1]||{})['早班']===docId) return false;
+    const d1Worked=SLOTS.some(s=>(sched[d1]||{})[s]===docId);
+    if(!d1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+  }
   // Avoid same-day pairs
   for(const pair of (state.avoidPairs||[])){
     if(!pair.includes(docId)) continue;
@@ -592,6 +600,13 @@ function canWorkRelaxed(docId, date, slot, sched){
     else break;
   }
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
+  // Forward-looking: same absolute prohibition as canWork
+  if(slot==='大夜'){
+    const d1=addDays(date,1), d2=addDays(date,2);
+    if((sched[d1]||{})['主白']===docId||(sched[d1]||{})['早班']===docId) return false;
+    const d1Worked=SLOTS.some(s=>(sched[d1]||{})[s]===docId);
+    if(!d1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+  }
   // Avoid same-day pairs (enforced even in relaxed mode)
   for(const pair of (state.avoidPairs||[])){
     if(!pair.includes(docId)) continue;
@@ -1000,7 +1015,15 @@ function checkConstraints(dateStr){
       const d2=addDays(dateStr,-2),d1=addDays(dateStr,-1);
       const s2=state.schedule[d2]||{},s1=state.schedule[d1]||{};
       if(s2['大夜']===docId&&!SLOTS.some(s=>s1[s]===docId))
-        issues.push(`${getDocName(docId)} 違反 N-OFF-D`);
+        issues.push(`${getDocName(docId)} 違反 N-OFF-D（大夜休一天接08上班）`);
+    }
+    if(slot==='大夜'){
+      const d1=addDays(dateStr,1),d2=addDays(dateStr,2);
+      const s1=state.schedule[d1]||{},s2=state.schedule[d2]||{};
+      if(s1['主白']===docId||s1['早班']===docId)
+        issues.push(`${getDocName(docId)} 大夜接隔日08上班（休息0h）`);
+      else if(!SLOTS.some(s=>s1[s]===docId)&&(s2['主白']===docId||s2['早班']===docId))
+        issues.push(`${getDocName(docId)} 違反 N-OFF-D（大夜休一天接08上班）`);
     }
   }
   const assigned=SLOTS.map(s=>ds[s]).filter(Boolean);
