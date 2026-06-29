@@ -138,6 +138,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <button class="action-btn btn-blue" onclick="exportCSV()">📊 匯出CSV</button>
   <button class="action-btn btn-red" onclick="saveData()">💾 儲存</button>
   <button class="action-btn btn-gray" onclick="loadData()">📂 載入</button>
+  <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
 </div>
 
 <div id="tabs">
@@ -193,6 +194,18 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       </thead>
       <tbody id="doctor-tbody"></tbody>
     </table>
+    <div style="margin-top:16px;background:#fff;border-radius:6px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
+      <h3 style="font-size:13px;margin-bottom:10px;color:#1a4a7a">🚫 避免同時上班設定</h3>
+      <p style="font-size:11px;color:#888;margin-bottom:10px">設定後，這兩位醫師在同一天不會同時出現在班表中。</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <select id="avoid-doc1" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px"></select>
+        <span style="font-weight:700;color:#666">不與</span>
+        <select id="avoid-doc2" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px"></select>
+        <span style="font-weight:700;color:#666">同時上班</span>
+        <button class="action-btn btn-red" onclick="addAvoidPair()" style="padding:5px 12px">新增</button>
+      </div>
+      <div id="avoid-pairs-list"></div>
+    </div>
   </div>
 
   <!-- ======= 預假/預班 ======= -->
@@ -321,9 +334,11 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="form-row"><label>目標時數 最少</label><input type="number" id="pref-hmin" value="140" min="0" max="300" style="width:70px"><label style="min-width:30px">最多</label><input type="number" id="pref-hmax" value="220" min="0" max="300" style="width:70px"></div>
     <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
     <h3>特殊選項</h3>
-    <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(>10h)</label></div>
-    <div class="check-row"><input type="checkbox" id="pref-cnight"><label for="pref-cnight">夜班連上 (偏好連續大夜)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">週末夜班 (僅五六日排大夜)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">上班集中 (排班盡量連上一段、連修一段)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-morningReport"><label for="pref-morningReport">晨會報告 (第1、3週四08:00，需排主白/早班或週三大夜)</label></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('doctor-modal')">取消</button>
       <button class="btn-primary" onclick="saveDoc()">儲存</button>
@@ -342,6 +357,7 @@ let state = {
   defaultSplit: 20,
   schedule: {},
   preRequests: {},
+  avoidPairs: [],
   doctors: [
     {id:'d1',name:'陳孝綱',type:'full',color:'#1565c0',prefs:defPrefs()},
     {id:'d2',name:'賴雨濃',type:'full',color:'#2e7d32',prefs:defPrefs()},
@@ -350,12 +366,15 @@ let state = {
     {id:'d5',name:'許景棠',type:'full',color:'#00695c',prefs:defPrefs()},
     {id:'d6',name:'楊尚衡',type:'full',color:'#c62828',prefs:defPrefs()},
     {id:'d7',name:'謝見杰',type:'part',color:'#4e342e',prefs:defPrefs()},
+    {id:'d8',name:'左華韋',type:'full',color:'#0097a7',prefs:defPrefs()},
+    {id:'d9',name:'永曜嘉',type:'full',color:'#558b2f',prefs:defPrefs()},
   ],
 };
-let _idCnt = 8;
+let _idCnt = 10;
 
 function defPrefs(){
-  return {'白班':0,'小夜':0,'大夜':0,hol:0,hMin:140,hMax:220,maxConsec:6,long:false,cNight:false,wkNight:false};
+  return {'白班':0,'小夜':0,'大夜':0,hol:0,hMin:140,hMax:220,maxConsec:6,
+          long:false,wkNight:false,cluster:false,medMeeting:false,morningReport:false};
 }
 // Map a slot to its preference category
 function slotPrefKey(slot){
@@ -383,6 +402,22 @@ function addDays(dateStr,n){
 function isWeekend(dateStr){const dow=getDOW(dateStr);return dow===5||dow===6;}
 function isHoliday(dateStr){return state.holidays.has(dateStr)||isWeekend(dateStr);}
 function monthDates(y,m){const a=[];for(let d=1;d<=daysInMonth(y,m);d++)a.push(fmtDate(y,m,d));return a;}
+
+// Returns the 1st and 3rd Thursday dates of a given year/month
+function getFirstThirdThursdays(y,m){
+  const result=[];
+  const days=daysInMonth(y,m);
+  let thuCount=0;
+  for(let d=1;d<=days;d++){
+    const ds=fmtDate(y,m,d);
+    if(getDOW(ds)===3){// Thu=3 (Mon=0)
+      thuCount++;
+      if(thuCount===1||thuCount===3) result.push(ds);
+      if(thuCount===3) break;
+    }
+  }
+  return result;
+}
 
 // ============================================================
 // SLOT / SHIFT HELPERS
@@ -521,6 +556,12 @@ function canWork(docId, date, slot, sched){
     const dow=getDOW(date);
     if(![4,5,6].includes(dow)) return false;
   }
+  // Avoid same-day pairs
+  for(const pair of (state.avoidPairs||[])){
+    if(!pair.includes(docId)) continue;
+    const other=pair.find(x=>x!==docId);
+    if(SLOTS.some(s=>(sched[date]||{})[s]===other)) return false;
+  }
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
   for(const pr of nextDayPRs){
     if((pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')&&slot==='大夜') return false;
@@ -550,6 +591,12 @@ function canWorkRelaxed(docId, date, slot, sched){
     else break;
   }
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
+  // Avoid same-day pairs (enforced even in relaxed mode)
+  for(const pair of (state.avoidPairs||[])){
+    if(!pair.includes(docId)) continue;
+    const other=pair.find(x=>x!==docId);
+    if(SLOTS.some(s=>(sched[date]||{})[s]===other)) return false;
+  }
   return true;
 }
 
@@ -583,11 +630,32 @@ function scoreDoc(docId, date, slot, sched){
   const last=getLastAssigned(docId,date,sched);
   if(last&&last.slot===slot) score+=5;
   else if(last) score-=3;
-  if(doc.prefs.cNight&&slot==='大夜'){
+  // 上班集中: bonus if worked yesterday, mild penalty if gap (to cluster shifts)
+  if(doc.prefs.cluster){
     const yd=addDays(date,-1);
-    if((sched[yd]||{})['大夜']===docId) score+=10;
+    const workedYd=SLOTS.some(s=>(sched[yd]||{})[s]===docId);
+    if(workedYd) score+=15;
+    else score-=3;
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=5;
+  // 醫務會議: boost Thursday 主白/早班 if doctor still has no covered Thursday this month
+  if(doc.prefs.medMeeting&&getDOW(date)===3&&(slot==='主白'||slot==='早班')){
+    const hasThuCover=monthDates(state.year,state.month).some(d=>{
+      if(getDOW(d)!==3) return false;
+      return (sched[d]||{})['主白']===docId||(sched[d]||{})['早班']===docId;
+    });
+    if(!hasThuCover) score+=20;
+  }
+  // 晨會報告: boost report-Thursday 主白/早班, or Wednesday 大夜 before a report Thursday
+  if(doc.prefs.morningReport){
+    const reportThus=getFirstThirdThursdays(state.year,state.month);
+    const dow=getDOW(date);
+    if(reportThus.includes(date)&&(slot==='主白'||slot==='早班')) score+=25;
+    if(dow===2&&slot==='大夜'){// Wednesday大夜 covers next-day Thursday morning
+      const nextDay=addDays(date,1);
+      if(reportThus.includes(nextDay)) score+=25;
+    }
+  }
   const addH=slotHours(slot,split);
   const hMax=doc.prefs.hMax||220;
   const hMin=doc.prefs.hMin||140;
@@ -691,6 +759,7 @@ function autoSchedule(){
   }
 
   state.schedule=newSched;
+  autoSave();
   renderCalendar();
   switchTab('schedule');
   const empty=countEmpty(newSched);
@@ -846,6 +915,7 @@ function openDayModal(dateStr){
 function setDaySplit(dateStr, val){
   if(!state.schedule[dateStr]) state.schedule[dateStr]={split:val,主白:null,早班:null,晚班:null,大夜:null};
   state.schedule[dateStr].split=val;
+  autoSave();
   renderCalendar();
   openDayModal(dateStr);
 }
@@ -853,6 +923,7 @@ function setDaySplit(dateStr, val){
 function assignDoc(dateStr, slot, docId){
   if(!state.schedule[dateStr]) state.schedule[dateStr]={split:getDaySplit(dateStr),主白:null,早班:null,晚班:null,大夜:null};
   state.schedule[dateStr][slot]=docId||null;
+  autoSave();
   renderCalendar();
 }
 
@@ -889,6 +960,7 @@ function toggleHol(dateStr,e){
   e.stopPropagation();
   if(state.holidays.has(dateStr)) state.holidays.delete(dateStr);
   else state.holidays.add(dateStr);
+  autoSave();
   renderCalendar();
 }
 
@@ -908,7 +980,7 @@ function renderDoctorTable(){
       <td>${p.hol?levelStr(p.hol):'-'}</td>
       <td>${p.hMin}-${p.hMax}h</td>
       <td>${p.maxConsec}天</td>
-      <td>${[p.long?'長班':'',p.cNight?'夜連':'',p.wkNight?'週末夜':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>${[p.long?'長班':'',p.wkNight?'週末夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
         <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
         <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
@@ -940,8 +1012,10 @@ function openDocModal(docId){
     document.getElementById('pref-hmax').value=p.hMax;
     document.getElementById('pref-consec').value=p.maxConsec;
     document.getElementById('pref-long').checked=p.long;
-    document.getElementById('pref-cnight').checked=p.cNight;
     document.getElementById('pref-wknight').checked=p.wkNight;
+    document.getElementById('pref-cluster').checked=!!p.cluster;
+    document.getElementById('pref-medMeeting').checked=!!p.medMeeting;
+    document.getElementById('pref-morningReport').checked=!!p.morningReport;
   } else {
     document.getElementById('doc-name').value='';
     document.getElementById('doc-type').value='full';
@@ -951,8 +1025,10 @@ function openDocModal(docId){
     document.getElementById('pref-hmax').value=220;
     document.getElementById('pref-consec').value=6;
     document.getElementById('pref-long').checked=false;
-    document.getElementById('pref-cnight').checked=false;
     document.getElementById('pref-wknight').checked=false;
+    document.getElementById('pref-cluster').checked=false;
+    document.getElementById('pref-medMeeting').checked=false;
+    document.getElementById('pref-morningReport').checked=false;
   }
   document.getElementById('doctor-modal').classList.add('show');
 }
@@ -969,14 +1045,17 @@ function saveDoc(){
   prefs.hMax=parseInt(document.getElementById('pref-hmax').value);
   prefs.maxConsec=parseInt(document.getElementById('pref-consec').value);
   prefs.long=document.getElementById('pref-long').checked;
-  prefs.cNight=document.getElementById('pref-cnight').checked;
   prefs.wkNight=document.getElementById('pref-wknight').checked;
+  prefs.cluster=document.getElementById('pref-cluster').checked;
+  prefs.medMeeting=document.getElementById('pref-medMeeting').checked;
+  prefs.morningReport=document.getElementById('pref-morningReport').checked;
   if(id){
     const doc=state.doctors.find(d=>d.id===id);
     Object.assign(doc,{name,type:document.getElementById('doc-type').value,color:document.getElementById('doc-color').value,prefs});
   } else {
     state.doctors.push({id:'d'+(_idCnt++),name,type:document.getElementById('doc-type').value,color:document.getElementById('doc-color').value,prefs});
   }
+  autoSave();
   closeModal('doctor-modal');
   renderDoctorTable();
   renderCalendar();
@@ -985,8 +1064,50 @@ function saveDoc(){
 function delDoc(docId){
   if(!confirm('確定刪除？')) return;
   state.doctors=state.doctors.filter(d=>d.id!==docId);
+  state.avoidPairs=(state.avoidPairs||[]).filter(p=>!p.includes(docId));
   for(const ds of Object.values(state.schedule)){for(const sl of SLOTS)if(ds[sl]===docId)ds[sl]=null;}
+  autoSave();
   renderDoctorTable(); renderCalendar();
+}
+
+function renderAvoidPairs(){
+  const sel1=document.getElementById('avoid-doc1');
+  const sel2=document.getElementById('avoid-doc2');
+  if(sel1&&sel2){
+    const opts=state.doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+    sel1.innerHTML=opts; sel2.innerHTML=opts;
+  }
+  const list=document.getElementById('avoid-pairs-list');
+  if(!list) return;
+  const pairs=state.avoidPairs||[];
+  if(!pairs.length){list.innerHTML='<span style="font-size:11px;color:#aaa">尚無設定</span>';return;}
+  list.innerHTML=pairs.map((p,i)=>{
+    const n1=state.doctors.find(d=>d.id===p[0])?.name||p[0];
+    const n2=state.doctors.find(d=>d.id===p[1])?.name||p[1];
+    return `<div style="display:inline-flex;align-items:center;gap:6px;background:#ffeef0;border:1px solid #ffcdd2;border-radius:4px;padding:3px 8px;margin:2px;font-size:12px">
+      <strong>${n1}</strong> ✗ <strong>${n2}</strong>
+      <button class="btn-sm btn-del" onclick="delAvoidPair(${i})" style="padding:1px 5px;font-size:10px">刪除</button>
+    </div>`;
+  }).join('');
+}
+
+function addAvoidPair(){
+  const d1=document.getElementById('avoid-doc1').value;
+  const d2=document.getElementById('avoid-doc2').value;
+  if(!d1||!d2||d1===d2){showToast('請選擇兩位不同的醫師','warn');return;}
+  if(!state.avoidPairs) state.avoidPairs=[];
+  const exists=state.avoidPairs.some(p=>(p[0]===d1&&p[1]===d2)||(p[0]===d2&&p[1]===d1));
+  if(exists){showToast('此配對已存在','warn');return;}
+  state.avoidPairs.push([d1,d2]);
+  renderAvoidPairs();
+  autoSave();
+  showToast('已新增避免同時上班配對');
+}
+
+function delAvoidPair(i){
+  state.avoidPairs.splice(i,1);
+  renderAvoidPairs();
+  autoSave();
 }
 
 // ============================================================
@@ -1032,6 +1153,7 @@ function addPR(){
     cur=addDays(cur,1);
     count++;
   }
+  autoSave();
   renderPRList(); renderCalendar();
   showToast(`已新增 ${count} 筆預假/預班`);
 }
@@ -1039,6 +1161,7 @@ function delPR(date,docId,type,custom){
   if(!state.preRequests[date]) return;
   state.preRequests[date]=state.preRequests[date].filter(r=>!(r.docId===docId&&r.type===type&&(r.custom||'')===(custom||'')));
   if(!state.preRequests[date].length) delete state.preRequests[date];
+  autoSave();
   renderPRList(); renderCalendar();
 }
 function onPRTypeChange(){
@@ -1130,6 +1253,7 @@ function renderStats(){
   }).join('');
 
   const viols=[];
+  const reportThus=getFirstThirdThursdays(state.year,state.month);
   for(const doc of state.doctors){
     if(doc.type!=='full') continue;
     const s=st[doc.id];
@@ -1137,6 +1261,25 @@ function renderStats(){
     if(totalH<doc.prefs.hMin) viols.push(`⚠ ${doc.name} 時數不足(${totalH}h < ${doc.prefs.hMin}h)`);
     if(totalH>doc.prefs.hMax) viols.push(`⚠ ${doc.name} 時數超標(${totalH}h > ${doc.prefs.hMax}h)`);
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
+    // 醫務會議: need at least one Thursday 主白/早班
+    if(doc.prefs.medMeeting){
+      const hasThu=dates.some(d=>{
+        if(getDOW(d)!==3) return false;
+        const ds=state.schedule[d]||{};
+        return ds['主白']===doc.id||ds['早班']===doc.id;
+      });
+      if(!hasThu) viols.push(`⚠ ${doc.name} 醫務會議：本月無週四主白/早班可簽到`);
+    }
+    // 晨會報告: each report Thursday needs 主白/早班 that day OR 大夜 on preceding Wednesday
+    if(doc.prefs.morningReport){
+      for(const thu of reportThus){
+        const wed=addDays(thu,-1);
+        const thuDs=state.schedule[thu]||{};
+        const wedDs=state.schedule[wed]||{};
+        const covered=(thuDs['主白']===doc.id||thuDs['早班']===doc.id)||wedDs['大夜']===doc.id;
+        if(!covered) viols.push(`⚠ ${doc.name} 晨會報告：${thu} 無法出席(需當天主白/早班或前天大夜)`);
+      }
+    }
   }
   const empties=countEmpty(state.schedule);
   if(empties>0) viols.push(`❌ 尚有 ${empties} 個空缺`);
@@ -1260,6 +1403,7 @@ function importDoctorData(){
           if(!state.preRequests[date]) state.preRequests[date]=[];
           for(const pr of prs) state.preRequests[date].push({...pr,docId:doc.id});
         }
+        autoSave();
         renderCalendar(); renderDoctorTable();
         showToast(`已匯入 ${doc.name} 的設定與預假`);
       }catch(err){showToast('匯入失敗: '+err.message,'warn');}
@@ -1363,8 +1507,10 @@ function initPersonalView(encoded){
       <div style="background:#f8f9fa;padding:10px;border-radius:6px">
         <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">特殊選項</div>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-long" ${pvState.prefs.long?'checked':''}> 偏好長班(&gt;10h)</label>
-        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-cNight" ${pvState.prefs.cNight?'checked':''}> 夜班連上</label>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-wkNight" ${pvState.prefs.wkNight?'checked':''}> 週末夜班</label>
+        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-cluster" ${pvState.prefs.cluster?'checked':''}> 上班集中</label>
+        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-medMeeting" ${pvState.prefs.medMeeting?'checked':''}> 醫務會議</label>
+        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-morningReport" ${pvState.prefs.morningReport?'checked':''}> 晨會報告</label>
       </div>
     </div>`;
     prefsForm.innerHTML=prefsHtml;
@@ -1384,8 +1530,10 @@ function initPersonalView(encoded){
       pvState.prefs.hMax=parseInt(document.getElementById('pvp-hMax').value)||220;
       pvState.prefs.maxConsec=parseInt(document.getElementById('pvp-maxConsec').value)||6;
       pvState.prefs.long=document.getElementById('pvp-long').checked;
-      pvState.prefs.cNight=document.getElementById('pvp-cNight').checked;
       pvState.prefs.wkNight=document.getElementById('pvp-wkNight').checked;
+      pvState.prefs.cluster=document.getElementById('pvp-cluster').checked;
+      pvState.prefs.medMeeting=document.getElementById('pvp-medMeeting').checked;
+      pvState.prefs.morningReport=document.getElementById('pvp-morningReport').checked;
 
       const payload={
         _type:'doctor_export', docId:pvState.docId, name:pvState.name, color:pvState.color, type:pvState.type,
@@ -1472,6 +1620,7 @@ function changeMonth(delta){
   state.month+=delta;
   if(state.month<0){state.month=11;state.year--;}
   if(state.month>11){state.month=0;state.year++;}
+  autoSave();
   renderCalendar();
 }
 function switchTab(name){
@@ -1479,7 +1628,7 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  if(name==='doctors') renderDoctorTable();
+  if(name==='doctors'){renderDoctorTable();renderAvoidPairs();}
   if(name==='prereq') renderPRTab();
   if(name==='stats') renderStats();
   if(name==='personal') renderPersonalTab();
@@ -1490,15 +1639,52 @@ function clearSchedule(){
     const sp=getDaySplit(d);
     state.schedule[d]={split:sp,主白:null,早班:null,晚班:null,大夜:null};
   }
+  autoSave();
   renderCalendar();
 }
+
 
 // ============================================================
 // SAVE / LOAD / EXPORT
 // ============================================================
+// ============================================================
+// AUTO-SAVE (localStorage)
+// ============================================================
+const LS_KEY='tienSheng_erSched_v1';
+
+function autoSave(){
+  try{
+    const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
+      holidays:[...state.holidays],year:state.year,month:state.month,
+      defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt};
+    localStorage.setItem(LS_KEY,JSON.stringify(data));
+    const ind=document.getElementById('_autosave_ind');
+    if(ind){ind.style.opacity='1';clearTimeout(ind._t);ind._t=setTimeout(()=>ind.style.opacity='0',1500);}
+  }catch(e){console.warn('AutoSave failed',e);}
+}
+
+function autoLoad(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return false;
+    const d=JSON.parse(raw);
+    if(d.doctors) state.doctors=d.doctors;
+    if(d.schedule) state.schedule=d.schedule;
+    state.preRequests=d.preRequests||{};
+    state.holidays=new Set(d.holidays||[]);
+    if(d.year!=null) state.year=d.year;
+    if(d.month!=null) state.month=d.month;
+    state.defaultSplit=d.defaultSplit||20;
+    state.avoidPairs=d.avoidPairs||[];
+    if(d.idCnt) _idCnt=d.idCnt;
+    return true;
+  }catch(e){return false;}
+}
+
 function saveData(){
   const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
-    holidays:[...state.holidays],year:state.year,month:state.month,defaultSplit:state.defaultSplit,idCnt:_idCnt};
+    holidays:[...state.holidays],year:state.year,month:state.month,
+    defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1518,8 +1704,10 @@ function loadData(){
         state.holidays=new Set(d.holidays||[]);
         state.year=d.year; state.month=d.month;
         state.defaultSplit=d.defaultSplit||20;
+        state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
         document.getElementById('default-split').value=state.defaultSplit;
+        autoSave();
         renderCalendar(); showToast('載入成功！');
       }catch(err){showToast('載入失敗: '+err.message,'warn');}
     };
@@ -1555,7 +1743,11 @@ window.onload=()=>{
   if(hash.startsWith('#pv=')){
     initPersonalView(hash.slice(4));
   } else {
+    const restored=autoLoad();
+    const splitEl=document.getElementById('default-split');
+    if(splitEl) splitEl.value=state.defaultSplit;
     renderCalendar();
+    if(restored) showToast('已自動還原上次排班資料');
   }
 };
 </script>
