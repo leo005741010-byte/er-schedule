@@ -158,6 +158,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <button class="action-btn btn-green" onclick="autoSchedule()">⚡ 自動排班</button>
   <button class="action-btn btn-orange" onclick="clearSchedule()">🗑 清空</button>
   <button id="btn-undo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="undoLast()" disabled title="無可還原操作">↩ 還原</button>
+  <button id="btn-redo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="redoLast()" disabled title="無可重做操作">↪ 重做</button>
   <button id="btn-lock" class="action-btn" style="background:#546e7a" onclick="toggleLock()">🔓 鎖定</button>
   <button class="action-btn btn-blue" onclick="exportCSV()">📊 匯出CSV</button>
   <button class="action-btn btn-red" onclick="saveData()">💾 儲存</button>
@@ -407,23 +408,38 @@ let _idCnt = 10;
 let _filterDocId = null;
 let _schedLocked = false;
 let _undoStack = [];
+let _redoStack = [];
 function pushUndo(){
   _undoStack.push(JSON.stringify({schedule:state.schedule,preRequests:state.preRequests}));
   if(_undoStack.length>10) _undoStack.shift();
-  updateUndoBtn();
+  _redoStack=[];  // 新操作打斷重做鏈
+  updateUndoBtn(); updateRedoBtn();
 }
 function undoLast(){
+  if(_schedLocked){showToast('班表已鎖定，無法還原','warn');return;}
   if(!_undoStack.length){showToast('沒有可還原的操作','warn');return;}
   if(!confirm('確定還原到上一個狀態？')) return;
+  _redoStack.push(JSON.stringify({schedule:state.schedule,preRequests:state.preRequests}));
+  if(_redoStack.length>10) _redoStack.shift();
   const snap=JSON.parse(_undoStack.pop());
-  state.schedule=snap.schedule;
-  state.preRequests=snap.preRequests;
+  state.schedule=snap.schedule; state.preRequests=snap.preRequests;
   autoSave(); renderCalendar(); renderPRList();
-  showToast('✅ 已還原','ok'); updateUndoBtn();
+  showToast('✅ 已還原','ok'); updateUndoBtn(); updateRedoBtn();
+}
+function redoLast(){
+  if(_schedLocked){showToast('班表已鎖定，無法重做','warn');return;}
+  if(!_redoStack.length){showToast('沒有可重做的操作','warn');return;}
+  if(!confirm('確定重做？')) return;
+  _undoStack.push(JSON.stringify({schedule:state.schedule,preRequests:state.preRequests}));
+  if(_undoStack.length>10) _undoStack.shift();
+  const snap=JSON.parse(_redoStack.pop());
+  state.schedule=snap.schedule; state.preRequests=snap.preRequests;
+  autoSave(); renderCalendar(); renderPRList();
+  showToast('✅ 已重做','ok'); updateUndoBtn(); updateRedoBtn();
 }
 function toggleLock(){
   _schedLocked=!_schedLocked;
-  updateLockBtn();
+  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
   showToast(_schedLocked?'🔒 班表已鎖定，防止誤操作':'🔓 班表已解鎖','ok');
 }
 function updateLockBtn(){
@@ -435,9 +451,16 @@ function updateLockBtn(){
 function updateUndoBtn(){
   const b=document.getElementById('btn-undo');
   if(!b) return;
-  b.disabled=_undoStack.length===0;
-  b.style.opacity=_undoStack.length?'1':'0.4';
-  b.title=_undoStack.length?`可還原 ${_undoStack.length} 步`:'無可還原操作';
+  const ok=_undoStack.length>0&&!_schedLocked;
+  b.disabled=!ok; b.style.opacity=ok?'1':'0.4';
+  b.title=_schedLocked?'班表已鎖定':(_undoStack.length?`可還原 ${_undoStack.length} 步`:'無可還原操作');
+}
+function updateRedoBtn(){
+  const b=document.getElementById('btn-redo');
+  if(!b) return;
+  const ok=_redoStack.length>0&&!_schedLocked;
+  b.disabled=!ok; b.style.opacity=ok?'1':'0.4';
+  b.title=_schedLocked?'班表已鎖定':(_redoStack.length?`可重做 ${_redoStack.length} 步`:'無可重做操作');
 }
 function toggleDocFilter(docId){
   _filterDocId = (_filterDocId===docId) ? null : docId;
@@ -2503,7 +2526,7 @@ window.onload=()=>{
     const splitEl=document.getElementById('default-split');
     if(splitEl) splitEl.value=state.defaultSplit;
     renderCalendar();
-    updateLockBtn(); updateUndoBtn();
+    updateLockBtn(); updateUndoBtn(); updateRedoBtn();
     if(restored) showToast('已自動還原上次排班資料');
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
