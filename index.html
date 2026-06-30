@@ -125,6 +125,8 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
 .pv-pr-table th{background:#f0f4f8;padding:6px 8px;text-align:left;}
 .pv-pr-table td{padding:5px 8px;border-bottom:1px solid #eee;}
 </style>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -139,6 +141,8 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <button class="action-btn btn-red" onclick="saveData()">💾 儲存</button>
   <button class="action-btn btn-gray" onclick="loadData()">📂 載入</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
+  <button class="action-btn btn-purple" onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
+  <span id="_cloud_status" style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
 </div>
 
 <div id="tabs">
@@ -880,19 +884,26 @@ function autoSchedule(){
     }
   }
 
-  // 4th pass: boost doctors below 120h minimum (exempt if >20 OFF pre-request days)
-  for(const doc of state.doctors.filter(d=>d.type==='full')){
-    if(countDocOffDays(doc.id)>20) continue;
-    for(const d of dates){
-      if(calcDocHours(doc.id,newSched)>=120) break;
-      for(const slot of SLOTS){
-        if(newSched[d][slot]) continue;
-        if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue;
-        if(canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)){
-          newSched[d][slot]=doc.id; break;
+  // 4th pass: force doctors to 120h minimum (exempt if >20 OFF days)
+  // Loop with shuffled dates until all eligible doctors reach 120h or no progress possible
+  for(let attempt=0;attempt<10;attempt++){
+    let anyProgress=false;
+    const tryDates=attempt===0?[...dates]:shuffle([...dates]);
+    for(const doc of state.doctors.filter(d=>d.type==='full')){
+      if(countDocOffDays(doc.id)>20) continue;
+      if(calcDocHours(doc.id,newSched)>=120) continue;
+      for(const d of tryDates){
+        if(calcDocHours(doc.id,newSched)>=120) break;
+        for(const slot of SLOTS){
+          if(newSched[d][slot]) continue;
+          if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue;
+          if(canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)){
+            newSched[d][slot]=doc.id; anyProgress=true; break;
+          }
         }
       }
     }
+    if(!anyProgress) break;
   }
 
   // ===== POST-PROCESSING: remove any surviving rest violations =====
@@ -1856,6 +1867,108 @@ function clearSchedule(){
 // ============================================================
 const LS_KEY='tienSheng_erSched_v1';
 
+// ============================================================
+// CLOUD SYNC (Firebase Realtime Database)
+// ============================================================
+const CLOUD_URL_KEY='tienSheng_cloudUrl';
+let _fbApp=null,_fbRef=null,_fbIgnoreOwn=false,_fbIgnoreTimer=null;
+
+function getCloudUrl(){ return localStorage.getItem(CLOUD_URL_KEY)||''; }
+
+async function initCloud(url){
+  if(!url){ updateCloudStatus(false); return; }
+  if(!window.firebase){ updateCloudStatus(false,'SDK未載入'); return; }
+  try{
+    if(_fbRef){ _fbRef.off(); _fbRef=null; }
+    if(_fbApp){ try{ await firebase.app('erSched').delete(); }catch(e){} _fbApp=null; }
+    _fbApp=firebase.initializeApp({databaseURL:url.trim()},'erSched');
+    _fbRef=firebase.database(_fbApp).ref('erScheduleData');
+    _fbRef.on('value', snap=>{
+      if(_fbIgnoreOwn) return;
+      const data=snap.val();
+      if(!data) return;
+      applyCloudData(data);
+    });
+    updateCloudStatus(true);
+    localStorage.setItem(CLOUD_URL_KEY,url.trim());
+    showToast('☁️ 雲端同步已連線','ok');
+  }catch(e){
+    _fbRef=null; _fbApp=null;
+    updateCloudStatus(false,'連線失敗');
+    showToast('☁️ 連線失敗: '+e.message,'warn');
+  }
+}
+
+function applyCloudData(data){
+  if(data.doctors) state.doctors=data.doctors;
+  if(data.schedule) state.schedule=data.schedule;
+  state.preRequests=data.preRequests||{};
+  state.holidays=new Set(data.holidays||[]);
+  if(data.year!=null) state.year=data.year;
+  if(data.month!=null) state.month=data.month;
+  state.defaultSplit=clampSplit(data.defaultSplit||18);
+  state.avoidPairs=data.avoidPairs||[];
+  if(data.idCnt) _idCnt=data.idCnt;
+  const sl=document.getElementById('default-split');
+  if(sl) sl.value=state.defaultSplit;
+  const ml=document.getElementById('month-label');
+  if(ml) ml.textContent=`${state.year}年${state.month+1}月`;
+  renderCalendar();
+  renderDoctorTable();
+  try{ localStorage.setItem(LS_KEY,JSON.stringify({
+    doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
+    holidays:[...state.holidays],year:state.year,month:state.month,
+    defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt
+  }));}catch(e){}
+}
+
+function cloudSave(){
+  if(!_fbRef) return;
+  _fbIgnoreOwn=true;
+  clearTimeout(_fbIgnoreTimer);
+  _fbIgnoreTimer=setTimeout(()=>{ _fbIgnoreOwn=false; },4000);
+  const data={
+    doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
+    holidays:[...state.holidays],year:state.year,month:state.month,
+    defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],
+    idCnt:_idCnt,_ts:Date.now()
+  };
+  _fbRef.set(data)
+    .then(()=>{ _fbIgnoreOwn=false; clearTimeout(_fbIgnoreTimer); })
+    .catch(e=>{ _fbIgnoreOwn=false; showToast('☁️ 雲端儲存失敗: '+e.message,'warn'); });
+}
+
+function updateCloudStatus(ok,msg=''){
+  const el=document.getElementById('_cloud_status');
+  if(!el) return;
+  el.textContent=ok?'☁️ 已連線':('☁️ '+(msg||'未連線'));
+  el.style.color=ok?'#a5d6a7':'#ef9a9a';
+}
+
+function openCloudSettings(){
+  const cur=getCloudUrl();
+  const url=prompt(
+    '☁️ 設定 Firebase 雲端同步\n\n'+
+    '設定步驟：\n'+
+    '1. 前往 https://console.firebase.google.com\n'+
+    '2. 建立新專案（名稱隨意）\n'+
+    '3. 左側選「建構 → Realtime Database」→「建立資料庫」→ 選「以測試模式啟動」\n'+
+    '4. 複製資料庫網址（格式：https://xxx-default-rtdb.firebaseio.com）\n'+
+    '5. 貼在下方後確定\n\n'+
+    '留空並確定 → 斷開雲端連線',
+    cur
+  );
+  if(url===null) return;
+  if(!url.trim()){
+    localStorage.removeItem(CLOUD_URL_KEY);
+    if(_fbRef){ _fbRef.off(); _fbRef=null; }
+    updateCloudStatus(false);
+    showToast('已斷開雲端同步');
+    return;
+  }
+  initCloud(url.trim());
+}
+
 function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
@@ -1864,6 +1977,7 @@ function autoSave(){
     localStorage.setItem(LS_KEY,JSON.stringify(data));
     const ind=document.getElementById('_autosave_ind');
     if(ind){ind.style.opacity='1';clearTimeout(ind._t);ind._t=setTimeout(()=>ind.style.opacity='0',1500);}
+    cloudSave();
   }catch(e){console.warn('AutoSave failed',e);}
 }
 
@@ -1952,6 +2066,8 @@ window.onload=()=>{
     if(splitEl) splitEl.value=state.defaultSplit;
     renderCalendar();
     if(restored) showToast('已自動還原上次排班資料');
+    const savedCloudUrl=getCloudUrl();
+    if(savedCloudUrl) initCloud(savedCloudUrl);
   }
 };
 </script>
