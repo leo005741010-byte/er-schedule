@@ -44,7 +44,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
 .slot-tag{width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;border-radius:2px;flex-shrink:0;}
 .tag-主白{background:#fff8e1;color:#e65100;border:1px solid #ffcc02;}
 .tag-早班{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
-.tag-晚班{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;}
+.tag-小夜{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;}
 .tag-大夜{background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;}
 .shift-doc{flex:1;padding:2px 5px;border-radius:3px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;min-width:0;gap:2px;}
 .shift-doc .doc-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;}
@@ -124,6 +124,26 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
 .pv-pr-table{width:100%;border-collapse:collapse;font-size:12px;}
 .pv-pr-table th{background:#f0f4f8;padding:6px 8px;text-align:left;}
 .pv-pr-table td{padding:5px 8px;border-bottom:1px solid #eee;}
+/* ===== PREREQ CALENDAR PICKER ===== */
+.pr-cal-wrap{display:inline-block;background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px;user-select:none;vertical-align:top;}
+.pr-cal-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;gap:8px;}
+.pr-cal-nav span{font-size:13px;font-weight:700;flex:1;text-align:center;}
+.pr-cal-nav button{background:none;border:1px solid #ccc;border-radius:3px;cursor:pointer;padding:1px 8px;font-size:12px;}
+.pr-cal-nav button:hover{background:#e3f2fd;}
+.pr-cal-grid{display:grid;grid-template-columns:repeat(7,30px);gap:2px;}
+.pr-cal-hd{text-align:center;font-size:11px;font-weight:700;color:#555;line-height:22px;}
+.pr-cal-hd.wknd{color:#c62828;}
+.pr-cal-cell{text-align:center;font-size:12px;line-height:26px;border-radius:3px;cursor:pointer;width:30px;}
+.pr-cal-cell:hover{background:#e3f2fd;}
+.pr-cal-cell.wknd{color:#c62828;}
+.pr-cal-cell.today{outline:2px solid #1565c0;outline-offset:-2px;}
+.pr-cal-cell.in-range{background:#bbdefb;border-radius:0;}
+.pr-cal-cell.range-start{background:#1565c0;color:#fff;border-radius:4px 0 0 4px;}
+.pr-cal-cell.range-end{background:#1565c0;color:#fff;border-radius:0 4px 4px 0;}
+.pr-cal-cell.range-single{background:#1565c0;color:#fff;border-radius:4px;}
+.pr-cal-cell.range-start.range-end{border-radius:4px;}
+.pr-cal-hint{font-size:11px;color:#555;margin-top:5px;min-height:16px;}
+.pr-cal-selected{font-size:12px;color:#1565c0;font-weight:600;margin-top:3px;min-height:16px;}
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -164,7 +184,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
           &nbsp;
           <span class="slot-tag tag-早班" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">早班</span>08:00-切割點
           &nbsp;
-          <span class="slot-tag tag-晚班" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">晚班</span>切割點-02:00
+          <span class="slot-tag tag-小夜" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">小夜</span>切割點-02:00
           &nbsp;
           <span class="slot-tag tag-大夜" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">大夜</span>20:00-08:00(12h)
         </span>
@@ -216,16 +236,27 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       <h3 style="margin-bottom:8px">新增預假/預班</h3>
       <div class="pr-form">
         <div><div>醫師</div><select id="pr-doc"></select></div>
-        <div><div>開始日期</div><input type="date" id="pr-date-start"></div>
-        <div><div>結束日期（可選，連選）</div><input type="date" id="pr-date-end" placeholder="同開始日期"></div>
+        <div>
+          <div style="margin-bottom:4px">選取日期（點選單日或拖曳選範圍）</div>
+          <div class="pr-cal-wrap">
+            <div class="pr-cal-nav">
+              <button onclick="prCalPrev()">&#9664;</button>
+              <span id="pr-cal-title"></span>
+              <button onclick="prCalNext()">&#9654;</button>
+            </div>
+            <div id="pr-cal-grid" class="pr-cal-grid"></div>
+            <div class="pr-cal-hint">點選單日；或按住拖曳選多日</div>
+            <div class="pr-cal-selected" id="pr-cal-selected">尚未選取日期</div>
+          </div>
+        </div>
         <div><div>類型</div>
           <select id="pr-type" onchange="onPRTypeChange()">
             <option value="OFF">當天OFF</option>
             <option value="OFF_NO_BIG">當天OFF + 前天不排大夜</option>
-            <option value="OFF_NO_NIGHT">當天OFF + 前天不排晚班/大夜</option>
+            <option value="OFF_NO_NIGHT">當天OFF + 前天不排小夜/大夜</option>
             <option value="WORK_主白">預上班 - 主白(08-20)</option>
             <option value="WORK_早班">預上班 - 早班</option>
-            <option value="WORK_晚班">預上班 - 晚班</option>
+            <option value="WORK_小夜">預上班 - 小夜</option>
             <option value="WORK_大夜">預上班 - 大夜(20-08)</option>
             <option value="WORK_CUSTOM">預上班 - 自訂時間</option>
           </select>
@@ -260,7 +291,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
             <th rowspan="2">醫師</th>
             <th colspan="3">主白 08-20</th>
             <th colspan="3">早班</th>
-            <th colspan="3">晚班</th>
+            <th colspan="3">小夜</th>
             <th colspan="3">大夜 20-08</th>
             <th rowspan="2">總時數</th>
             <th colspan="3">假日各班時數</th>
@@ -381,7 +412,7 @@ function defPrefs(){
 // Map a slot to its preference category
 function slotPrefKey(slot){
   if(slot==='主白'||slot==='早班') return '白班';
-  if(slot==='晚班') return '小夜';
+  if(slot==='小夜') return '小夜';
   return '大夜'; // 大夜
 }
 
@@ -424,13 +455,13 @@ function getFirstThirdThursdays(y,m){
 // ============================================================
 // SLOT / SHIFT HELPERS
 // ============================================================
-const SLOTS = ['主白','早班','晚班','大夜'];
+const SLOTS = ['主白','早班','小夜','大夜'];
 
 function slotRange(slot, split){
   switch(slot){
     case '主白': return {s:8, e:20, h:12};
     case '早班': return {s:8, e:split, h:split-8};
-    case '晚班': return {s:split, e:26, h:26-split};
+    case '小夜': return {s:split, e:26, h:26-split};
     case '大夜': return {s:20, e:32, h:12};
   }
 }
@@ -505,10 +536,10 @@ function parseCustomShift(custom){
   if(s===8&&e===20) return {slot:'主白', split:null};
   if(s===20&&e===32) return {slot:'大夜', split:null};
   if(s===8&&e>=14&&e<=20) return {slot:'早班', split:e};
-  if(s>=14&&s<=20&&e===26) return {slot:'晚班', split:s};
+  if(s>=14&&s<=20&&e===26) return {slot:'小夜', split:s};
   // Fallback: best-effort mapping
   if(s===8&&e>8&&e<20) return {slot:'早班', split:e};
-  if(s>8&&s<26&&e===26) return {slot:'晚班', split:s};
+  if(s>8&&s<26&&e===26) return {slot:'小夜', split:s};
   return null;
 }
 
@@ -562,12 +593,12 @@ function canWork(docId, date, slot, sched){
     if(![4,5,6].includes(dow)) return false;
   }
   // ===== ABSOLUTE PROHIBITIONS (both backward and forward) =====
-  // 主白/早班 starts at 08:00 — must not have 大夜(ends 08:00) or 晚班(ends 02:00) yesterday
+  // 主白/早班 starts at 08:00 — must not have 大夜(ends 08:00) or 小夜(ends 02:00) yesterday
   if(slot==='主白'||slot==='早班'){
     const yd=addDays(date,-1);
     const yds=sched[yd]||{};
     if(yds['大夜']===docId) return false; // 0h rest
-    if(yds['晚班']===docId) return false; // 6h rest < 12h
+    if(yds['小夜']===docId) return false; // 6h rest < 12h
   }
   // 大夜 ends at 08:00 next day — must not have 主白/早班(starts 08:00) next day
   if(slot==='大夜'){
@@ -579,8 +610,8 @@ function canWork(docId, date, slot, sched){
     const td1Worked=SLOTS.some(s=>tds[s]===docId);
     if(!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
-  // 晚班 ends at 02:00 next day — must not have 主白/早班(starts 08:00) next day (6h rest)
-  if(slot==='晚班'){
+  // 小夜 ends at 02:00 next day — must not have 主白/早班(starts 08:00) next day (6h rest)
+  if(slot==='小夜'){
     const td=addDays(date,1);
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
@@ -594,7 +625,7 @@ function canWork(docId, date, slot, sched){
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
   for(const pr of nextDayPRs){
     if((pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')&&slot==='大夜') return false;
-    if(pr.type==='OFF_NO_NIGHT'&&slot==='晚班') return false;
+    if(pr.type==='OFF_NO_NIGHT'&&slot==='小夜') return false;
   }
   return true;
 }
@@ -624,7 +655,7 @@ function canWorkRelaxed(docId, date, slot, sched){
   if(slot==='主白'||slot==='早班'){
     const yd=addDays(date,-1);
     const yds=sched[yd]||{};
-    if(yds['大夜']===docId||yds['晚班']===docId) return false;
+    if(yds['大夜']===docId||yds['小夜']===docId) return false;
   }
   if(slot==='大夜'){
     const td=addDays(date,1);
@@ -634,7 +665,7 @@ function canWorkRelaxed(docId, date, slot, sched){
     const td1Worked=SLOTS.some(s=>tds[s]===docId);
     if(!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
-  if(slot==='晚班'){
+  if(slot==='小夜'){
     const td=addDays(date,1);
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
@@ -743,7 +774,7 @@ function scoreDoc(docId, date, slot, sched){
   return score;
 }
 
-// Choose optimal split for a day given the assigned 早班 and 晚班 doctors
+// Choose optimal split for a day given the assigned 早班 and 小夜 doctors
 function bestSplitForPair(earlyId, lateId, date, sched){
   const earlyDoc = earlyId ? state.doctors.find(d=>d.id===earlyId) : null;
   const lateDoc  = lateId  ? state.doctors.find(d=>d.id===lateId)  : null;
@@ -752,7 +783,7 @@ function bestSplitForPair(earlyId, lateId, date, sched){
   let bestSp = state.defaultSplit, bestSc = -Infinity;
   for(let sp=16; sp<=19; sp++){
     const earlyH = sp - 8;   // 早班 hours
-    const lateH  = 26 - sp;  // 晚班 hours
+    const lateH  = 26 - sp;  // 小夜 hours
     let sc = 0;
     // Long-shift preference
     if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 8;
@@ -782,7 +813,7 @@ function autoSchedule(){
 
   for(const d of dates){
     const existing=state.schedule[d]||{};
-    newSched[d]={split:existing.split||state.defaultSplit, 主白:null, 早班:null, 晚班:null, 大夜:null};
+    newSched[d]={split:existing.split||state.defaultSplit, 主白:null, 早班:null, 小夜:null, 大夜:null};
   }
 
   // fullSched: Proxy that reads current month from newSched (live), other months from state.schedule.
@@ -941,21 +972,21 @@ function autoSchedule(){
         if(ds2['早班']===did){newSched[d2]['早班']=null;}
       }
     }
-    // 晚班 on D → 主白/早班 on D+1: 6h rest
-    if(ds['晚班']){
-      const did=ds['晚班'];
+    // 小夜 on D → 主白/早班 on D+1: 6h rest
+    if(ds['小夜']){
+      const did=ds['小夜'];
       const d1=addDays(d,1); const ds1=newSched[d1]||{};
       if(ds1['主白']===did){newSched[d1]['主白']=null;}
       if(ds1['早班']===did){newSched[d1]['早班']=null;}
     }
   }
 
-  // Auto-optimize split for each day based on assigned 早班/晚班 doctors
+  // Auto-optimize split for each day based on assigned 早班/小夜 doctors
   for(const d of dates){
     // Only auto-optimize if split wasn't locked by a WORK_CUSTOM pre-request
     const hasCustomPR = (state.preRequests[d]||[]).some(pr=>pr.type==='WORK_CUSTOM'&&pr.custom&&parseCustomShift(pr.custom)?.split!==null);
     if(!hasCustomPR){
-      newSched[d].split = bestSplitForPair(newSched[d]['早班'], newSched[d]['晚班'], d, newSched);
+      newSched[d].split = bestSplitForPair(newSched[d]['早班'], newSched[d]['小夜'], d, newSched);
     }
   }
 
@@ -1030,7 +1061,7 @@ function renderCalendar(){
     const slotInfo=[
       {slot:'主白',tagClass:'tag-主白',tagLabel:'主'},
       {slot:'早班',tagClass:'tag-早班',tagLabel:'早'},
-      {slot:'晚班',tagClass:'tag-晚班',tagLabel:'晚'},
+      {slot:'小夜',tagClass:'tag-小夜',tagLabel:'晚'},
       {slot:'大夜',tagClass:'tag-大夜',tagLabel:'大'},
     ];
     for(const si of slotInfo){
@@ -1079,7 +1110,7 @@ function openDayModal(dateStr){
     <select onchange="setDaySplit('${dateStr}',parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
       ${[16,17,18,19].map(h=>`<option value="${h}"${h===sp?' selected':''}>${h}:00</option>`).join('')}
     </select>
-    <span style="color:#888">早班結束 / 晚班開始</span>
+    <span style="color:#888">早班結束 / 小夜開始</span>
   </div>
   <table class="day-slot-table">
   <thead><tr><th>班別</th><th>時間</th><th>時數</th><th>點值</th><th>指派醫師</th></tr></thead>
@@ -1091,7 +1122,7 @@ function openDayModal(dateStr){
     const pts=calcSlotPoints(slot,sp,dateStr);
     const docId=ds[slot];
     const opts=state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
-    const tagClass={'主白':'tag-主白','早班':'tag-早班','晚班':'tag-晚班','大夜':'tag-大夜'}[slot];
+    const tagClass={'主白':'tag-主白','早班':'tag-早班','小夜':'tag-小夜','大夜':'tag-大夜'}[slot];
     html+=`<tr>
       <td><span class="slot-tag ${tagClass}" style="width:auto;padding:2px 6px">${slot}</span></td>
       <td style="font-size:11px;color:#555">${timeStr}</td>
@@ -1115,7 +1146,7 @@ function openDayModal(dateStr){
 }
 
 function setDaySplit(dateStr, val){
-  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:val,主白:null,早班:null,晚班:null,大夜:null};
+  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:val,主白:null,早班:null,小夜:null,大夜:null};
   state.schedule[dateStr].split=val;
   autoSave();
   renderCalendar();
@@ -1123,7 +1154,7 @@ function setDaySplit(dateStr, val){
 }
 
 function assignDoc(dateStr, slot, docId){
-  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:getDaySplit(dateStr),主白:null,早班:null,晚班:null,大夜:null};
+  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:getDaySplit(dateStr),主白:null,早班:null,小夜:null,大夜:null};
   state.schedule[dateStr][slot]=docId||null;
   autoSave();
   renderCalendar();
@@ -1335,9 +1366,102 @@ function delAvoidPair(i){
 // ============================================================
 // PRE-REQUESTS
 // ============================================================
+// ============================================================
+// PREREQ CALENDAR PICKER
+// ============================================================
+const prCal={year:0,month:0,start:null,end:null,hover:null,dragging:false};
+
+function initPRCal(){
+  prCal.year=state.year; prCal.month=state.month;
+  prCal.start=null; prCal.end=null; prCal.hover=null; prCal.dragging=false;
+  renderPRCal();
+}
+
+function prCalPrev(){
+  if(prCal.month===0){prCal.month=11;prCal.year--;}else prCal.month--;
+  renderPRCal();
+}
+function prCalNext(){
+  if(prCal.month===11){prCal.month=0;prCal.year++;}else prCal.month++;
+  renderPRCal();
+}
+
+function renderPRCal(){
+  const {year,month,start,end,hover}=prCal;
+  const titleEl=document.getElementById('pr-cal-title');
+  const gridEl=document.getElementById('pr-cal-grid');
+  const selEl=document.getElementById('pr-cal-selected');
+  if(!gridEl) return;
+  if(titleEl) titleEl.textContent=`${year}年${month+1}月`;
+
+  const rangeA=start;
+  const rangeB=end||hover;
+  const lo=rangeA&&rangeB?(rangeA<rangeB?rangeA:rangeB):rangeA;
+  const hi=rangeA&&rangeB?(rangeA<rangeB?rangeB:rangeA):rangeA;
+
+  const todayStr=fmtDate(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
+  const days=daysInMonth(year,month);
+  const firstDOW=getDOW(fmtDate(year,month,1)); // 0=Mon..6=Sun
+
+  const hdrs=['一','二','三','四','五','六','日'];
+  let html=hdrs.map((h,i)=>`<div class="pr-cal-hd${i>=5?' wknd':''}">${h}</div>`).join('');
+  for(let i=0;i<firstDOW;i++) html+='<div></div>';
+
+  for(let d=1;d<=days;d++){
+    const ds=fmtDate(year,month,d);
+    const dow=getDOW(ds);
+    const isWknd=dow>=5;
+    const isToday=ds===todayStr;
+    let cls='pr-cal-cell'+(isWknd?' wknd':'')+(isToday?' today':'');
+    if(lo&&hi){
+      if(ds===lo&&ds===hi) cls+=' range-single';
+      else if(ds===lo) cls+=' range-start';
+      else if(ds===hi) cls+=' range-end';
+      else if(ds>lo&&ds<hi) cls+=' in-range';
+    } else if(lo&&ds===lo) cls+=' range-single';
+    html+=`<div class="${cls}"
+      onmousedown="prCellDown('${ds}',event)"
+      onmouseenter="prCellEnter('${ds}')"
+      onmouseup="prCellUp('${ds}')">${d}</div>`;
+  }
+  gridEl.innerHTML=html;
+
+  if(selEl){
+    if(prCal.start&&prCal.end&&prCal.start!==prCal.end){
+      const a=prCal.start<prCal.end?prCal.start:prCal.end;
+      const b=prCal.start<prCal.end?prCal.end:prCal.start;
+      selEl.textContent=`選取：${a} ～ ${b}`;
+    } else if(prCal.start){
+      selEl.textContent=`選取：${prCal.start}`;
+    } else {
+      selEl.textContent='尚未選取日期';
+    }
+  }
+}
+
+function prCellDown(ds,e){
+  e.preventDefault();
+  prCal.dragging=true; prCal.start=ds; prCal.end=null; prCal.hover=null;
+  renderPRCal();
+}
+function prCellEnter(ds){
+  if(!prCal.dragging) return;
+  prCal.hover=ds; renderPRCal();
+}
+function prCellUp(ds){
+  if(!prCal.dragging) return;
+  prCal.dragging=false;
+  if(ds!==prCal.start){
+    prCal.end=ds;
+    if(prCal.end<prCal.start){const t=prCal.start;prCal.start=prCal.end;prCal.end=t;}
+  }
+  prCal.hover=null; renderPRCal();
+}
+
 function renderPRTab(){
   const sel=document.getElementById('pr-doc');
   sel.innerHTML=state.doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  initPRCal();
   renderPRList();
 }
 function renderPRList(){
@@ -1352,12 +1476,12 @@ function renderPRList(){
 }
 function addPR(){
   const docId=document.getElementById('pr-doc').value;
-  const dateStart=document.getElementById('pr-date-start').value;
-  const dateEnd=document.getElementById('pr-date-end').value||dateStart;
+  const dateStart=prCal.start;
+  const dateEnd=prCal.end||prCal.start;
   const type=document.getElementById('pr-type').value;
   const note=document.getElementById('pr-note').value.trim();
   const custom=type==='WORK_CUSTOM'?document.getElementById('pr-custom').value.trim():'';
-  if(!dateStart){showToast('請選擇日期','warn');return;}
+  if(!dateStart){showToast('請先在日曆選取日期','warn');return;}
   if(type==='WORK_CUSTOM'&&!custom){showToast('請填寫自訂時段，例如 08-17','warn');return;}
 
   // Validate custom format
@@ -1375,6 +1499,7 @@ function addPR(){
     cur=addDays(cur,1);
     count++;
   }
+  prCal.start=null; prCal.end=null; renderPRCal();
   autoSave();
   renderPRList(); renderCalendar();
   showToast(`已新增 ${count} 筆預假/預班`);
@@ -1393,12 +1518,12 @@ function onPRTypeChange(){
 function prLabel(pr){
   if(pr.type==='WORK_CUSTOM') return `自訂班 ${pr.custom||''}`;
   const m={OFF:'當天OFF',OFF_NO_BIG:'OFF+前天不大夜',OFF_NO_NIGHT:'OFF+前天不夜班',
-    WORK_主白:'排主白(08-20)',WORK_早班:'排早班',WORK_晚班:'排晚班',WORK_大夜:'排大夜(20-08)'};
+    WORK_主白:'排主白(08-20)',WORK_早班:'排早班',WORK_小夜:'排小夜',WORK_大夜:'排大夜(20-08)'};
   return m[pr.type]||pr.type;
 }
 function prShortLabel(pr){
   if(pr.type==='WORK_CUSTOM') return `自(${pr.custom||'?'})`;
-  const m={OFF:'假',OFF_NO_BIG:'假+',OFF_NO_NIGHT:'假++',WORK_主白:'主',WORK_早班:'早',WORK_晚班:'晚',WORK_大夜:'大'};
+  const m={OFF:'假',OFF_NO_BIG:'假+',OFF_NO_NIGHT:'假++',WORK_主白:'主',WORK_早班:'早',WORK_小夜:'小',WORK_大夜:'大'};
   return m[pr.type]||'?';
 }
 
@@ -1410,8 +1535,8 @@ function renderStats(){
   const st={};
   for(const doc of state.doctors){
     st[doc.id]={
-      cnt:{主白:[0,0],早班:[0,0],晚班:[0,0],大夜:[0,0]},
-      hrs:{主白:[0,0],早班:[0,0],晚班:[0,0],大夜:[0,0]},
+      cnt:{主白:[0,0],早班:[0,0],小夜:[0,0],大夜:[0,0]},
+      hrs:{主白:[0,0],早班:[0,0],小夜:[0,0],大夜:[0,0]},
       pts:{wd:0,hol:0},
       holZone:{bai:0,sn:0,bn:0},
       // Track shift-type sequence for 轉班 counting
@@ -1461,7 +1586,7 @@ function renderStats(){
     const td=sl=>`<td>${s.cnt[sl][0]+s.cnt[sl][1]}</td><td>${s.hrs[sl][0]}</td><td>${s.hrs[sl][1]}</td>`;
     return `<tr>
       <td style="text-align:left"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
-      ${td('主白')}${td('早班')}${td('晚班')}${td('大夜')}
+      ${td('主白')}${td('早班')}${td('小夜')}${td('大夜')}
       <td><strong>${totalH}</strong></td>
       <td style="background:#fff3e0">${s.holZone.bai}</td>
       <td style="background:#fff3e0">${s.holZone.sn}</td>
@@ -1691,7 +1816,7 @@ function initPersonalView(encoded){
                 <option value="OFF_NO_NIGHT">OFF + 前天不夜班</option>
                 <option value="WORK_主白">排主白 (08-20)</option>
                 <option value="WORK_早班">排早班</option>
-                <option value="WORK_晚班">排晚班</option>
+                <option value="WORK_小夜">排小夜</option>
                 <option value="WORK_大夜">排大夜 (20-08)</option>
                 <option value="WORK_CUSTOM">自訂時段</option>
               </select>
@@ -1871,7 +1996,7 @@ function clearSchedule(){
   if(!confirm('確定清空本月排班？')) return;
   for(const d of monthDates(state.year,state.month)){
     const sp=getDaySplit(d);
-    state.schedule[d]={split:sp,主白:null,早班:null,晚班:null,大夜:null};
+    state.schedule[d]={split:sp,主白:null,早班:null,小夜:null,大夜:null};
   }
   autoSave();
   renderCalendar();
@@ -1919,6 +2044,7 @@ async function initCloud(url){
 }
 
 function applyCloudData(data){
+  migrateData(data);
   if(data.doctors) state.doctors=data.doctors;
   if(data.schedule) state.schedule=data.schedule;
   state.preRequests=data.preRequests||{};
@@ -1988,6 +2114,21 @@ function openCloudSettings(){
   initCloud(url.trim());
 }
 
+function migrateData(d){
+  // Rename old '晚班' slot key to '小夜' in schedule and preRequests
+  if(d.schedule){
+    for(const ds of Object.values(d.schedule)){
+      if('晚班' in ds){ ds['小夜']=ds['晚班']; delete ds['晚班']; }
+    }
+  }
+  if(d.preRequests){
+    for(const prs of Object.values(d.preRequests)){
+      for(const pr of prs){ if(pr.type==='WORK_晚班') pr.type='WORK_小夜'; }
+    }
+  }
+  return d;
+}
+
 function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
@@ -2004,7 +2145,7 @@ function autoLoad(){
   try{
     const raw=localStorage.getItem(LS_KEY);
     if(!raw) return false;
-    const d=JSON.parse(raw);
+    const d=migrateData(JSON.parse(raw));
     if(d.doctors) state.doctors=d.doctors;
     if(d.schedule) state.schedule=d.schedule;
     state.preRequests=d.preRequests||{};
@@ -2055,13 +2196,13 @@ function loadData(){
 function exportCSV(){
   const dates=monthDates(state.year,state.month);
   const DOW=['一','二','三','四','五','六','日'];
-  const rows=[['日期','星期','假日','切割點','主白醫師','主白時間','早班醫師','早班時間','晚班醫師','晚班時間','大夜醫師','大夜時間']];
+  const rows=[['日期','星期','假日','切割點','主白醫師','主白時間','早班醫師','早班時間','小夜醫師','小夜時間','大夜醫師','大夜時間']];
   for(const d of dates){
     const ds=state.schedule[d]||{};const sp=ds.split||state.defaultSplit;
     rows.push([d,DOW[getDOW(d)],isHoliday(d)?'是':'',sp+':00',
       getDocName(ds['主白'])||'',slotTimeStr('主白',sp),
       getDocName(ds['早班'])||'',slotTimeStr('早班',sp),
-      getDocName(ds['晚班'])||'',slotTimeStr('晚班',sp),
+      getDocName(ds['小夜'])||'',slotTimeStr('小夜',sp),
       getDocName(ds['大夜'])||'',slotTimeStr('大夜',sp),
     ]);
   }
@@ -2087,6 +2228,17 @@ window.onload=()=>{
     if(restored) showToast('已自動還原上次排班資料');
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
+    document.addEventListener('mouseup',()=>{
+      if(prCal.dragging){
+        prCal.dragging=false;
+        if(prCal.hover){
+          prCal.end=prCal.hover;
+          if(prCal.end<prCal.start){const t=prCal.start;prCal.start=prCal.end;prCal.end=t;}
+          prCal.hover=null;
+        }
+        renderPRCal();
+      }
+    });
   }
 };
 </script>
