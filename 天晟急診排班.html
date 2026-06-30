@@ -858,7 +858,10 @@ function scoreDoc(docId, date, slot, sched){
   let score=Math.random()*2;
   const myH=calcDocHours(docId,sched);
   const avg=avgHours(sched);
-  score+=(avg-myH)*1.2;
+  const offDays=countDocOffDays(docId);
+  // 相對值縮放：預假多的醫師可上班天數少，拉力與偏好目標同步縮小
+  const availScale=Math.max(0.25, 1-offDays/30);
+  score+=(avg-myH)*1.2*availScale;
   // Point equalization: strong pull toward ±20 target
   const myPts=calcDocPoints(docId,sched);
   const avgPts=avgPoints(sched);
@@ -877,12 +880,14 @@ function scoreDoc(docId, date, slot, sched){
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
-  const targetH=avg+(doc.prefs.htPref||0)*10;
+  // 時數偏好相對值：+2>+1 相對排序，預假多時偏好自動放寬不強求
+  const effectiveHtPref=(doc.prefs.htPref||0)*availScale;
+  const targetH=avg+effectiveHtPref*10;
   if(myH+addH>targetH+20) score-=80;
   if(myH+addH>targetH+40) score-=100;
   if(myH<targetH-10) score+=10;
   // 120h minimum: very strong pull so under-120h doctors always win during greedy passes
-  if(countDocOffDays(docId)<=20&&myH<120) score+=(120-myH)*10;
+  if(offDays<=20&&myH<120) score+=(120-myH)*10;
   // 轉班懲罰: penalize 大夜↔白班 transitions, strongly discourage ≥3rd turnover
   const isNewTurnover=(
     (slot==='大夜'&&SLOTS.some(s=>s==='主白'||s==='早班')&&(()=>{const la=getLastAssigned(docId,date,sched);return la&&(la.slot==='主白'||la.slot==='早班');})())||
@@ -946,8 +951,8 @@ function bestSplitForPair(earlyId, lateId, date, sched){
     if(lateId) { const mh=calcDocHours(lateId,sched);  sc += (avg-mh) * lateH  * 0.35; }
     // Point fairness for split selection
     const avgH2=avgHours(sched);
-    if(earlyId){const mh2=calcDocHours(earlyId,sched);const th=avgH2+(earlyDoc?.prefs.htPref||0)*15;if(mh2+earlyH>th+20)sc-=30;}
-    if(lateId) {const mh2=calcDocHours(lateId,sched); const th=avgH2+(lateDoc?.prefs.htPref||0)*15; if(mh2+lateH>th+20) sc-=30;}
+    if(earlyId){const mh2=calcDocHours(earlyId,sched);const th=avgH2+(earlyDoc?.prefs.htPref||0)*10;if(mh2+earlyH>th+20)sc-=30;}
+    if(lateId) {const mh2=calcDocHours(lateId,sched); const th=avgH2+(lateDoc?.prefs.htPref||0)*10; if(mh2+lateH>th+20) sc-=30;}
     if(sc>bestSc){ bestSc=sc; bestSp=sp; }
   }
   return bestSp;
@@ -1888,8 +1893,9 @@ function renderStats(){
     const totalPts2=s.pts.wd+s.pts.hol;
     const targetH2=overallAvgPts>0?overallAvgPts:0; // unused now
     const avgHrs=state.doctors.filter(d=>d.type==='full').reduce((s,d2)=>{const st2=st[d2.id];return s+SLOTS.reduce((a,sl)=>a+st2.hrs[sl][0]+st2.hrs[sl][1],0);},0)/(state.doctors.filter(d=>d.type==='full').length||1);
-    const tgtH=avgHrs+(doc.prefs.htPref||0)*10;
-    if(Math.abs(totalH-tgtH)>20) viols.push(`⚠ ${doc.name} 時數偏離目標(實際${totalH}h vs 目標${Math.round(tgtH)}h)`);
+    const availScale2=Math.max(0.25,1-offDays/30);
+    const tgtH=avgHrs+(doc.prefs.htPref||0)*availScale2*10;
+    if(offDays<=15&&Math.abs(totalH-tgtH)>20) viols.push(`⚠ ${doc.name} 時數偏離目標(實際${totalH}h vs 目標${Math.round(tgtH)}h)`);
     // 醫務會議: need at least one Thursday 主白/早班
     if(doc.prefs.medMeeting){
       const hasThu=dates.some(d=>{
