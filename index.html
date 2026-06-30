@@ -1251,6 +1251,9 @@ function saveDoc(){
 }
 
 function delDoc(docId){
+  const pwd=prompt('請輸入刪除密碼：');
+  if(pwd===null) return;
+  if(pwd!=='22511'){alert('密碼錯誤'); return;}
   if(!confirm('確定刪除？')) return;
   state.doctors=state.doctors.filter(d=>d.id!==docId);
   state.avoidPairs=(state.avoidPairs||[]).filter(p=>!p.includes(docId));
