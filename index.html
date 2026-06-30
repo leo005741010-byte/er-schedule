@@ -230,6 +230,11 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       </div>
       <div id="avoid-pairs-list"></div>
     </div>
+    <div style="margin-top:12px;background:#fff;border-radius:6px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
+      <h3 style="font-size:13px;margin-bottom:6px;color:#1a4a7a">🌙 不排大夜設定 (不上02-08，可排小夜至02:00)</h3>
+      <p style="font-size:11px;color:#888;margin-bottom:10px">勾選後排班演算法三層強制不指派大夜班（20-08）。</p>
+      <div id="nonight-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
   </div>
 
   <!-- ======= 預假/預班 ======= -->
@@ -363,7 +368,6 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-noday"><label for="pref-noday">不排白班 (不排主白/早班，僅排小夜/大夜)</label></div>
-    <div class="check-row"><input type="checkbox" id="pref-nonight"><label for="pref-nonight">不排大夜 (不上02-08，可排小夜至02:00)</label></div>
     <div class="check-row" id="wknight-row" style="display:none"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">周一到周四不夜班 (20-08大夜嚴格鎖定，僅周五六日可排) ─ 僅陳孝綱適用</label></div>
     <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">上班集中 (排班盡量連上一段、連休一段)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
@@ -1446,7 +1450,6 @@ function openDocModal(docId){
     document.getElementById('pref-consec').value=p.maxConsec;
     document.getElementById('pref-long').checked=p.long;
     document.getElementById('pref-noday').checked=!!p.noDay;
-    document.getElementById('pref-nonight').checked=!!p.noNight;
     const isCheng=doc.name==='陳孝綱';
     document.getElementById('wknight-row').style.display=isCheng?'':'none';
     document.getElementById('pref-wknight').checked=isCheng&&!!p.wkNight;
@@ -1463,7 +1466,6 @@ function openDocModal(docId){
     document.getElementById('pref-consec').value=6;
     document.getElementById('pref-long').checked=false;
     document.getElementById('pref-noday').checked=false;
-    document.getElementById('pref-nonight').checked=false;
     document.getElementById('wknight-row').style.display='none';
     document.getElementById('pref-wknight').checked=false;
     document.getElementById('pref-cluster').checked=false;
@@ -1485,7 +1487,6 @@ function saveDoc(){
   prefs.maxConsec=parseInt(document.getElementById('pref-consec').value);
   prefs.long=document.getElementById('pref-long').checked;
   prefs.noDay=document.getElementById('pref-noday').checked;
-  prefs.noNight=document.getElementById('pref-nonight').checked;
   prefs.wkNight=name==='陳孝綱'&&document.getElementById('pref-wknight').checked;
   prefs.cluster=document.getElementById('pref-cluster').checked;
   prefs.medMeeting=document.getElementById('pref-medMeeting').checked;
@@ -1514,6 +1515,21 @@ function delDoc(docId){
   renderDoctorTable(); renderCalendar();
 }
 
+function toggleNoNight(docId){
+  const doc=state.doctors.find(d=>d.id===docId); if(!doc) return;
+  doc.prefs.noNight=!doc.prefs.noNight;
+  autoSave(); renderNoNightPanel(); renderDoctorTable();
+}
+function renderNoNightPanel(){
+  const el=document.getElementById('nonight-list'); if(!el) return;
+  el.innerHTML=state.doctors.map(doc=>{
+    const on=!!doc.prefs.noNight;
+    return `<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid ${on?doc.color:'#ddd'};background:${on?doc.color+'22':'#f9f9f9'};cursor:pointer;font-size:12px">
+      <input type="checkbox" ${on?'checked':''} onchange="toggleNoNight('${doc.id}')">
+      <span class="color-dot" style="background:${doc.color}"></span>${doc.name}
+    </label>`;
+  }).join('');
+}
 function renderAvoidPairs(){
   const sel1=document.getElementById('avoid-doc1');
   const sel2=document.getElementById('avoid-doc2');
@@ -2242,7 +2258,7 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  if(name==='doctors'){renderDoctorTable();renderAvoidPairs();}
+  if(name==='doctors'){renderDoctorTable();renderAvoidPairs();renderNoNightPanel();}
   if(name==='prereq') renderPRTab();
   if(name==='stats'){_statsYear=state.year;_statsMonth=state.month;renderStats();}
   if(name==='personal') renderPersonalTab();
