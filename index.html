@@ -1413,9 +1413,9 @@ function _renderDayDraft(){
     const tagClass={'主白':'tag-主白','早班':'tag-早班','小夜':'tag-小夜','大夜':'tag-大夜'}[slot];
     html+=`<tr>
       <td><span class="slot-tag ${tagClass}" style="padding:2px 6px">${slot}</span></td>
-      <td><input type="text" value="${editVal}" style="width:72px;font-size:11px;padding:2px 5px;border:1px solid ${ct?'#e65100':'#ddd'};border-radius:3px;color:${ct?'#e65100':'#555'}" title="格式 HH-HH，清空還原預設" onblur="_draftSlotTime('${slot}',this.value)"></td>
-      <td>${hrs}h</td><td>${pts}</td>
-      <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftSlot('${slot}',this.value)">${opts}</select></td>
+      <td><input id="ti-${slot}" type="text" value="${editVal}" style="width:72px;font-size:11px;padding:2px 5px;border:1px solid ${ct?'#e65100':'#ddd'};border-radius:3px;color:${ct?'#e65100':'#555'}" title="格式 HH-HH，清空還原預設" onblur="_draftSlotTime('${slot}',this.value)"></td>
+      <td id="hrs-${slot}">${hrs}h</td><td id="pts-${slot}">${pts}</td>
+      <td><select id="ds-${slot}" style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftSlot('${slot}',this.value)">${opts}</select></td>
     </tr>`;
   }
   html+=`</tbody></table>`;
@@ -1433,9 +1433,9 @@ function _renderDayDraft(){
       const exOpts=`<option value=""${!ex.docId?' selected':''}>-- 選醫師 --</option>`+
         state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===ex.docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
       html+=`<tr>
-        <td><input type="text" value="${ex.timeRange||''}" placeholder="08-16" style="width:68px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px" onblur="_draftExtraTime('${ex.id}',this.value)"></td>
-        <td>${exH?exH+'h':'-'}</td><td>${ex.timeRange?exPts:'-'}</td>
-        <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftExtraDoc('${ex.id}',this.value)">${exOpts}</select></td>
+        <td><input id="eti-${ex.id}" type="text" value="${ex.timeRange||''}" placeholder="08-16" style="width:68px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px" onblur="_draftExtraTime('${ex.id}',this.value)"></td>
+        <td id="exhrs-${ex.id}">${exH?exH+'h':'-'}</td><td id="expts-${ex.id}">${ex.timeRange?exPts:'-'}</td>
+        <td><select id="eds-${ex.id}" style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftExtraDoc('${ex.id}',this.value)">${exOpts}</select></td>
         <td><button onclick="_draftRemoveExtra('${ex.id}')" style="background:#ffebee;border:1px solid #ef9a9a;color:#c62828;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:12px">✕</button></td>
       </tr>`;
     }
@@ -1455,22 +1455,43 @@ function _renderDayDraft(){
 function _draftSplit(val){ _dayDraft.split=val; _renderDayDraft(); }
 function _draftSlot(slot,docId){ _dayDraft[slot]=docId||null; }
 function _draftSlotTime(slot,val){
+  // 不重繪整個 modal（避免 blur→re-render 殺掉確認按鈕的 click 事件）
   val=(val||'').trim();
   if(!val||customTimeHours(val)===0) delete _dayDraft.customTimes[slot];
   else _dayDraft.customTimes[slot]=val;
-  _renderDayDraft();
+  const sp=_dayDraft.split; const ct=_dayDraft.customTimes[slot];
+  const hrs=ct?customTimeHours(ct):slotHours(slot,sp);
+  const pts=ct?calcCustomPoints(ct,_dayDraftDate):calcSlotPoints(slot,sp,_dayDraftDate);
+  const h=document.getElementById('hrs-'+slot); const p=document.getElementById('pts-'+slot); const i=document.getElementById('ti-'+slot);
+  if(h) h.textContent=hrs+'h'; if(p) p.textContent=pts;
+  if(i){i.style.borderColor=ct?'#e65100':'#ddd';i.style.color=ct?'#e65100':'#555';}
 }
 function _draftAddExtra(){ _dayDraft.extras.push({id:'ex_'+Date.now(),docId:'',timeRange:''}); _renderDayDraft(); }
 function _draftRemoveExtra(id){ _dayDraft.extras=_dayDraft.extras.filter(e=>e.id!==id); _renderDayDraft(); }
 function _draftExtraDoc(id,docId){ const ex=_dayDraft.extras.find(e=>e.id===id); if(ex) ex.docId=docId; }
 function _draftExtraTime(id,val){
+  // 不重繪整個 modal
   val=(val||'').trim();
-  const ex=_dayDraft.extras.find(e=>e.id===id);
-  if(ex){ ex.timeRange=val; _renderDayDraft(); }
+  const ex=_dayDraft.extras.find(e=>e.id===id); if(!ex) return;
+  ex.timeRange=val;
+  const exH=customTimeHours(val); const exPts=val?calcCustomPoints(val,_dayDraftDate):0;
+  const h=document.getElementById('exhrs-'+id); const p=document.getElementById('expts-'+id);
+  if(h) h.textContent=exH?exH+'h':'-'; if(p) p.textContent=val?exPts:'-';
 }
 
 function confirmDayModal(){
   if(!_dayDraftDate||!_dayDraft) return;
+  // 防禦性補讀 DOM（處理 blur 尚未觸發的輸入框）
+  for(const slot of SLOTS){
+    const inp=document.getElementById('ti-'+slot);
+    if(inp){const v=inp.value.trim();if(!v||customTimeHours(v)===0)delete _dayDraft.customTimes[slot];else _dayDraft.customTimes[slot]=v;}
+    const sel=document.getElementById('ds-'+slot);
+    if(sel) _dayDraft[slot]=sel.value||null;
+  }
+  _dayDraft.extras.forEach(ex=>{
+    const inp=document.getElementById('eti-'+ex.id); if(inp) ex.timeRange=inp.value.trim();
+    const sel=document.getElementById('eds-'+ex.id); if(sel) ex.docId=sel.value||'';
+  });
   pushUndo();
   if(!state.schedule[_dayDraftDate]) state.schedule[_dayDraftDate]={};
   const ds=state.schedule[_dayDraftDate];
