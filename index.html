@@ -720,8 +720,8 @@ function scoreDoc(docId, date, slot, sched){
   if(myH+addH>targetH+20) score-=80;
   if(myH+addH>targetH+40) score-=100;
   if(myH<targetH-10) score+=10;
-  // 120h minimum bonus
-  if(countDocOffDays(docId)<=20&&myH<120) score+=(120-myH)*2;
+  // 120h minimum: very strong pull so under-120h doctors always win during greedy passes
+  if(countDocOffDays(docId)<=20&&myH<120) score+=(120-myH)*10;
   // 醫務會議: boost Thursday 主白/早班 if doctor still has no covered Thursday this month
   if(doc.prefs.medMeeting&&getDOW(date)===3&&(slot==='主白'||slot==='早班')){
     const hasThuCover=monthDates(state.year,state.month).some(d=>{
@@ -885,7 +885,7 @@ function autoSchedule(){
   }
 
   // 4th pass: force doctors to 120h minimum (exempt if >20 OFF days)
-  // Loop with shuffled dates until all eligible doctors reach 120h or no progress possible
+  // First try empty slots; if still short, displace a doctor who is already over 120h
   for(let attempt=0;attempt<10;attempt++){
     let anyProgress=false;
     const tryDates=attempt===0?[...dates]:shuffle([...dates]);
@@ -894,11 +894,30 @@ function autoSchedule(){
       if(calcDocHours(doc.id,newSched)>=120) continue;
       for(const d of tryDates){
         if(calcDocHours(doc.id,newSched)>=120) break;
+        if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue; // already working this day
+        // Pass A: fill empty slot
+        let filled=false;
         for(const slot of SLOTS){
           if(newSched[d][slot]) continue;
-          if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue;
           if(canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)){
-            newSched[d][slot]=doc.id; anyProgress=true; break;
+            newSched[d][slot]=doc.id; anyProgress=true; filled=true; break;
+          }
+        }
+        if(filled) continue;
+        // Pass B: displace an over-120h occupant
+        for(const slot of SLOTS){
+          const occupant=newSched[d][slot];
+          if(!occupant) continue;
+          const sp=newSched[d].split||state.defaultSplit;
+          const occupantH=calcDocHours(occupant,newSched);
+          if(occupantH-slotHours(slot,sp)<120) continue; // occupant would fall below 120h
+          // Temporarily clear slot to test if doc can work there
+          newSched[d][slot]=null;
+          const ok=canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched);
+          if(ok){
+            newSched[d][slot]=doc.id; anyProgress=true; filled=true; break;
+          } else {
+            newSched[d][slot]=occupant; // restore
           }
         }
       }
