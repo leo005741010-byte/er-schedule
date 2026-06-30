@@ -272,7 +272,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       <h3 style="margin-bottom:6px">預假/預班清單</h3>
       <div id="pre-req-list">
         <table>
-          <thead><tr><th>日期</th><th>醫師</th><th>類型</th><th>備註</th><th>操作</th></tr></thead>
+          <thead><tr><th>醫師</th><th>日期/區間</th><th>類型</th><th>備註</th><th>操作</th></tr></thead>
           <tbody id="pr-tbody"></tbody>
         </table>
       </div>
@@ -1495,15 +1495,64 @@ function renderPRTab(){
   initPRCal();
   renderPRList();
 }
+function fmtShort(ds){const[,m,d]=ds.split('-').map(Number);return `${m}/${d}`;}
+
 function renderPRList(){
-  const all=[];
-  for(const[date,prs]of Object.entries(state.preRequests)){for(const pr of prs)all.push({date,...pr});}
-  all.sort((a,b)=>a.date.localeCompare(b.date));
-  document.getElementById('pr-tbody').innerHTML=all.map(pr=>`<tr>
-    <td>${pr.date}</td><td>${getDocName(pr.docId)}</td>
-    <td>${prLabel(pr)}</td><td>${pr.note||''}</td>
-    <td><button class="btn-sm btn-del" onclick="delPR('${pr.date}','${pr.docId}','${pr.type}','${pr.custom||''}')">刪除</button></td>
-  </tr>`).join('');
+  // Group: docId → {type+custom → {type,custom,note,dates[]}}
+  const grouped={};
+  for(const[date,prs] of Object.entries(state.preRequests)){
+    for(const pr of prs){
+      if(!grouped[pr.docId]) grouped[pr.docId]={};
+      const key=pr.type+'|'+(pr.custom||'');
+      if(!grouped[pr.docId][key]) grouped[pr.docId][key]={type:pr.type,custom:pr.custom||'',note:pr.note||'',dates:[]};
+      grouped[pr.docId][key].dates.push(date);
+    }
+  }
+  const rows=[];
+  for(const doc of state.doctors){
+    const docG=grouped[doc.id]; if(!docG) continue;
+    for(const g of Object.values(docG)){
+      g.dates.sort();
+      // Merge consecutive dates into ranges
+      let rs=null,re=null;
+      for(const d of g.dates){
+        if(!rs){rs=d;re=d;}
+        else if(addDays(re,1)===d){re=d;}
+        else{rows.push({docId:doc.id,type:g.type,custom:g.custom,note:g.note,start:rs,end:re});rs=d;re=d;}
+      }
+      if(rs) rows.push({docId:doc.id,type:g.type,custom:g.custom,note:g.note,start:rs,end:re});
+    }
+  }
+  document.getElementById('pr-tbody').innerHTML=rows.map(r=>{
+    let dateDisp;
+    if(r.start===r.end) dateDisp=fmtShort(r.start);
+    else{
+      const[sy,sm]=r.start.split('-').map(Number);
+      const[,em,ed]=r.end.split('-').map(Number);
+      dateDisp=sm===em?`${sm}/${r.start.split('-')[2]}-${ed}`:`${fmtShort(r.start)}～${fmtShort(r.end)}`;
+    }
+    const delCall=r.start===r.end
+      ?`delPR('${r.start}','${r.docId}','${r.type}','${r.custom}')`
+      :`delPRRange('${r.docId}','${r.type}','${r.custom}','${r.start}','${r.end}')`;
+    return `<tr>
+      <td>${getDocName(r.docId)}</td><td>${dateDisp}</td>
+      <td>${prLabel({type:r.type,custom:r.custom})}</td><td>${r.note||''}</td>
+      <td><button class="btn-sm btn-del" onclick="${delCall}">刪除</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function delPRRange(docId,type,custom,dateStart,dateEnd){
+  if(!confirm(`確定刪除 ${getDocName(docId)} ${fmtShort(dateStart)}～${fmtShort(dateEnd)} 整段？`)) return;
+  let cur=dateStart;
+  while(cur<=dateEnd){
+    if(state.preRequests[cur]){
+      state.preRequests[cur]=state.preRequests[cur].filter(r=>!(r.docId===docId&&r.type===type&&(r.custom||'')===(custom||'')));
+      if(!state.preRequests[cur].length) delete state.preRequests[cur];
+    }
+    cur=addDays(cur,1);
+  }
+  autoSave(); renderPRList(); renderCalendar();
 }
 function addPR(){
   const docId=document.getElementById('pr-doc').value;
