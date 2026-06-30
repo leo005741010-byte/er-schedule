@@ -1695,7 +1695,7 @@ function prCellUp(ds){
 function renderPRTab(){
   _prListYear=state.year; _prListMonth=state.month;
   const sel=document.getElementById('pr-doc');
-  sel.innerHTML=state.doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  sel.innerHTML=`<option value="">── 請先選擇醫師 ──</option>`+state.doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
   initPRCal();
   renderPRList();
 }
@@ -1771,6 +1771,7 @@ function addPR(){
   const type=document.getElementById('pr-type').value;
   const note=document.getElementById('pr-note').value.trim();
   const custom=type==='WORK_CUSTOM'?document.getElementById('pr-custom').value.trim():'';
+  if(!docId){showToast('請先選擇醫師','warn');return;}
   if(!dateStart){showToast('請先在日曆選取日期','warn');return;}
   if(type==='WORK_CUSTOM'&&!custom){showToast('請填寫自訂時段，例如 08-17','warn');return;}
 
