@@ -609,6 +609,8 @@ function canWork(docId, date, slot, sched){
     const td=addDays(date,1);
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
+    // 大夜(D)→小夜(D+1): rest = nextSp-8. Need ≥12 → nextSp≥20.
+    if(tds['小夜']===docId&&clampSplit(tds.split||state.defaultSplit)<20) return false;
     // N-OFF-D forward: 大夜→OFF→主白/早班 two days later
     const d2=addDays(date,2);
     const td1Worked=SLOTS.some(s=>tds[s]===docId);
@@ -619,6 +621,11 @@ function canWork(docId, date, slot, sched){
     const td=addDays(date,1);
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
+  }
+  // 大夜(D-1)→小夜(D): rest=sp-8. Need sp≥20 for ≥12h rest.
+  if(slot==='小夜'){
+    const yd=addDays(date,-1); const yds=sched[yd]||{};
+    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||state.defaultSplit)<20) return false;
   }
   // Avoid same-day pairs
   for(const pair of (state.avoidPairs||[])){
@@ -666,6 +673,7 @@ function canWorkRelaxed(docId, date, slot, sched){
     const td=addDays(date,1);
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
+    if(tds['小夜']===docId&&clampSplit(tds.split||state.defaultSplit)<20) return false;
     const d2=addDays(date,2);
     const td1Worked=SLOTS.some(s=>tds[s]===docId);
     if(!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
@@ -674,6 +682,8 @@ function canWorkRelaxed(docId, date, slot, sched){
     const td=addDays(date,1);
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
+    const yd=addDays(date,-1); const yds=sched[yd]||{};
+    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||state.defaultSplit)<20) return false;
   }
   // Avoid same-day pairs (enforced even in relaxed mode)
   for(const pair of (state.avoidPairs||[])){
@@ -712,12 +722,15 @@ function canWorkForce(docId, date, slot, sched){
   if(slot==='大夜'){
     const td=addDays(date,1); const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
+    if(tds['小夜']===docId&&clampSplit(tds.split||state.defaultSplit)<20) return false;
     const d2=addDays(date,2);
     if(!SLOTS.some(s=>tds[s]===docId)&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
   if(slot==='小夜'){
     const td=addDays(date,1); const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
+    const yd=addDays(date,-1); const yds=sched[yd]||{};
+    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||state.defaultSplit)<20) return false;
   }
   return true;
 }
@@ -851,11 +864,21 @@ function bestSplitForPair(earlyId, lateId, date, sched){
   const lateDoc  = lateId  ? state.doctors.find(d=>d.id===lateId)  : null;
   if(!earlyDoc && !lateDoc) return state.defaultSplit;
 
+  // Pre-check: rest constraints that depend on split
+  const prevDate = addDays(date, -1);
+  const prevDs = sched[prevDate] || {};
+  // 大夜(D-1) ends at 08:00 on D. 小夜(D) starts at sp. Rest = sp-8. Need ≥12 → sp≥20.
+  const lateNeedsMinSp20 = lateId && prevDs['大夜']===lateId;
+  // 早班(D) starts at 08:00. If early doctor worked 小夜(D-1) ending 02:00 → rest=6h always blocked.
+  // (already handled by canWork absolute prohibition — not split-dependent)
+
   let bestSp = state.defaultSplit, bestSc = -Infinity;
   for(let sp=16; sp<=20; sp++){
     const earlyH = sp - 8;   // 早班 hours
     const lateH  = 26 - sp;  // 小夜 hours
     let sc = 0;
+    // REST CONSTRAINT: iron rule — block splits that violate 12h rest
+    if(lateNeedsMinSp20 && sp < 20){ sc -= 99999; } // 大夜→小夜 with sp<20: rest=(sp-8)<12h
     if(sp===20) sc += 10; // strong preference for 20:00 split
     // Long-shift preference
     if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 40;
@@ -865,7 +888,6 @@ function bestSplitForPair(earlyId, lateId, date, sched){
     if(earlyId){ const mh=calcDocHours(earlyId,sched); sc += (avg-mh) * earlyH * 0.35; }
     if(lateId) { const mh=calcDocHours(lateId,sched);  sc += (avg-mh) * lateH  * 0.35; }
     // Point fairness for split selection
-    const avgPts2=avgPoints(sched);
     const avgH2=avgHours(sched);
     if(earlyId){const mh2=calcDocHours(earlyId,sched);const th=avgH2+(earlyDoc?.prefs.htPref||0)*15;if(mh2+earlyH>th+20)sc-=30;}
     if(lateId) {const mh2=calcDocHours(lateId,sched); const th=avgH2+(lateDoc?.prefs.htPref||0)*15; if(mh2+lateH>th+20) sc-=30;}
@@ -1075,6 +1097,17 @@ function autoSchedule(){
     const hasCustomPR = (state.preRequests[d]||[]).some(pr=>pr.type==='WORK_CUSTOM'&&pr.custom&&parseCustomShift(pr.custom)?.split!==null);
     if(!hasCustomPR){
       newSched[d].split = bestSplitForPair(newSched[d]['早班'], newSched[d]['小夜'], d, newSched);
+    }
+  }
+
+  // POST-SPLIT safety pass: fix any 大夜(D)→小夜(D+1) violations where sp<20
+  for(const d of dates){
+    const ds=newSched[d]; if(!ds||!ds['大夜']) continue;
+    const did=ds['大夜'];
+    const d1=addDays(d,1); const ds1=newSched[d1]; if(!ds1||!ds1['小夜']) continue;
+    if(ds1['小夜']===did){
+      const sp=ds1.split||state.defaultSplit;
+      if(sp<20) ds1.split=20; // force minimum 20 for 12h rest
     }
   }
 
