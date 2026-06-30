@@ -286,7 +286,10 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <!-- ======= 統計報表 ======= -->
   <div id="tab-stats" class="tab-pane">
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
-      <strong>統計月份：</strong><span id="stats-month"></span>
+      <strong>統計月份：</strong>
+      <button class="nav-btn" onclick="changeStatsMonth(-1)">&#9664;</button>
+      <span id="stats-month" style="font-weight:700;min-width:80px;text-align:center"></span>
+      <button class="nav-btn" onclick="changeStatsMonth(1)">&#9654;</button>
       <button class="action-btn btn-blue" onclick="renderStats()">重新計算</button>
     </div>
     <div class="stats-wrap">
@@ -442,6 +445,14 @@ function changePRListMonth(delta){
   if(_prListMonth<0){_prListMonth=11;_prListYear--;}
   if(_prListMonth>11){_prListMonth=0;_prListYear++;}
   renderPRList();
+}
+let _statsYear = new Date().getFullYear();
+let _statsMonth = new Date().getMonth();
+function changeStatsMonth(delta){
+  _statsMonth+=delta;
+  if(_statsMonth<0){_statsMonth=11;_statsYear--;}
+  if(_statsMonth>11){_statsMonth=0;_statsYear++;}
+  renderStats();
 }
 
 function defPrefs(){
@@ -1175,7 +1186,6 @@ function countEmpty(sched){
 function renderCalendar(){
   const y=state.year, m=state.month;
   document.getElementById('month-label').textContent=`${y}年${m+1}月`;
-  document.getElementById('stats-month').textContent=`${y}年${m+1}月`;
 
   document.getElementById('doc-legend').innerHTML=
     `<span class="legend-item" onclick="toggleDocFilter(null)" style="cursor:pointer;padding:2px 7px;border-radius:10px;border:1px solid ${!_filterDocId?'#1a4a7a':'#ccc'};background:${!_filterDocId?'#e8f0fb':'transparent'};color:${!_filterDocId?'#1a4a7a':'#999'};font-weight:${!_filterDocId?'700':'400'}">全部</span>`+
@@ -1757,7 +1767,8 @@ function prShortLabel(pr){
 // STATISTICS
 // ============================================================
 function renderStats(){
-  const dates=monthDates(state.year,state.month);
+  document.getElementById('stats-month').textContent=`${_statsYear}年${_statsMonth+1}月`;
+  const dates=monthDates(_statsYear,_statsMonth);
   const st={};
   for(const doc of state.doctors){
     st[doc.id]={
@@ -2218,7 +2229,7 @@ function switchTab(name){
   document.getElementById('tab-'+name).classList.add('active');
   if(name==='doctors'){renderDoctorTable();renderAvoidPairs();}
   if(name==='prereq') renderPRTab();
-  if(name==='stats') renderStats();
+  if(name==='stats'){_statsYear=state.year;_statsMonth=state.month;renderStats();}
   if(name==='personal') renderPersonalTab();
 }
 function clearSchedule(){
