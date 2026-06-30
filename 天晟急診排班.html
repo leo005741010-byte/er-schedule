@@ -363,7 +363,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-noday"><label for="pref-noday">不排白班 (不排主白/早班，僅排小夜/大夜)</label></div>
-    <div class="check-row"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">週末夜班 (僅五六日排大夜)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">周一到周四不夜班 (20-08大夜嚴格鎖定，僅周五六日可排)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">上班集中 (排班盡量連上一段、連休一段)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-morningReport"><label for="pref-morningReport">晨會報告 (第1、3週四08:00，需排主白/早班或週三大夜)</label></div>
@@ -638,9 +638,9 @@ function canWork(docId, date, slot, sched){
     else break;
   }
   if(consec>=(doc.prefs.maxConsec||6)) return false;
-  if(doc.prefs.wkNight&&(slot==='大夜'||slot==='小夜')){
+  if(doc.prefs.wkNight&&slot==='大夜'){
     const dow=getDOW(date);
-    if(![4,5,6].includes(dow)) return false;
+    if(![4,5,6].includes(dow)) return false; // 周一到周四絕對不排大夜(20-08)
   }
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
   // ===== ABSOLUTE PROHIBITIONS (both backward and forward) =====
@@ -709,7 +709,7 @@ function canWorkRelaxed(docId, date, slot, sched){
     else break;
   }
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
-  if(doc.prefs.wkNight&&(slot==='大夜'||slot==='小夜')){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
+  if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
   // ===== ABSOLUTE PROHIBITIONS (same as canWork, never relaxed) =====
   if(slot==='主白'||slot==='早班'){
@@ -756,6 +756,7 @@ function canWorkForce(docId, date, slot, sched){
     if(pr.type==='OFF_NO_NIGHT'&&slot==='小夜') return false;
   }
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
+  if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
   // 12h rest from last shift
   const last=getLastAssigned(docId,date,sched);
   if(last){
@@ -1410,7 +1411,7 @@ function renderDoctorTable(){
       <td>${p.hol?levelStr(p.hol):'-'}</td>
       <td>${p.htPref>0?'+'+p.htPref:p.htPref} (${(p.htPref*15>0?'+':'')+p.htPref*15}h)</td>
       <td>${p.maxConsec}天</td>
-      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'週末夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'不平夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
         <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
         <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
