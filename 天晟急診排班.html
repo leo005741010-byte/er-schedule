@@ -340,7 +340,8 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <h2 id="day-modal-title"></h2>
     <div id="day-modal-body"></div>
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeModal('day-modal')">關閉</button>
+      <button class="action-btn btn-green" onclick="confirmDayModal()" style="padding:6px 22px">✔ 確認</button>
+      <button class="btn-secondary" onclick="cancelDayModal()">✕ 取消</button>
     </div>
   </div>
 </div>
@@ -1363,30 +1364,43 @@ function renderCalendar(){
 }
 
 // ============================================================
-// DAY MODAL
+// DAY MODAL — draft-based, Confirm/Cancel, no rule enforcement
 // ============================================================
+let _dayDraft=null, _dayDraftDate=null;
+
 function openDayModal(dateStr){
+  _dayDraftDate=dateStr;
+  const ds=state.schedule[dateStr]||{};
+  _dayDraft={
+    split:ds.split||state.defaultSplit,
+    主白:ds['主白']||null, 早班:ds['早班']||null, 小夜:ds['小夜']||null, 大夜:ds['大夜']||null,
+    customTimes:ds.customTimes?{...ds.customTimes}:{},
+    extras:(ds.extras||[]).map(e=>({...e}))
+  };
   const[y,mo,d]=dateStr.split('-').map(Number);
   const dow=['一','二','三','四','五','六','日'][getDOW(dateStr)];
-  const holTxt=isHoliday(dateStr)?'（假日）':'';
-  document.getElementById('day-modal-title').textContent=`${y}年${mo}月${d}日 (${dow}) ${holTxt}`;
+  document.getElementById('day-modal-title').textContent=`${y}年${mo}月${d}日 (${dow})${isHoliday(dateStr)?' （假日）':''}`;
+  _renderDayDraft();
+  document.getElementById('day-modal').classList.add('show');
+}
 
-  const ds=state.schedule[dateStr]||{split:state.defaultSplit};
-  const sp=ds.split||state.defaultSplit;
-  const customTimes=ds.customTimes||{};
-  const extras=ds.extras||[];
+function _renderDayDraft(){
+  const dateStr=_dayDraftDate;
+  const ds=_dayDraft; if(!ds) return;
+  const sp=ds.split;
+  const customTimes=ds.customTimes;
+  const extras=ds.extras;
 
   let html=`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px">
     <strong>當日切割點：</strong>
-    <select onchange="setDaySplit('${dateStr}',parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
+    <select onchange="_draftSplit(parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
       ${[16,17,18,19].map(h=>`<option value="${h}"${h===sp?' selected':''}>${h}:00</option>`).join('')}
     </select>
     <span style="color:#888">早班結束 / 小夜開始</span>
   </div>
   <table class="day-slot-table">
-  <thead><tr><th>班別</th><th>時間 <span style="font-size:10px;color:#999">(可改)</span></th><th>時數</th><th>點值</th><th>指派醫師</th></tr></thead>
-  <tbody>`;
+  <thead><tr><th>班別</th><th>時間 <span style="font-size:10px;color:#999">(HH-HH)</span></th><th>時數</th><th>點值</th><th>指派醫師</th></tr></thead><tbody>`;
 
   for(const slot of SLOTS){
     const ct=customTimes[slot];
@@ -1394,40 +1408,35 @@ function openDayModal(dateStr){
     const hrs=ct?customTimeHours(ct):slotHours(slot,sp);
     const pts=ct?calcCustomPoints(ct,dateStr):calcSlotPoints(slot,sp,dateStr);
     const docId=ds[slot];
-    const opts=state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
+    const opts=`<option value=""${!docId?' selected':''}>-- 空缺 --</option>`+
+      state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
     const tagClass={'主白':'tag-主白','早班':'tag-早班','小夜':'tag-小夜','大夜':'tag-大夜'}[slot];
     html+=`<tr>
-      <td><span class="slot-tag ${tagClass}" style="width:auto;padding:2px 6px">${slot}</span></td>
-      <td><input type="text" value="${editVal}" style="width:72px;font-size:11px;padding:2px 5px;border:1px solid ${ct?'#e65100':'#ddd'};border-radius:3px;color:${ct?'#e65100':'#555'}" title="格式 HH-HH，清空還原預設" onblur="setSlotCustomTime('${dateStr}','${slot}',this.value)"></td>
-      <td>${hrs}h</td>
-      <td>${pts}</td>
-      <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="assignDoc('${dateStr}','${slot}',this.value)">
-        <option value="">-- 空缺 --</option>${opts}
-      </select></td>
+      <td><span class="slot-tag ${tagClass}" style="padding:2px 6px">${slot}</span></td>
+      <td><input type="text" value="${editVal}" style="width:72px;font-size:11px;padding:2px 5px;border:1px solid ${ct?'#e65100':'#ddd'};border-radius:3px;color:${ct?'#e65100':'#555'}" title="格式 HH-HH，清空還原預設" onblur="_draftSlotTime('${slot}',this.value)"></td>
+      <td>${hrs}h</td><td>${pts}</td>
+      <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftSlot('${slot}',this.value)">${opts}</select></td>
     </tr>`;
   }
   html+=`</tbody></table>`;
 
-  // Extra doctors section
-  const extraDocOpts=state.doctors.map(doc=>`<option value="${doc.id}">${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
   html+=`<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <strong style="font-size:12px">額外醫師</strong>
-      <button onclick="addExtraDoc('${dateStr}')" style="font-size:11px;padding:2px 10px;border:1px solid #4caf50;background:#e8f5e9;color:#2e7d32;border-radius:3px;cursor:pointer">＋ 新增醫師</button>
+      <button onclick="_draftAddExtra()" style="font-size:11px;padding:2px 10px;border:1px solid #4caf50;background:#e8f5e9;color:#2e7d32;border-radius:3px;cursor:pointer">＋ 新增醫師</button>
     </div>`;
   if(extras.length){
     html+=`<table class="day-slot-table"><thead><tr><th>時間 (HH-HH)</th><th>時數</th><th>點值</th><th>指派醫師</th><th></th></tr></thead><tbody>`;
     for(const ex of extras){
       const exH=customTimeHours(ex.timeRange);
       const exPts=ex.timeRange?calcCustomPoints(ex.timeRange,dateStr):0;
+      const exOpts=`<option value=""${!ex.docId?' selected':''}>-- 選醫師 --</option>`+
+        state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===ex.docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
       html+=`<tr>
-        <td><input type="text" value="${ex.timeRange||''}" placeholder="08-16" style="width:68px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px" onblur="setExtraTime('${dateStr}','${ex.id}',this.value)"></td>
-        <td>${exH?exH+'h':'-'}</td>
-        <td>${ex.timeRange?exPts:'-'}</td>
-        <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="assignExtraDoc('${dateStr}','${ex.id}',this.value)">
-          <option value="">-- 選醫師 --</option>${extraDocOpts.replace(`value="${ex.docId}"`,`value="${ex.docId}" selected`)}
-        </select></td>
-        <td><button onclick="removeExtraDoc('${dateStr}','${ex.id}')" style="background:#ffebee;border:1px solid #ef9a9a;color:#c62828;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:12px">✕</button></td>
+        <td><input type="text" value="${ex.timeRange||''}" placeholder="08-16" style="width:68px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px" onblur="_draftExtraTime('${ex.id}',this.value)"></td>
+        <td>${exH?exH+'h':'-'}</td><td>${ex.timeRange?exPts:'-'}</td>
+        <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftExtraDoc('${ex.id}',this.value)">${exOpts}</select></td>
+        <td><button onclick="_draftRemoveExtra('${ex.id}')" style="background:#ffebee;border:1px solid #ef9a9a;color:#c62828;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:12px">✕</button></td>
       </tr>`;
     }
     html+=`</tbody></table>`;
@@ -1436,60 +1445,49 @@ function openDayModal(dateStr){
   }
   html+=`</div>`;
 
-  const issues=checkConstraints(dateStr);
-  if(issues.length) html+=`<div class="alert alert-warn"><strong>⚠ 注意：</strong><br>${issues.map(i=>`• ${i}`).join('<br>')}</div>`;
-
   const prs=state.preRequests[dateStr]||[];
   if(prs.length) html+=`<div style="margin-top:6px"><strong style="font-size:12px">📝 預假/預班：</strong><br>${prs.map(pr=>`<span class="pr-badge">${getDocName(pr.docId)}: ${prLabel(pr)}${pr.note?' ('+pr.note+')':''}</span> `).join('')}</div>`;
 
   document.getElementById('day-modal-body').innerHTML=html;
-  document.getElementById('day-modal').classList.add('show');
 }
 
-function setDaySplit(dateStr, val){
-  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:val,主白:null,早班:null,小夜:null,大夜:null};
-  state.schedule[dateStr].split=val;
-  autoSave();
-  renderCalendar();
-  openDayModal(dateStr);
-}
-
-function assignDoc(dateStr, slot, docId){
-  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:getDaySplit(dateStr),主白:null,早班:null,小夜:null,大夜:null};
-  state.schedule[dateStr][slot]=docId||null;
-  autoSave();
-  renderCalendar();
-}
-
-function setSlotCustomTime(dateStr,slot,val){
+// Draft mutation helpers — no immediate save, no rule enforcement
+function _draftSplit(val){ _dayDraft.split=val; _renderDayDraft(); }
+function _draftSlot(slot,docId){ _dayDraft[slot]=docId||null; }
+function _draftSlotTime(slot,val){
   val=(val||'').trim();
-  if(!state.schedule[dateStr]) return;
-  if(!state.schedule[dateStr].customTimes) state.schedule[dateStr].customTimes={};
-  if(!val||customTimeHours(val)===0) delete state.schedule[dateStr].customTimes[slot];
-  else state.schedule[dateStr].customTimes[slot]=val;
-  if(state.schedule[dateStr].customTimes&&!Object.keys(state.schedule[dateStr].customTimes).length) delete state.schedule[dateStr].customTimes;
-  autoSave(); renderCalendar(); openDayModal(dateStr);
+  if(!val||customTimeHours(val)===0) delete _dayDraft.customTimes[slot];
+  else _dayDraft.customTimes[slot]=val;
+  _renderDayDraft();
 }
-function addExtraDoc(dateStr){
-  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:getDaySplit(dateStr),主白:null,早班:null,小夜:null,大夜:null};
-  if(!state.schedule[dateStr].extras) state.schedule[dateStr].extras=[];
-  state.schedule[dateStr].extras.push({id:'ex_'+Date.now(),docId:'',timeRange:''});
-  autoSave(); openDayModal(dateStr);
-}
-function removeExtraDoc(dateStr,id){
-  if(!state.schedule[dateStr]?.extras) return;
-  state.schedule[dateStr].extras=state.schedule[dateStr].extras.filter(e=>e.id!==id);
-  if(!state.schedule[dateStr].extras.length) delete state.schedule[dateStr].extras;
-  autoSave(); renderCalendar(); openDayModal(dateStr);
-}
-function assignExtraDoc(dateStr,id,docId){
-  const ex=(state.schedule[dateStr]?.extras||[]).find(e=>e.id===id);
-  if(ex){ex.docId=docId;autoSave();renderCalendar();}
-}
-function setExtraTime(dateStr,id,val){
+function _draftAddExtra(){ _dayDraft.extras.push({id:'ex_'+Date.now(),docId:'',timeRange:''}); _renderDayDraft(); }
+function _draftRemoveExtra(id){ _dayDraft.extras=_dayDraft.extras.filter(e=>e.id!==id); _renderDayDraft(); }
+function _draftExtraDoc(id,docId){ const ex=_dayDraft.extras.find(e=>e.id===id); if(ex) ex.docId=docId; }
+function _draftExtraTime(id,val){
   val=(val||'').trim();
-  const ex=(state.schedule[dateStr]?.extras||[]).find(e=>e.id===id);
-  if(ex){ex.timeRange=val;autoSave();renderCalendar();openDayModal(dateStr);}
+  const ex=_dayDraft.extras.find(e=>e.id===id);
+  if(ex){ ex.timeRange=val; _renderDayDraft(); }
+}
+
+function confirmDayModal(){
+  if(!_dayDraftDate||!_dayDraft) return;
+  pushUndo();
+  if(!state.schedule[_dayDraftDate]) state.schedule[_dayDraftDate]={};
+  const ds=state.schedule[_dayDraftDate];
+  ds.split=_dayDraft.split;
+  for(const sl of SLOTS) ds[sl]=_dayDraft[sl];
+  if(Object.keys(_dayDraft.customTimes).length) ds.customTimes={..._dayDraft.customTimes};
+  else delete ds.customTimes;
+  if(_dayDraft.extras.length) ds.extras=_dayDraft.extras.map(e=>({...e}));
+  else delete ds.extras;
+  autoSave(); renderCalendar();
+  _dayDraft=null; _dayDraftDate=null;
+  closeModal('day-modal');
+}
+
+function cancelDayModal(){
+  _dayDraft=null; _dayDraftDate=null;
+  closeModal('day-modal');
 }
 
 function checkConstraints(dateStr){
