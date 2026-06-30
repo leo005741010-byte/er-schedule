@@ -1732,6 +1732,9 @@ function renderPRList(){
       if(rs) rows.push({docId:doc.id,type:g.type,custom:g.custom,note:g.note,start:rs,end:re});
     }
   }
+  // Sort: doctor order first, then by start date
+  const _docIdx={};state.doctors.forEach((d,i)=>_docIdx[d.id]=i);
+  rows.sort((a,b)=>{const di=_docIdx[a.docId]-_docIdx[b.docId];return di!==0?di:a.start<b.start?-1:a.start>b.start?1:0;});
   document.getElementById('pr-tbody').innerHTML=rows.map(r=>{
     let dateDisp;
     if(r.start===r.end) dateDisp=fmtShort(r.start);
