@@ -254,7 +254,16 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       <!-- 新增表單在上 -->
       <h3 style="margin-bottom:8px">新增預假/預班</h3>
       <div class="pr-form">
-        <div><div>醫師</div><select id="pr-doc"></select></div>
+        <div>
+          <div>醫師</div>
+          <div id="pr-doc-wrap" style="position:relative;display:inline-block">
+            <button id="pr-doc-btn" onclick="togglePRDocDropdown(event)" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #ddd;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;min-width:130px;text-align:left">
+              <span id="pr-doc-label" style="flex:1">── 請先選擇醫師 ──</span><span style="color:#999;font-size:10px">▲</span>
+            </button>
+            <div id="pr-doc-list" style="display:none;position:absolute;bottom:calc(100% + 2px);left:0;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 -4px 16px rgba(0,0,0,.18);z-index:9000;min-width:130px;max-height:220px;overflow-y:auto"></div>
+            <input type="hidden" id="pr-doc" value="">
+          </div>
+        </div>
         <div>
           <div style="margin-bottom:4px">選取日期（點選單日或拖曳選範圍）</div>
           <div class="pr-cal-wrap">
@@ -1898,10 +1907,38 @@ function prCellUp(ds){
   prCal.hover=null; renderPRCal();
 }
 
+function togglePRDocDropdown(e){
+  e&&e.stopPropagation();
+  const list=document.getElementById('pr-doc-list');
+  if(list.style.display!=='none'){list.style.display='none';return;}
+  list.style.display='block';
+  setTimeout(()=>document.addEventListener('click',_closePRDocDropdown,{once:true}),0);
+}
+function _closePRDocDropdown(e){
+  const list=document.getElementById('pr-doc-list');
+  if(list&&!list.contains(e.target)) list.style.display='none';
+  else if(list&&list.style.display!=='none') setTimeout(()=>document.addEventListener('click',_closePRDocDropdown,{once:true}),0);
+}
+function _selectPRDoc(id,name){
+  document.getElementById('pr-doc').value=id;
+  document.getElementById('pr-doc-label').textContent=name||'── 請先選擇醫師 ──';
+  document.getElementById('pr-doc-label').style.color=id?'#222':'#999';
+  document.getElementById('pr-doc-list').style.display='none';
+}
+
 function renderPRTab(){
   _prListYear=state.year; _prListMonth=state.month;
-  const sel=document.getElementById('pr-doc');
-  sel.innerHTML=`<option value="">── 請先選擇醫師 ──</option>`+state.doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  // 填入自訂 dropdown 選項
+  const list=document.getElementById('pr-doc-list');
+  if(list){
+    const itemStyle='padding:7px 12px;cursor:pointer;font-size:12px;white-space:nowrap;';
+    list.innerHTML=`<div onclick="_selectPRDoc('','── 請先選擇醫師 ──')" style="${itemStyle}color:#999" onmouseover="this.style.background='#f0f4f8'" onmouseout="this.style.background=''">── 請先選擇醫師 ──</div>`+
+      state.doctors.map(d=>`<div onclick="_selectPRDoc('${d.id}','${d.name}')" style="${itemStyle}" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background=''">${d.name}</div>`).join('');
+  }
+  // 重置選擇
+  document.getElementById('pr-doc').value='';
+  document.getElementById('pr-doc-label').textContent='── 請先選擇醫師 ──';
+  document.getElementById('pr-doc-label').style.color='#999';
   initPRCal();
   renderPRList();
 }
