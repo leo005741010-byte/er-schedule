@@ -1742,6 +1742,10 @@ function addPR(){
 }
 function delPR(date,docId,type,custom){
   if(!state.preRequests[date]) return;
+  const pr=state.preRequests[date].find(r=>r.docId===docId&&r.type===type&&(r.custom||'')===(custom||''));
+  if(!pr) return;
+  const label=prLabel(pr);
+  if(!confirm(`確定刪除 ${getDocName(docId)} ${fmtShort(date)} 的「${label}」？`)) return;
   state.preRequests[date]=state.preRequests[date].filter(r=>!(r.docId===docId&&r.type===type&&(r.custom||'')===(custom||'')));
   if(!state.preRequests[date].length) delete state.preRequests[date];
   autoSave();
