@@ -285,17 +285,15 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
             <div class="pr-cal-selected" id="pr-cal-selected">尚未選取日期</div>
           </div>
         </div>
-        <div><div>類型</div>
-          <select id="pr-type" onchange="onPRTypeChange()">
-            <option value="OFF">當天OFF</option>
-            <option value="OFF_NO_BIG">當天OFF + 前天不排大夜</option>
-            <option value="OFF_NO_NIGHT">當天OFF + 前天不排小夜/大夜</option>
-            <option value="WORK_主白">預上班 - 主白(08-20)</option>
-            <option value="WORK_早班">預上班 - 早班</option>
-            <option value="WORK_小夜">預上班 - 小夜</option>
-            <option value="WORK_大夜">預上班 - 大夜(20-08)</option>
-            <option value="WORK_CUSTOM">預上班 - 自訂時間</option>
-          </select>
+        <div>
+          <div>類型</div>
+          <div id="pr-type-wrap" style="position:relative;display:inline-block">
+            <button id="pr-type-btn" onclick="togglePRTypeDropdown(event)" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #ddd;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;min-width:160px;text-align:left">
+              <span id="pr-type-label" style="flex:1">當天OFF</span><span style="color:#999;font-size:10px">▲</span>
+            </button>
+            <div id="pr-type-list" style="display:none;position:absolute;bottom:calc(100% + 2px);left:0;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 -4px 16px rgba(0,0,0,.18);z-index:9000;min-width:200px;overflow:hidden"></div>
+            <input type="hidden" id="pr-type" value="OFF">
+          </div>
         </div>
         <div id="custom-div" style="display:none">
           <div>自訂時段 (HH-HH)</div>
@@ -2080,6 +2078,38 @@ function delPR(date,docId,type,custom){
   if(!state.preRequests[date].length) delete state.preRequests[date];
   autoSave();
   renderPRList(); renderCalendar();
+}
+const _PR_TYPES=[
+  {v:'OFF',l:'當天OFF'},
+  {v:'OFF_NO_BIG',l:'當天OFF + 前天不排大夜'},
+  {v:'OFF_NO_NIGHT',l:'當天OFF + 前天不排小夜/大夜'},
+  {v:'WORK_主白',l:'預上班 - 主白(08-20)'},
+  {v:'WORK_早班',l:'預上班 - 早班'},
+  {v:'WORK_小夜',l:'預上班 - 小夜'},
+  {v:'WORK_大夜',l:'預上班 - 大夜(20-08)'},
+  {v:'WORK_CUSTOM',l:'預上班 - 自訂時間'},
+];
+function togglePRTypeDropdown(e){
+  e&&e.stopPropagation();
+  const list=document.getElementById('pr-type-list');
+  if(list.style.display!=='none'){list.style.display='none';return;}
+  // 填入選項
+  const cur=document.getElementById('pr-type').value;
+  const s='padding:7px 12px;cursor:pointer;font-size:12px;white-space:nowrap;';
+  list.innerHTML=_PR_TYPES.map(t=>`<div onclick="_selectPRType('${t.v}','${t.l}')" style="${s}background:${t.v===cur?'#e3f2fd':''};font-weight:${t.v===cur?'700':'400'}" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='${t.v===cur?'#e3f2fd':''}'">${t.l}</div>`).join('');
+  list.style.display='block';
+  setTimeout(()=>document.addEventListener('click',_closePRTypeDropdown,{once:true}),0);
+}
+function _closePRTypeDropdown(e){
+  const list=document.getElementById('pr-type-list');
+  if(list&&!list.contains(e.target)) list.style.display='none';
+  else if(list&&list.style.display!=='none') setTimeout(()=>document.addEventListener('click',_closePRTypeDropdown,{once:true}),0);
+}
+function _selectPRType(val,label){
+  document.getElementById('pr-type').value=val;
+  document.getElementById('pr-type-label').textContent=label;
+  document.getElementById('pr-type-list').style.display='none';
+  onPRTypeChange();
 }
 function onPRTypeChange(){
   document.getElementById('custom-div').style.display=
