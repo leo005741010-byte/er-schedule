@@ -909,8 +909,8 @@ function scoreDoc(docId, date, slot, sched){
   if(myH+addH>targetH+20) score-=80;
   if(myH+addH>targetH+40) score-=100;
   if(myH<targetH-10) score+=10;
-  // 120h minimum: iron rule — always pull regardless of OFF days
-  if(myH<120) score+=(120-myH)*10;
+  // 135h minimum: iron rule — always pull regardless of OFF days
+  if(myH<135) score+=(135-myH)*10;
   // 轉班懲罰: penalize 大夜↔白班 transitions, strongly discourage ≥3rd turnover
   const isNewTurnover=(
     (slot==='大夜'&&SLOTS.some(s=>s==='主白'||s==='早班')&&(()=>{const la=getLastAssigned(docId,date,sched);return la&&(la.slot==='主白'||la.slot==='早班');})())||
@@ -1096,15 +1096,15 @@ function autoSchedule(){
     }
   }
 
-  // 4th pass: force doctors to 120h minimum (iron rule — no exemptions)
-  // First try empty slots; if still short, displace a doctor who is already over 120h
+  // 4th pass: force doctors to 135h minimum (iron rule — no exemptions)
+  // First try empty slots; if still short, displace a doctor who is already over 135h
   for(let attempt=0;attempt<10;attempt++){
     let anyProgress=false;
     const tryDates=attempt===0?[...dates]:shuffle([...dates]);
     for(const doc of state.doctors.filter(d=>d.type==='full')){
-      if(calcDocHours(doc.id,newSched)>=120) continue;
+      if(calcDocHours(doc.id,newSched)>=135) continue;
       for(const d of tryDates){
-        if(calcDocHours(doc.id,newSched)>=120) break;
+        if(calcDocHours(doc.id,newSched)>=135) break;
         if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue; // already working this day
         // Pass A: fill empty slot
         let filled=false;
@@ -1115,13 +1115,13 @@ function autoSchedule(){
           }
         }
         if(filled) continue;
-        // Pass B: displace an over-120h occupant
+        // Pass B: displace an over-135h occupant
         for(const slot of SLOTS){
           const occupant=newSched[d][slot];
           if(!occupant) continue;
           const sp=newSched[d].split||state.defaultSplit;
           const occupantH=calcDocHours(occupant,newSched);
-          if(occupantH-slotHours(slot,sp)<120) continue; // occupant would fall below 120h
+          if(occupantH-slotHours(slot,sp)<135) continue; // occupant would fall below 135h
           newSched[d][slot]=null;
           const ok=canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched);
           if(ok){
@@ -1915,7 +1915,7 @@ function renderStats(){
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
     if(s.shifts>=3) viols.push(`⚠ ${doc.name} 轉班次數${s.shifts}次（目標 < 3次）`);
     const offDays=countDocOffDays(doc.id);
-    if(totalH<120) viols.push(`⚠ ${doc.name} 時數不足120h（實際${totalH}h，預假${offDays}天）`);
+    if(totalH<135) viols.push(`⚠ ${doc.name} 時數不足135h（實際${totalH}h，預假${offDays}天）`);
     const totalPts2=s.pts.wd+s.pts.hol;
     const targetH2=overallAvgPts>0?overallAvgPts:0; // unused now
     const avgHrs=state.doctors.filter(d=>d.type==='full').reduce((s,d2)=>{const st2=st[d2.id];return s+SLOTS.reduce((a,sl)=>a+st2.hrs[sl][0]+st2.hrs[sl][1],0);},0)/(state.doctors.filter(d=>d.type==='full').length||1);
