@@ -1319,7 +1319,8 @@ function renderCalendar(){
     for(const si of slotInfo){
       const docId=ds[si.slot];
       const doc=docId?state.doctors.find(d=>d.id===docId):null;
-      const timeStr=slotTimeStr(si.slot,sp);
+      const _ct=ds.customTimes&&ds.customTimes[si.slot];
+      const timeStr=_ct?(()=>{const m=_ct.match(/^(\d{1,2})-(\d{1,2})$/);return m?`${String(m[1]).padStart(2,'0')}:00-${String(m[2]).padStart(2,'0')}:00`:slotTimeStr(si.slot,sp);})():slotTimeStr(si.slot,sp);
       const row=document.createElement('div');
       row.className='shift-row';
       const tag=`<span class="slot-tag ${si.tagClass}">${si.tagLabel}</span>`;
@@ -1457,7 +1458,8 @@ function _draftSlot(slot,docId){ _dayDraft[slot]=docId||null; }
 function _draftSlotTime(slot,val){
   // 不重繪整個 modal（避免 blur→re-render 殺掉確認按鈕的 click 事件）
   val=(val||'').trim();
-  if(!val||customTimeHours(val)===0) delete _dayDraft.customTimes[slot];
+  const _defaultT=slotTimeEdit(slot,_dayDraft.split,{});
+  if(!val||customTimeHours(val)===0||val===_defaultT) delete _dayDraft.customTimes[slot];
   else _dayDraft.customTimes[slot]=val;
   const sp=_dayDraft.split; const ct=_dayDraft.customTimes[slot];
   const hrs=ct?customTimeHours(ct):slotHours(slot,sp);
@@ -1484,7 +1486,12 @@ function confirmDayModal(){
   // 防禦性補讀 DOM（處理 blur 尚未觸發的輸入框）
   for(const slot of SLOTS){
     const inp=document.getElementById('ti-'+slot);
-    if(inp){const v=inp.value.trim();if(!v||customTimeHours(v)===0)delete _dayDraft.customTimes[slot];else _dayDraft.customTimes[slot]=v;}
+    if(inp){
+      const v=inp.value.trim();
+      const defV=slotTimeEdit(slot,_dayDraft.split,{});
+      if(!v||customTimeHours(v)===0||v===defV) delete _dayDraft.customTimes[slot];
+      else _dayDraft.customTimes[slot]=v;
+    }
     const sel=document.getElementById('ds-'+slot);
     if(sel) _dayDraft[slot]=sel.value||null;
   }
@@ -1501,9 +1508,11 @@ function confirmDayModal(){
   else delete ds.customTimes;
   if(_dayDraft.extras.length) ds.extras=_dayDraft.extras.map(e=>({...e}));
   else delete ds.extras;
-  autoSave(); renderCalendar();
+  const savedDate=_dayDraftDate;
   _dayDraft=null; _dayDraftDate=null;
+  autoSave();
   closeModal('day-modal');
+  showToast(`✅ ${savedDate} 已儲存`);
 }
 
 function cancelDayModal(){
