@@ -294,6 +294,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
             <th colspan="3">早班</th>
             <th colspan="3">小夜</th>
             <th colspan="3">大夜 20-08</th>
+            <th rowspan="2">總班次</th>
             <th rowspan="2">總時數</th>
             <th colspan="3">假日各班時數</th>
             <th colspan="3">點值</th>
@@ -713,6 +714,23 @@ function avgPoints(sched){
   return full.reduce((s,d)=>s+calcDocPoints(d.id,sched),0)/full.length;
 }
 
+function countTurnovers(docId, sched){
+  let count=0, lastSlot=null;
+  for(const d of Object.keys(sched).sort()){
+    const ds=sched[d]||{};
+    for(const sl of SLOTS){
+      if(ds[sl]===docId){
+        if(lastSlot&&(
+          (lastSlot==='大夜'&&(sl==='主白'||sl==='早班'))||
+          ((lastSlot==='主白'||lastSlot==='早班')&&sl==='大夜')
+        )) count++;
+        lastSlot=sl;
+      }
+    }
+  }
+  return count;
+}
+
 function countDocOffDays(docId){
   const prefix=`${state.year}-${String(state.month+1).padStart(2,'0')}-`;
   let cnt=0;
@@ -754,6 +772,17 @@ function scoreDoc(docId, date, slot, sched){
   if(myH<targetH-10) score+=10;
   // 120h minimum: very strong pull so under-120h doctors always win during greedy passes
   if(countDocOffDays(docId)<=20&&myH<120) score+=(120-myH)*10;
+  // 轉班懲罰: penalize 大夜↔白班 transitions, strongly discourage ≥3rd turnover
+  const isNewTurnover=(
+    (slot==='大夜'&&SLOTS.some(s=>s==='主白'||s==='早班')&&(()=>{const la=getLastAssigned(docId,date,sched);return la&&(la.slot==='主白'||la.slot==='早班');})())||
+    ((slot==='主白'||slot==='早班')&&(()=>{const la=getLastAssigned(docId,date,sched);return la&&la.slot==='大夜';})())
+  );
+  if(isNewTurnover){
+    const cur=countTurnovers(docId,sched);
+    if(cur>=2) score-=150;
+    else if(cur===1) score-=40;
+    else score-=10;
+  }
   // 醫務會議: boost Thursday 主白/早班 if doctor still has no covered Thursday this month
   if(doc.prefs.medMeeting&&getDOW(date)===3&&(slot==='主白'||slot==='早班')){
     const hasThuCover=monthDates(state.year,state.month).some(d=>{
@@ -1584,11 +1613,13 @@ function renderStats(){
   document.getElementById('stats-tbody').innerHTML=state.doctors.map(doc=>{
     const s=st[doc.id];
     const totalH=SLOTS.reduce((sum,sl)=>sum+s.hrs[sl][0]+s.hrs[sl][1],0);
+    const totalCnt=SLOTS.reduce((sum,sl)=>sum+s.cnt[sl][0]+s.cnt[sl][1],0);
     const totalPts=s.pts.wd+s.pts.hol;
     const td=sl=>`<td>${s.cnt[sl][0]+s.cnt[sl][1]}</td><td>${s.hrs[sl][0]}</td><td>${s.hrs[sl][1]}</td>`;
     return `<tr>
       <td style="text-align:left"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
       ${td('主白')}${td('早班')}${td('小夜')}${td('大夜')}
+      <td><strong>${totalCnt}</strong></td>
       <td><strong>${totalH}</strong></td>
       <td style="background:#fff3e0">${s.holZone.bai}</td>
       <td style="background:#fff3e0">${s.holZone.sn}</td>
@@ -1614,6 +1645,7 @@ function renderStats(){
     const s=st[doc.id];
     const totalH=SLOTS.reduce((sum,sl)=>sum+s.hrs[sl][0]+s.hrs[sl][1],0);
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
+    if(s.shifts>=3) viols.push(`⚠ ${doc.name} 轉班次數${s.shifts}次（目標 < 3次）`);
     const offDays=countDocOffDays(doc.id);
     if(offDays<=20&&totalH<120) viols.push(`⚠ ${doc.name} 時數不足120h（實際${totalH}h，預假${offDays}天）`);
     const totalPts2=s.pts.wd+s.pts.hol;
