@@ -358,11 +358,12 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="form-row"><label>大夜偏好 (20-08)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-大夜" min="-2" max="2" step="1" value="0" oninput="updPV('大夜',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-大夜">0</span></div></div>
     <div class="form-row"><label>假日偏好</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-hol" min="-2" max="2" step="1" value="0" oninput="updPV('hol',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-hol">0</span></div></div>
     <h3>點值與連班</h3>
-    <div class="form-row"><label>時數偏好</label><div class="pref-slider"><span style="font-size:10px">少(-30h)</span><input type="range" id="pref-htPref" min="-2" max="2" step="1" value="0" oninput="updPV('htPref',this.value)"><span style="font-size:10px">多(+30h)</span><span class="pref-value" id="pv-htPref">0</span></div></div>
+    <div class="form-row"><label>時數偏好</label><div class="pref-slider"><span style="font-size:10px">少(-20h)</span><input type="range" id="pref-htPref" min="-2" max="2" step="1" value="0" oninput="updPV('htPref',this.value)"><span style="font-size:10px">多(+20h)</span><span class="pref-value" id="pv-htPref">0</span></div></div>
     <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-noday"><label for="pref-noday">不排白班 (不排主白/早班，僅排小夜/大夜)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-nonight"><label for="pref-nonight">不排大夜 (不上02-08，可排小夜至02:00)</label></div>
     <div class="check-row" id="wknight-row" style="display:none"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">周一到周四不夜班 (20-08大夜嚴格鎖定，僅周五六日可排) ─ 僅陳孝綱適用</label></div>
     <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">上班集中 (排班盡量連上一段、連休一段)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
@@ -457,7 +458,7 @@ function changeStatsMonth(delta){
 
 function defPrefs(){
   return {'白班':0,'小夜':0,'大夜':0,hol:0,htPref:0,maxConsec:6,
-          long:false,wkNight:false,cluster:false,noDay:false,medMeeting:false,morningReport:false};
+          long:false,wkNight:false,cluster:false,noDay:false,noNight:false,medMeeting:false,morningReport:false};
 }
 // Map a slot to its preference category
 function slotPrefKey(slot){
@@ -643,6 +644,7 @@ function canWork(docId, date, slot, sched){
     if(![4,5,6].includes(dow)) return false; // 周一到周四絕對不排大夜(20-08)
   }
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
+  if(doc.prefs.noNight&&slot==='大夜') return false;
   // ===== ABSOLUTE PROHIBITIONS (both backward and forward) =====
   // 主白/早班 starts at 08:00 — must not have 大夜(ends 08:00) or 小夜(ends 02:00) yesterday
   if(slot==='主白'||slot==='早班'){
@@ -711,6 +713,7 @@ function canWorkRelaxed(docId, date, slot, sched){
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
   if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
+  if(doc.prefs.noNight&&slot==='大夜') return false;
   // ===== ABSOLUTE PROHIBITIONS (same as canWork, never relaxed) =====
   if(slot==='主白'||slot==='早班'){
     const yd=addDays(date,-1);
@@ -756,6 +759,7 @@ function canWorkForce(docId, date, slot, sched){
     if(pr.type==='OFF_NO_NIGHT'&&slot==='小夜') return false;
   }
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
+  if(doc.prefs.noNight&&slot==='大夜') return false;
   if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
   // 12h rest from last shift
   const last=getLastAssigned(docId,date,sched);
@@ -869,7 +873,7 @@ function scoreDoc(docId, date, slot, sched){
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
-  const targetH=avg+(doc.prefs.htPref||0)*15;
+  const targetH=avg+(doc.prefs.htPref||0)*10;
   if(myH+addH>targetH+20) score-=80;
   if(myH+addH>targetH+40) score-=100;
   if(myH<targetH-10) score+=10;
@@ -1409,9 +1413,9 @@ function renderDoctorTable(){
       <td>${p['小夜']?levelStr(p['小夜']):'-'}</td>
       <td>${p['大夜']?levelStr(p['大夜']):'-'}</td>
       <td>${p.hol?levelStr(p.hol):'-'}</td>
-      <td>${p.htPref>0?'+'+p.htPref:p.htPref} (${(p.htPref*15>0?'+':'')+p.htPref*15}h)</td>
+      <td>${p.htPref>0?'+'+p.htPref:p.htPref} (${(p.htPref*10>0?'+':'')+p.htPref*10}h)</td>
       <td>${p.maxConsec}天</td>
-      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'不平夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.noNight?'不大夜':'',p.wkNight?'不平夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
         <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
         <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
@@ -1442,6 +1446,7 @@ function openDocModal(docId){
     document.getElementById('pref-consec').value=p.maxConsec;
     document.getElementById('pref-long').checked=p.long;
     document.getElementById('pref-noday').checked=!!p.noDay;
+    document.getElementById('pref-nonight').checked=!!p.noNight;
     const isCheng=doc.name==='陳孝綱';
     document.getElementById('wknight-row').style.display=isCheng?'':'none';
     document.getElementById('pref-wknight').checked=isCheng&&!!p.wkNight;
@@ -1458,6 +1463,7 @@ function openDocModal(docId){
     document.getElementById('pref-consec').value=6;
     document.getElementById('pref-long').checked=false;
     document.getElementById('pref-noday').checked=false;
+    document.getElementById('pref-nonight').checked=false;
     document.getElementById('wknight-row').style.display='none';
     document.getElementById('pref-wknight').checked=false;
     document.getElementById('pref-cluster').checked=false;
@@ -1479,6 +1485,7 @@ function saveDoc(){
   prefs.maxConsec=parseInt(document.getElementById('pref-consec').value);
   prefs.long=document.getElementById('pref-long').checked;
   prefs.noDay=document.getElementById('pref-noday').checked;
+  prefs.noNight=document.getElementById('pref-nonight').checked;
   prefs.wkNight=name==='陳孝綱'&&document.getElementById('pref-wknight').checked;
   prefs.cluster=document.getElementById('pref-cluster').checked;
   prefs.medMeeting=document.getElementById('pref-medMeeting').checked;
@@ -1865,7 +1872,7 @@ function renderStats(){
     const totalPts2=s.pts.wd+s.pts.hol;
     const targetH2=overallAvgPts>0?overallAvgPts:0; // unused now
     const avgHrs=state.doctors.filter(d=>d.type==='full').reduce((s,d2)=>{const st2=st[d2.id];return s+SLOTS.reduce((a,sl)=>a+st2.hrs[sl][0]+st2.hrs[sl][1],0);},0)/(state.doctors.filter(d=>d.type==='full').length||1);
-    const tgtH=avgHrs+(doc.prefs.htPref||0)*15;
+    const tgtH=avgHrs+(doc.prefs.htPref||0)*10;
     if(Math.abs(totalH-tgtH)>20) viols.push(`⚠ ${doc.name} 時數偏離目標(實際${totalH}h vs 目標${Math.round(tgtH)}h)`);
     // 醫務會議: need at least one Thursday 主白/早班
     if(doc.prefs.medMeeting){
