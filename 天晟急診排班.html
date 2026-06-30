@@ -864,8 +864,8 @@ function scoreDoc(docId, date, slot, sched){
   if(doc.prefs.cluster){
     const yd=addDays(date,-1);
     const workedYd=SLOTS.some(s=>(sched[yd]||{})[s]===docId);
-    if(workedYd) score+=35;
-    else score-=8;
+    if(workedYd) score+=80;
+    else score-=20;
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
