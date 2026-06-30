@@ -170,7 +170,6 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <div class="tab" onclick="switchTab('doctors')">👨‍⚕️ 醫師設定</div>
   <div class="tab" onclick="switchTab('prereq')">📝 預假/預班</div>
   <div class="tab" onclick="switchTab('stats')">📈 統計報表</div>
-  <div class="tab" onclick="switchTab('personal')">👤 個人頁面</div>
 </div>
 
 <div id="content">
@@ -318,21 +317,6 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div id="stats-violations" style="margin-top:10px;"></div>
   </div>
 
-  <!-- ======= 個人頁面 ======= -->
-  <div id="tab-personal" class="tab-pane">
-    <div id="personal-page-wrap">
-      <div class="personal-card">
-        <h3>📋 各醫師個人連結</h3>
-        <p style="font-size:11px;color:#666;margin-bottom:10px">點「開啟個人頁面」可讓醫師在自己的瀏覽器中填寫設定與預假。醫師填完後可「匯出個人資料」，管理員再用下方「匯入醫師資料」更新。</p>
-        <div id="personal-doc-links"></div>
-      </div>
-      <div class="personal-card">
-        <h3>📥 匯入醫師回傳資料</h3>
-        <p style="font-size:11px;color:#666;margin-bottom:8px">醫師匯出的JSON檔案，管理員載入後即可更新該醫師的設定及預假/預班。</p>
-        <button class="action-btn btn-purple" onclick="importDoctorData()">匯入醫師資料 (JSON)</button>
-      </div>
-    </div>
-  </div>
 
 </div>
 
@@ -406,6 +390,11 @@ let state = {
   ],
 };
 let _idCnt = 10;
+let _filterDocId = null;
+function toggleDocFilter(docId){
+  _filterDocId = (_filterDocId===docId) ? null : docId;
+  renderCalendar();
+}
 
 function defPrefs(){
   return {'白班':0,'小夜':0,'大夜':0,hol:0,htPref:0,maxConsec:6,
@@ -752,7 +741,7 @@ function scoreDoc(docId, date, slot, sched){
   const myPts=calcDocPoints(docId,sched);
   const avgPts=avgPoints(sched);
   score+=(avgPts-myPts)*3.0;
-  score+=(doc.prefs[slotPrefKey(slot)]||0)*18;
+  score+=(doc.prefs[slotPrefKey(slot)]||0)*36;
   if(isHoliday(date)) score+=(doc.prefs.hol||0)*5;
   const last=getLastAssigned(docId,date,sched);
   if(last&&last.slot===slot) score+=5;
@@ -764,7 +753,7 @@ function scoreDoc(docId, date, slot, sched){
     if(workedYd) score+=15;
     else score-=3;
   }
-  if(doc.prefs.long&&slotHours(slot,split)>10) score+=20;
+  if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
   const targetH=avg+(doc.prefs.htPref||0)*15;
   if(myH+addH>targetH+20) score-=80;
@@ -817,8 +806,8 @@ function bestSplitForPair(earlyId, lateId, date, sched){
     let sc = 0;
     if(sp===20) sc += 10; // strong preference for 20:00 split
     // Long-shift preference
-    if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 20;
-    if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 20;
+    if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 40;
+    if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 40;
     // Hours fairness: choose split to give more hours to under-target doctor
     const avg = avgHours(sched);
     if(earlyId){ const mh=calcDocHours(earlyId,sched); sc += (avg-mh) * earlyH * 0.35; }
@@ -1049,7 +1038,11 @@ function renderCalendar(){
   document.getElementById('stats-month').textContent=`${y}年${m+1}月`;
 
   document.getElementById('doc-legend').innerHTML=
-    state.doctors.map(d=>`<span class="legend-item"><span class="color-dot" style="background:${d.color}"></span>${d.name}${d.type==='part'?'(兼)':''}</span>`).join('');
+    `<span class="legend-item" onclick="toggleDocFilter(null)" style="cursor:pointer;padding:2px 7px;border-radius:10px;border:1px solid ${!_filterDocId?'#1a4a7a':'#ccc'};background:${!_filterDocId?'#e8f0fb':'transparent'};color:${!_filterDocId?'#1a4a7a':'#999'};font-weight:${!_filterDocId?'700':'400'}">全部</span>`+
+    state.doctors.map(d=>{
+      const sel=(_filterDocId===d.id);
+      return `<span class="legend-item" onclick="toggleDocFilter('${d.id}')" style="cursor:pointer;padding:2px 7px;border-radius:10px;border:1px solid ${sel?d.color:'transparent'};background:${sel?d.color+'28':'transparent'};font-weight:${sel?'700':'400'}"><span class="color-dot" style="background:${d.color}"></span>${d.name}${d.type==='part'?'(兼)':''}</span>`;
+    }).join('');
 
   const grid=document.getElementById('calendar-grid');
   grid.innerHTML='';
@@ -1102,10 +1095,15 @@ function renderCalendar(){
       const row=document.createElement('div');
       row.className='shift-row';
       const tag=`<span class="slot-tag ${si.tagClass}">${si.tagLabel}</span>`;
+      const isDimmed=_filterDocId&&docId!==_filterDocId;
+      const isHighlighted=_filterDocId&&docId===_filterDocId;
       if(doc){
-        row.innerHTML=`${tag}<span class="shift-doc" style="background:${doc.color}18;border:1px solid ${doc.color}60;color:${doc.color}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${timeStr}</span></span>`;
+        const dimStyle=isDimmed?'opacity:0.12;':'';
+        const hlStyle=isHighlighted?`box-shadow:0 0 0 2px ${doc.color};`:'';
+        row.innerHTML=`${tag}<span class="shift-doc" style="background:${doc.color}18;border:1px solid ${doc.color}60;color:${doc.color};${dimStyle}${hlStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${timeStr}</span></span>`;
       } else {
-        row.innerHTML=`${tag}<span class="shift-doc empty-slot" onclick="openDayModal('${dateStr}')"><span class="doc-name">空 ${timeStr}</span></span>`;
+        const dimStyle=isDimmed?'opacity:0.12;':'';
+        row.innerHTML=`${tag}<span class="shift-doc empty-slot" style="${dimStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">空 ${timeStr}</span></span>`;
       }
       cell.appendChild(row);
     }
@@ -1500,7 +1498,9 @@ function fmtShort(ds){const[,m,d]=ds.split('-').map(Number);return `${m}/${d}`;}
 function renderPRList(){
   // Group: docId → {type+custom → {type,custom,note,dates[]}}
   const grouped={};
+  const monthPrefix=`${state.year}-${String(state.month+1).padStart(2,'0')}-`;
   for(const[date,prs] of Object.entries(state.preRequests)){
+    if(!date.startsWith(monthPrefix)) continue;
     for(const pr of prs){
       if(!grouped[pr.docId]) grouped[pr.docId]={};
       const key=pr.type+'|'+(pr.custom||'');
