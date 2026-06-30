@@ -192,7 +192,8 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
           <label>預設切割點：</label>
           <select id="default-split" onchange="state.defaultSplit=parseInt(this.value)">
             <option value="16">16:00</option><option value="17">17:00</option>
-            <option value="18" selected>18:00</option><option value="19">19:00</option>
+            <option value="18">18:00</option><option value="19">19:00</option>
+            <option value="20" selected>20:00</option>
           </select>
           <span style="font-size:10px;color:#888">(自動排班初始值)</span>
         </div>
@@ -387,7 +388,7 @@ let state = {
   year: new Date().getFullYear(),
   month: new Date().getMonth(),
   holidays: new Set(),
-  defaultSplit: 18,
+  defaultSplit: 20,
   schedule: {},
   preRequests: {},
   avoidPairs: [],
@@ -505,7 +506,7 @@ function zoneHours(slot, split, startDate){
 }
 
 // Clamp split to allowed manual range (custom pre-requests may exceed this)
-function clampSplit(v){ return Math.min(19,Math.max(16,v||18)); }
+function clampSplit(v){ return Math.min(20,Math.max(16,v||20)); }
 
 function getDaySplit(dateStr){
   return (state.schedule[dateStr]&&state.schedule[dateStr].split) || state.defaultSplit;
@@ -781,10 +782,11 @@ function bestSplitForPair(earlyId, lateId, date, sched){
   if(!earlyDoc && !lateDoc) return state.defaultSplit;
 
   let bestSp = state.defaultSplit, bestSc = -Infinity;
-  for(let sp=16; sp<=19; sp++){
+  for(let sp=16; sp<=20; sp++){
     const earlyH = sp - 8;   // 早班 hours
     const lateH  = 26 - sp;  // 小夜 hours
     let sc = 0;
+    if(sp===20) sc += 10; // strong preference for 20:00 split
     // Long-shift preference
     if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 8;
     if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 8;
@@ -2051,7 +2053,7 @@ function applyCloudData(data){
   state.holidays=new Set(data.holidays||[]);
   if(data.year!=null) state.year=data.year;
   if(data.month!=null) state.month=data.month;
-  state.defaultSplit=clampSplit(data.defaultSplit||18);
+  state.defaultSplit=clampSplit(data.defaultSplit||20);
   state.avoidPairs=data.avoidPairs||[];
   if(data.idCnt) _idCnt=data.idCnt;
   const sl=document.getElementById('default-split');
@@ -2152,7 +2154,7 @@ function autoLoad(){
     state.holidays=new Set(d.holidays||[]);
     if(d.year!=null) state.year=d.year;
     if(d.month!=null) state.month=d.month;
-    state.defaultSplit=clampSplit(d.defaultSplit||18);
+    state.defaultSplit=clampSplit(d.defaultSplit||20);
     state.avoidPairs=d.avoidPairs||[];
     if(d.idCnt) _idCnt=d.idCnt;
     return true;
@@ -2181,7 +2183,7 @@ function loadData(){
         state.preRequests=d.preRequests||{};
         state.holidays=new Set(d.holidays||[]);
         state.year=d.year; state.month=d.month;
-        state.defaultSplit=clampSplit(d.defaultSplit||18);
+        state.defaultSplit=clampSplit(d.defaultSplit||20);
         state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
         document.getElementById('default-split').value=state.defaultSplit;
