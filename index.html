@@ -1534,8 +1534,9 @@ function renderPRList(){
     const delCall=r.start===r.end
       ?`delPR('${r.start}','${r.docId}','${r.type}','${r.custom}')`
       :`delPRRange('${r.docId}','${r.type}','${r.custom}','${r.start}','${r.end}')`;
-    return `<tr>
-      <td>${getDocName(r.docId)}</td><td>${dateDisp}</td>
+    const docColor=(state.doctors.find(d=>d.id===r.docId)||{}).color||'#888';
+    return `<tr style="background:${docColor}22">
+      <td><span class="color-dot" style="background:${docColor};vertical-align:middle;margin-right:4px"></span>${getDocName(r.docId)}</td><td>${dateDisp}</td>
       <td>${prLabel({type:r.type,custom:r.custom})}</td><td>${r.note||''}</td>
       <td><button class="btn-sm btn-del" onclick="${delCall}">刪除</button></td>
     </tr>`;
