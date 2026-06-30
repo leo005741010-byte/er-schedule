@@ -781,6 +781,25 @@ function autoSchedule(){
     newSched[d]={split:existing.split||state.defaultSplit, 主白:null, 早班:null, 晚班:null, 大夜:null};
   }
 
+  // fullSched: Proxy that reads current month from newSched (live), other months from state.schedule.
+  // Used for cross-month constraint checks (12h rest across month boundary, consecutive days, N-OFF-D).
+  // Scoring functions (calcDocHours etc.) still use newSched to avoid counting other months' hours.
+  const fullSched = new Proxy(newSched, {
+    get(target, key, receiver){
+      if(typeof key!=='string') return Reflect.get(target,key,receiver);
+      return key in target ? target[key] : state.schedule[key];
+    },
+    has(target,key){ return (key in target)||(key in state.schedule); },
+    ownKeys(target){
+      return [...new Set([...Object.keys(target),...Object.keys(state.schedule)])];
+    },
+    getOwnPropertyDescriptor(target,key){
+      const val=key in target?target[key]:state.schedule[key];
+      if(val!==undefined) return {value:val,writable:true,enumerable:true,configurable:true};
+      return undefined;
+    }
+  });
+
   // Apply WORK pre-requests (including CUSTOM)
   for(const d of dates){
     for(const pr of (state.preRequests[d]||[])){
@@ -803,16 +822,16 @@ function autoSchedule(){
   for(const doc of state.doctors.filter(d=>d.type==='full'&&d.prefs.morningReport)){
     for(const thu of reportThus){
       const wed=addDays(thu,-1);
-      const covered=(newSched[thu]||{})['主白']===doc.id||(newSched[thu]||{})['早班']===doc.id
-                   ||(newSched[wed]||{})['大夜']===doc.id;
+      const covered=(fullSched[thu]||{})['主白']===doc.id||(fullSched[thu]||{})['早班']===doc.id
+                   ||(fullSched[wed]||{})['大夜']===doc.id;
       if(covered) continue;
       let done=false;
       for(const slot of ['主白','早班']){
-        if(!newSched[thu][slot]&&canWork(doc.id,thu,slot,newSched)){
+        if(!newSched[thu][slot]&&canWork(doc.id,thu,slot,fullSched)){
           newSched[thu][slot]=doc.id; done=true; break;
         }
       }
-      if(!done&&!newSched[wed]['大夜']&&canWork(doc.id,wed,'大夜',newSched)){
+      if(!done&&newSched[wed]&&!newSched[wed]['大夜']&&canWork(doc.id,wed,'大夜',fullSched)){
         newSched[wed]['大夜']=doc.id;
       }
     }
@@ -826,7 +845,7 @@ function autoSchedule(){
     for(const thu of thursdays){
       let done=false;
       for(const slot of ['主白','早班']){
-        if(!newSched[thu][slot]&&canWork(doc.id,thu,slot,newSched)){
+        if(!newSched[thu][slot]&&canWork(doc.id,thu,slot,fullSched)){
           newSched[thu][slot]=doc.id; done=true; break;
         }
       }
@@ -843,13 +862,13 @@ function autoSchedule(){
         let candidates=state.doctors.filter(doc=>{
           if(doc.type==='part') return false;
           if(SLOTS.some(s=>newSched[d][s]===doc.id)) return false;
-          return canWork(doc.id,d,slot,newSched);
+          return canWork(doc.id,d,slot,fullSched);
         });
         if(!candidates.length){
           candidates=state.doctors.filter(doc=>{
             if(doc.type==='part') return false;
             if(SLOTS.some(s=>newSched[d][s]===doc.id)) return false;
-            return canWorkRelaxed(doc.id,d,slot,newSched);
+            return canWorkRelaxed(doc.id,d,slot,fullSched);
           });
         }
         if(candidates.length){
@@ -869,7 +888,7 @@ function autoSchedule(){
       for(const slot of SLOTS){
         if(newSched[d][slot]) continue;
         if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue;
-        if(canWork(doc.id,d,slot,newSched)||canWorkRelaxed(doc.id,d,slot,newSched)){
+        if(canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)){
           newSched[d][slot]=doc.id; break;
         }
       }
@@ -910,7 +929,8 @@ function autoSchedule(){
     }
   }
 
-  state.schedule=newSched;
+  // Merge current month into state.schedule without destroying other months' data
+  Object.assign(state.schedule, newSched);
   autoSave();
   renderCalendar();
   switchTab('schedule');
