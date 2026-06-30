@@ -818,11 +818,46 @@ function canWorkForce(docId, date, slot, sched){
 // ============================================================
 // SCORING
 // ============================================================
+function customTimeHours(timeRange){
+  if(!timeRange) return 0;
+  const m=timeRange.match(/^(\d{1,2})-(\d{1,2})$/);
+  if(!m) return 0;
+  let s=parseInt(m[1]),e=parseInt(m[2]);
+  if(e<=s) e+=24;
+  return e-s;
+}
+function calcCustomPoints(timeRange,dateStr){
+  if(!timeRange) return 0;
+  const m=timeRange.match(/^(\d{1,2})-(\d{1,2})$/);
+  if(!m) return 0;
+  let s=parseInt(m[1]),e=parseInt(m[2]);
+  if(e<=s) e+=24;
+  const nextDate=addDays(dateStr,1);
+  let pts=0;
+  for(let h=s;h<e;h++){
+    const ah=h%24; const d=h>=24?nextDate:dateStr; const isHol=isHoliday(d);
+    if(ah>=2&&ah<8) pts+=isHol?2.0:1.6;
+    else if(ah>=8&&ah<16) pts+=isHol?1.2:1.0;
+    else pts+=isHol?1.4:1.2;
+  }
+  return Math.round(pts*10)/10;
+}
+function slotTimeEdit(slot,split,customTimes){
+  if(customTimes&&customTimes[slot]) return customTimes[slot];
+  const {s,e}=slotRange(slot,split);
+  return `${String(s).padStart(2,'0')}-${String(e%24||24).padStart(2,'0')}`;
+}
 function calcDocHours(docId, sched){
   let h=0;
   for(const[d,ds]of Object.entries(sched)){
     const sp=ds.split||state.defaultSplit;
-    for(const sl of SLOTS) if(ds[sl]===docId) h+=slotHours(sl,sp);
+    for(const sl of SLOTS){
+      if(ds[sl]===docId){
+        const ct=ds.customTimes&&ds.customTimes[sl];
+        h+=ct?customTimeHours(ct):slotHours(sl,sp);
+      }
+    }
+    for(const ex of (ds.extras||[])) if(ex.docId===docId) h+=customTimeHours(ex.timeRange||'');
   }
   return h;
 }
@@ -837,7 +872,13 @@ function calcDocPoints(docId, sched){
   let pts=0;
   for(const[d,ds]of Object.entries(sched)){
     const sp=ds.split||state.defaultSplit;
-    for(const sl of SLOTS) if(ds[sl]===docId) pts+=calcSlotPoints(sl,sp,d);
+    for(const sl of SLOTS){
+      if(ds[sl]===docId){
+        const ct=ds.customTimes&&ds.customTimes[sl];
+        pts+=ct?calcCustomPoints(ct,d):calcSlotPoints(sl,sp,d);
+      }
+    }
+    for(const ex of (ds.extras||[])) if(ex.docId===docId) pts+=calcCustomPoints(ex.timeRange||'',d);
   }
   return pts;
 }
@@ -1294,6 +1335,20 @@ function renderCalendar(){
       cell.appendChild(row);
     }
 
+    for(const ex of (ds.extras||[])){
+      if(!ex.docId) continue;
+      const doc=state.doctors.find(d=>d.id===ex.docId);
+      if(!doc) continue;
+      const exRow=document.createElement('div');
+      exRow.className='shift-row';
+      const isDimmedEx=_filterDocId&&ex.docId!==_filterDocId;
+      const isHighEx=_filterDocId&&ex.docId===_filterDocId;
+      const dimSt=isDimmedEx?'opacity:0.12;':'';
+      const hlSt=isHighEx?`box-shadow:0 0 0 2px ${doc.color};`:'';
+      exRow.innerHTML=`<span class="slot-tag" style="background:#78909c;color:#fff;font-size:9px;padding:1px 4px">加</span><span class="shift-doc" style="background:${doc.color}18;border:1px solid ${doc.color}60;color:${doc.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${ex.timeRange||'?'}</span></span>`;
+      cell.appendChild(exRow);
+    }
+
     const prs=state.preRequests[dateStr]||[];
     if(prs.length){
       const prow=document.createElement('div');
@@ -1318,6 +1373,8 @@ function openDayModal(dateStr){
 
   const ds=state.schedule[dateStr]||{split:state.defaultSplit};
   const sp=ds.split||state.defaultSplit;
+  const customTimes=ds.customTimes||{};
+  const extras=ds.extras||[];
 
   let html=`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px">
@@ -1328,19 +1385,20 @@ function openDayModal(dateStr){
     <span style="color:#888">早班結束 / 小夜開始</span>
   </div>
   <table class="day-slot-table">
-  <thead><tr><th>班別</th><th>時間</th><th>時數</th><th>點值</th><th>指派醫師</th></tr></thead>
+  <thead><tr><th>班別</th><th>時間 <span style="font-size:10px;color:#999">(可改)</span></th><th>時數</th><th>點值</th><th>指派醫師</th></tr></thead>
   <tbody>`;
 
   for(const slot of SLOTS){
-    const timeStr=slotTimeStr(slot,sp);
-    const hrs=slotHours(slot,sp);
-    const pts=calcSlotPoints(slot,sp,dateStr);
+    const ct=customTimes[slot];
+    const editVal=slotTimeEdit(slot,sp,customTimes);
+    const hrs=ct?customTimeHours(ct):slotHours(slot,sp);
+    const pts=ct?calcCustomPoints(ct,dateStr):calcSlotPoints(slot,sp,dateStr);
     const docId=ds[slot];
     const opts=state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
     const tagClass={'主白':'tag-主白','早班':'tag-早班','小夜':'tag-小夜','大夜':'tag-大夜'}[slot];
     html+=`<tr>
       <td><span class="slot-tag ${tagClass}" style="width:auto;padding:2px 6px">${slot}</span></td>
-      <td style="font-size:11px;color:#555">${timeStr}</td>
+      <td><input type="text" value="${editVal}" style="width:72px;font-size:11px;padding:2px 5px;border:1px solid ${ct?'#e65100':'#ddd'};border-radius:3px;color:${ct?'#e65100':'#555'}" title="格式 HH-HH，清空還原預設" onblur="setSlotCustomTime('${dateStr}','${slot}',this.value)"></td>
       <td>${hrs}h</td>
       <td>${pts}</td>
       <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="assignDoc('${dateStr}','${slot}',this.value)">
@@ -1349,6 +1407,34 @@ function openDayModal(dateStr){
     </tr>`;
   }
   html+=`</tbody></table>`;
+
+  // Extra doctors section
+  const extraDocOpts=state.doctors.map(doc=>`<option value="${doc.id}">${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
+  html+=`<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <strong style="font-size:12px">額外醫師</strong>
+      <button onclick="addExtraDoc('${dateStr}')" style="font-size:11px;padding:2px 10px;border:1px solid #4caf50;background:#e8f5e9;color:#2e7d32;border-radius:3px;cursor:pointer">＋ 新增醫師</button>
+    </div>`;
+  if(extras.length){
+    html+=`<table class="day-slot-table"><thead><tr><th>時間 (HH-HH)</th><th>時數</th><th>點值</th><th>指派醫師</th><th></th></tr></thead><tbody>`;
+    for(const ex of extras){
+      const exH=customTimeHours(ex.timeRange);
+      const exPts=ex.timeRange?calcCustomPoints(ex.timeRange,dateStr):0;
+      html+=`<tr>
+        <td><input type="text" value="${ex.timeRange||''}" placeholder="08-16" style="width:68px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px" onblur="setExtraTime('${dateStr}','${ex.id}',this.value)"></td>
+        <td>${exH?exH+'h':'-'}</td>
+        <td>${ex.timeRange?exPts:'-'}</td>
+        <td><select style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="assignExtraDoc('${dateStr}','${ex.id}',this.value)">
+          <option value="">-- 選醫師 --</option>${extraDocOpts.replace(`value="${ex.docId}"`,`value="${ex.docId}" selected`)}
+        </select></td>
+        <td><button onclick="removeExtraDoc('${dateStr}','${ex.id}')" style="background:#ffebee;border:1px solid #ef9a9a;color:#c62828;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:12px">✕</button></td>
+      </tr>`;
+    }
+    html+=`</tbody></table>`;
+  } else {
+    html+=`<div style="color:#999;font-size:11px;padding:4px 0">無額外醫師</div>`;
+  }
+  html+=`</div>`;
 
   const issues=checkConstraints(dateStr);
   if(issues.length) html+=`<div class="alert alert-warn"><strong>⚠ 注意：</strong><br>${issues.map(i=>`• ${i}`).join('<br>')}</div>`;
@@ -1373,6 +1459,37 @@ function assignDoc(dateStr, slot, docId){
   state.schedule[dateStr][slot]=docId||null;
   autoSave();
   renderCalendar();
+}
+
+function setSlotCustomTime(dateStr,slot,val){
+  val=(val||'').trim();
+  if(!state.schedule[dateStr]) return;
+  if(!state.schedule[dateStr].customTimes) state.schedule[dateStr].customTimes={};
+  if(!val||customTimeHours(val)===0) delete state.schedule[dateStr].customTimes[slot];
+  else state.schedule[dateStr].customTimes[slot]=val;
+  if(state.schedule[dateStr].customTimes&&!Object.keys(state.schedule[dateStr].customTimes).length) delete state.schedule[dateStr].customTimes;
+  autoSave(); renderCalendar(); openDayModal(dateStr);
+}
+function addExtraDoc(dateStr){
+  if(!state.schedule[dateStr]) state.schedule[dateStr]={split:getDaySplit(dateStr),主白:null,早班:null,小夜:null,大夜:null};
+  if(!state.schedule[dateStr].extras) state.schedule[dateStr].extras=[];
+  state.schedule[dateStr].extras.push({id:'ex_'+Date.now(),docId:'',timeRange:''});
+  autoSave(); openDayModal(dateStr);
+}
+function removeExtraDoc(dateStr,id){
+  if(!state.schedule[dateStr]?.extras) return;
+  state.schedule[dateStr].extras=state.schedule[dateStr].extras.filter(e=>e.id!==id);
+  if(!state.schedule[dateStr].extras.length) delete state.schedule[dateStr].extras;
+  autoSave(); renderCalendar(); openDayModal(dateStr);
+}
+function assignExtraDoc(dateStr,id,docId){
+  const ex=(state.schedule[dateStr]?.extras||[]).find(e=>e.id===id);
+  if(ex){ex.docId=docId;autoSave();renderCalendar();}
+}
+function setExtraTime(dateStr,id,val){
+  val=(val||'').trim();
+  const ex=(state.schedule[dateStr]?.extras||[]).find(e=>e.id===id);
+  if(ex){ex.timeRange=val;autoSave();renderCalendar();openDayModal(dateStr);}
 }
 
 function checkConstraints(dateStr){
@@ -1865,6 +1982,30 @@ function renderStats(){
         if(isTurnover) s.shifts++;
       }
       s.lastSlot=slot;
+    }
+    // Account for custom time overrides on standard slots
+    for(const slot of SLOTS){
+      const docId=ds[slot]; if(!docId||!st[docId]) continue;
+      const ct=ds.customTimes&&ds.customTimes[slot];
+      if(!ct) continue;
+      const s=st[docId];
+      const hol=isHoliday(dateStr)?1:0;
+      // Subtract default hours/pts already added, add custom hours/pts
+      s.hrs[slot][hol]-=slotHours(slot,sp);
+      s.hrs[slot][hol]+=customTimeHours(ct);
+      const cpPts=calcCustomPoints(ct,dateStr);
+      if(hol) s.pts.hol+=cpPts-calcSlotPoints(slot,sp,dateStr);
+      else s.pts.wd+=cpPts-calcSlotPoints(slot,sp,dateStr);
+    }
+    // Extra doctors
+    for(const ex of (ds.extras||[])){
+      if(!ex.docId||!st[ex.docId]) continue;
+      const s=st[ex.docId];
+      const hol=isHoliday(dateStr)?1:0;
+      const exH=customTimeHours(ex.timeRange||'');
+      const exPts=calcCustomPoints(ex.timeRange||'',dateStr);
+      s.hrs['主白'][hol]+=exH; // bucket into 主白 for display simplicity
+      s.pts[hol?'hol':'wd']+=exPts;
     }
   }
 
