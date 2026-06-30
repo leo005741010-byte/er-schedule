@@ -268,7 +268,10 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
         <div><div>備註</div><input type="text" id="pr-note" style="width:110px" placeholder="(可留空)"></div>
         <button class="action-btn btn-green" onclick="addPR()">新增</button>
       </div>
-      <h3 style="margin-bottom:6px">預假/預班清單</h3>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+        <h3 style="margin:0">預假/預班清單</h3>
+        <div id="pr-list-month-nav" style="display:flex;align-items:center;gap:6px"></div>
+      </div>
       <div id="pre-req-list">
         <table>
           <thead><tr><th>醫師</th><th>日期/區間</th><th>類型</th><th>備註</th><th>操作</th></tr></thead>
@@ -354,6 +357,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-noday"><label for="pref-noday">不排白班 (不排主白/早班，僅排小夜/大夜)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">週末夜班 (僅五六日排大夜)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">上班集中 (排班盡量連上一段、連休一段)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
@@ -395,10 +399,18 @@ function toggleDocFilter(docId){
   _filterDocId = (_filterDocId===docId) ? null : docId;
   renderCalendar();
 }
+let _prListYear = new Date().getFullYear();
+let _prListMonth = new Date().getMonth();
+function changePRListMonth(delta){
+  _prListMonth+=delta;
+  if(_prListMonth<0){_prListMonth=11;_prListYear--;}
+  if(_prListMonth>11){_prListMonth=0;_prListYear++;}
+  renderPRList();
+}
 
 function defPrefs(){
   return {'白班':0,'小夜':0,'大夜':0,hol:0,htPref:0,maxConsec:6,
-          long:false,wkNight:false,cluster:false,medMeeting:false,morningReport:false};
+          long:false,wkNight:false,cluster:false,noDay:false,medMeeting:false,morningReport:false};
 }
 // Map a slot to its preference category
 function slotPrefKey(slot){
@@ -583,6 +595,7 @@ function canWork(docId, date, slot, sched){
     const dow=getDOW(date);
     if(![4,5,6].includes(dow)) return false;
   }
+  if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
   // ===== ABSOLUTE PROHIBITIONS (both backward and forward) =====
   // 主白/早班 starts at 08:00 — must not have 大夜(ends 08:00) or 小夜(ends 02:00) yesterday
   if(slot==='主白'||slot==='早班'){
@@ -642,6 +655,7 @@ function canWorkRelaxed(docId, date, slot, sched){
     else break;
   }
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
+  if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
   // ===== ABSOLUTE PROHIBITIONS (same as canWork, never relaxed) =====
   if(slot==='主白'||slot==='早班'){
     const yd=addDays(date,-1);
@@ -666,6 +680,44 @@ function canWorkRelaxed(docId, date, slot, sched){
     if(!pair.includes(docId)) continue;
     const other=pair.find(x=>x!==docId);
     if(SLOTS.some(s=>(sched[date]||{})[s]===other)) return false;
+  }
+  return true;
+}
+
+// Force-fill: only enforces 12h rest + OFF pre-requests. No consecutive limit.
+function canWorkForce(docId, date, slot, sched){
+  const doc=state.doctors.find(d=>d.id===docId);
+  if(!doc||doc.type==='part') return false;
+  const split=getDaySplit(date);
+  if(SLOTS.some(s=>(sched[date]||{})[s]===docId)) return false;
+  const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
+  for(const pr of prs){if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;}
+  const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
+  for(const pr of nextDayPRs){
+    if((pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')&&slot==='大夜') return false;
+    if(pr.type==='OFF_NO_NIGHT'&&slot==='小夜') return false;
+  }
+  if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
+  // 12h rest from last shift
+  const last=getLastAssigned(docId,date,sched);
+  if(last){
+    const end=getShiftEndTime(last.slot,last.split,last.date);
+    if(hoursBetween(end.date,end.hour,date,slotRange(slot,split).s)<12) return false;
+  }
+  // Forward rest: 大夜 cannot precede 主白/早班 next day
+  if(slot==='主白'||slot==='早班'){
+    const yd=addDays(date,-1); const yds=sched[yd]||{};
+    if(yds['大夜']===docId||yds['小夜']===docId) return false;
+  }
+  if(slot==='大夜'){
+    const td=addDays(date,1); const tds=sched[td]||{};
+    if(tds['主白']===docId||tds['早班']===docId) return false;
+    const d2=addDays(date,2);
+    if(!SLOTS.some(s=>tds[s]===docId)&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+  }
+  if(slot==='小夜'){
+    const td=addDays(date,1); const tds=sched[td]||{};
+    if(tds['主白']===docId||tds['早班']===docId) return false;
   }
   return true;
 }
@@ -750,8 +802,8 @@ function scoreDoc(docId, date, slot, sched){
   if(doc.prefs.cluster){
     const yd=addDays(date,-1);
     const workedYd=SLOTS.some(s=>(sched[yd]||{})[s]===docId);
-    if(workedYd) score+=15;
-    else score-=3;
+    if(workedYd) score+=35;
+    else score-=8;
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
@@ -950,7 +1002,7 @@ function autoSchedule(){
         let filled=false;
         for(const slot of SLOTS){
           if(newSched[d][slot]) continue;
-          if(canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)){
+          if(canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched)){
             newSched[d][slot]=doc.id; anyProgress=true; filled=true; break;
           }
         }
@@ -962,9 +1014,8 @@ function autoSchedule(){
           const sp=newSched[d].split||state.defaultSplit;
           const occupantH=calcDocHours(occupant,newSched);
           if(occupantH-slotHours(slot,sp)<120) continue; // occupant would fall below 120h
-          // Temporarily clear slot to test if doc can work there
           newSched[d][slot]=null;
-          const ok=canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched);
+          const ok=canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched);
           if(ok){
             newSched[d][slot]=doc.id; anyProgress=true; filled=true; break;
           } else {
@@ -974,6 +1025,23 @@ function autoSchedule(){
       }
     }
     if(!anyProgress) break;
+  }
+
+  // 5th pass: force-fill any remaining empty slots (iron rule — no empty slots unless rest prevents all doctors)
+  for(const d of [...dates,...shuffle([...dates]),...shuffle([...dates])]){
+    for(const slot of SLOTS){
+      if(newSched[d][slot]) continue;
+      const candidates=state.doctors.filter(doc=>{
+        if(doc.type==='part') return false;
+        if(SLOTS.some(s=>newSched[d][s]===doc.id)) return false;
+        return canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched);
+      });
+      if(candidates.length){
+        const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
+        scored.sort((a,b)=>b.sc-a.sc);
+        newSched[d][slot]=scored[0].id;
+      }
+    }
   }
 
   // ===== POST-PROCESSING: remove any surviving rest violations =====
@@ -1260,12 +1328,10 @@ function renderDoctorTable(){
       <td>${p.hol?levelStr(p.hol):'-'}</td>
       <td>${p.htPref>0?'+'+p.htPref:p.htPref} (${(p.htPref*15>0?'+':'')+p.htPref*15}h)</td>
       <td>${p.maxConsec}天</td>
-      <td>${[p.long?'長班':'',p.wkNight?'週末夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'週末夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
         <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
         <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
-        <button class="btn-sm btn-link" onclick="openPersonalView('${doc.id}')">個人頁</button>
-        <button class="btn-sm" style="background:#16a085;color:#fff" onclick="copyPersonalLink('${doc.id}')">複製連結</button>
       </td>
     </tr>`;
   }).join('');
@@ -1292,6 +1358,7 @@ function openDocModal(docId){
     if(ppEl){ppEl.value=p.htPref||0;if(ppPv)ppPv.textContent=p.htPref||0;}
     document.getElementById('pref-consec').value=p.maxConsec;
     document.getElementById('pref-long').checked=p.long;
+    document.getElementById('pref-noday').checked=!!p.noDay;
     document.getElementById('pref-wknight').checked=p.wkNight;
     document.getElementById('pref-cluster').checked=!!p.cluster;
     document.getElementById('pref-medMeeting').checked=!!p.medMeeting;
@@ -1305,6 +1372,7 @@ function openDocModal(docId){
     if(ppEl2){ppEl2.value=0;if(ppPv2)ppPv2.textContent=0;}
     document.getElementById('pref-consec').value=6;
     document.getElementById('pref-long').checked=false;
+    document.getElementById('pref-noday').checked=false;
     document.getElementById('pref-wknight').checked=false;
     document.getElementById('pref-cluster').checked=false;
     document.getElementById('pref-medMeeting').checked=false;
@@ -1324,6 +1392,7 @@ function saveDoc(){
   prefs.htPref=parseInt(document.getElementById('pref-htPref').value)||0;
   prefs.maxConsec=parseInt(document.getElementById('pref-consec').value);
   prefs.long=document.getElementById('pref-long').checked;
+  prefs.noDay=document.getElementById('pref-noday').checked;
   prefs.wkNight=document.getElementById('pref-wknight').checked;
   prefs.cluster=document.getElementById('pref-cluster').checked;
   prefs.medMeeting=document.getElementById('pref-medMeeting').checked;
@@ -1488,6 +1557,7 @@ function prCellUp(ds){
 }
 
 function renderPRTab(){
+  _prListYear=state.year; _prListMonth=state.month;
   const sel=document.getElementById('pr-doc');
   sel.innerHTML=state.doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
   initPRCal();
@@ -1496,9 +1566,12 @@ function renderPRTab(){
 function fmtShort(ds){const[,m,d]=ds.split('-').map(Number);return `${m}/${d}`;}
 
 function renderPRList(){
+  // Update month nav
+  const nav=document.getElementById('pr-list-month-nav');
+  if(nav) nav.innerHTML=`<button onclick="changePRListMonth(-1)" style="padding:2px 8px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff">◀</button><span style="font-size:13px;font-weight:700;min-width:80px;text-align:center;display:inline-block">${_prListYear}年${_prListMonth+1}月</span><button onclick="changePRListMonth(1)" style="padding:2px 8px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff">▶</button>`;
   // Group: docId → {type+custom → {type,custom,note,dates[]}}
   const grouped={};
-  const monthPrefix=`${state.year}-${String(state.month+1).padStart(2,'0')}-`;
+  const monthPrefix=`${_prListYear}-${String(_prListMonth+1).padStart(2,'0')}-`;
   for(const[date,prs] of Object.entries(state.preRequests)){
     if(!date.startsWith(monthPrefix)) continue;
     for(const pr of prs){
