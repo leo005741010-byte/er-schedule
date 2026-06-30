@@ -153,7 +153,17 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
 <div id="header">
   <h1>🏥 天晟急診排班系統</h1>
   <button class="nav-btn" onclick="changeMonth(-1)">&#9664; 上月</button>
-  <span id="month-label"></span>
+  <div style="position:relative">
+    <button id="month-label" class="nav-btn" onclick="toggleMonthPicker(event)" style="font-size:16px;font-weight:600;min-width:90px;padding:5px 10px;cursor:pointer" title="點擊選擇年月"></button>
+    <div id="month-picker" style="display:none;position:absolute;top:38px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;z-index:9000;box-shadow:0 6px 20px rgba(0,0,0,.25);min-width:220px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <button onclick="event.stopPropagation();_pickerYear--;_renderMonthPicker()" style="background:#f0f4f8;border:1px solid #ccc;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:14px">&#9664;</button>
+        <span id="picker-year-label" style="font-weight:700;color:#1a4a7a;font-size:15px"></span>
+        <button onclick="event.stopPropagation();_pickerYear++;_renderMonthPicker()" style="background:#f0f4f8;border:1px solid #ccc;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:14px">&#9654;</button>
+      </div>
+      <div id="picker-months" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px"></div>
+    </div>
+  </div>
   <button class="nav-btn" onclick="changeMonth(1)">下月 &#9654;</button>
   <button class="action-btn btn-green" onclick="autoSchedule()">⚡ 自動排班</button>
   <button class="action-btn btn-orange" onclick="clearSchedule()">🗑 清空</button>
@@ -1263,7 +1273,7 @@ function countEmpty(sched){
 // ============================================================
 function renderCalendar(){
   const y=state.year, m=state.month;
-  document.getElementById('month-label').textContent=`${y}年${m+1}月`;
+  const ml=document.getElementById('month-label'); if(ml) ml.textContent=`${y}年${m+1}月`;
 
   document.getElementById('doc-legend').innerHTML=
     `<span class="legend-item" onclick="toggleDocFilter(null)" style="cursor:pointer;padding:2px 7px;border-radius:10px;border:1px solid ${!_filterDocId?'#1a4a7a':'#ccc'};background:${!_filterDocId?'#e8f0fb':'transparent'};color:${!_filterDocId?'#1a4a7a':'#999'};font-weight:${!_filterDocId?'700':'400'}">全部</span>`+
@@ -2453,6 +2463,35 @@ function changeMonth(delta){
   if(state.month>11){state.month=0;state.year++;}
   autoSave();
   renderCalendar();
+}
+
+let _pickerYear=new Date().getFullYear();
+function toggleMonthPicker(e){
+  e&&e.stopPropagation();
+  const pk=document.getElementById('month-picker');
+  if(pk.style.display!=='none'){pk.style.display='none';return;}
+  _pickerYear=state.year;
+  _renderMonthPicker();
+  pk.style.display='block';
+  setTimeout(()=>document.addEventListener('click',_closeMonthPickerOutside,{once:true}),0);
+}
+function _closeMonthPickerOutside(e){
+  const pk=document.getElementById('month-picker');
+  if(pk&&!pk.contains(e.target)) pk.style.display='none';
+  else if(pk&&pk.style.display!=='none') setTimeout(()=>document.addEventListener('click',_closeMonthPickerOutside,{once:true}),0);
+}
+function _renderMonthPicker(){
+  document.getElementById('picker-year-label').textContent=_pickerYear+'年';
+  document.getElementById('picker-months').innerHTML=
+    [1,2,3,4,5,6,7,8,9,10,11,12].map(m=>{
+      const cur=_pickerYear===state.year&&(m-1)===state.month;
+      return `<button onclick="event.stopPropagation();_gotoMonth(${_pickerYear},${m-1})" style="padding:6px 2px;border:1px solid ${cur?'#1a4a7a':'#ddd'};border-radius:4px;background:${cur?'#1a4a7a':'#f8f9fa'};color:${cur?'#fff':'#333'};cursor:pointer;font-size:12px;font-weight:${cur?'700':'400'}">${m}月</button>`;
+    }).join('');
+}
+function _gotoMonth(y,m){
+  state.year=y; state.month=m;
+  document.getElementById('month-picker').style.display='none';
+  autoSave(); renderCalendar();
 }
 function switchTab(name){
   const names=['schedule','doctors','prereq','stats','personal'];
