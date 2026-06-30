@@ -752,7 +752,7 @@ function scoreDoc(docId, date, slot, sched){
   const myPts=calcDocPoints(docId,sched);
   const avgPts=avgPoints(sched);
   score+=(avgPts-myPts)*3.0;
-  score+=(doc.prefs[slotPrefKey(slot)]||0)*6;
+  score+=(doc.prefs[slotPrefKey(slot)]||0)*18;
   if(isHoliday(date)) score+=(doc.prefs.hol||0)*5;
   const last=getLastAssigned(docId,date,sched);
   if(last&&last.slot===slot) score+=5;
@@ -764,7 +764,7 @@ function scoreDoc(docId, date, slot, sched){
     if(workedYd) score+=15;
     else score-=3;
   }
-  if(doc.prefs.long&&slotHours(slot,split)>10) score+=5;
+  if(doc.prefs.long&&slotHours(slot,split)>10) score+=20;
   const addH=slotHours(slot,split);
   const targetH=avg+(doc.prefs.htPref||0)*15;
   if(myH+addH>targetH+20) score-=80;
@@ -817,12 +817,12 @@ function bestSplitForPair(earlyId, lateId, date, sched){
     let sc = 0;
     if(sp===20) sc += 10; // strong preference for 20:00 split
     // Long-shift preference
-    if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 8;
-    if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 8;
-    // Hours fairness: give more hours to the doctor further below average
+    if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 20;
+    if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 20;
+    // Hours fairness: choose split to give more hours to under-target doctor
     const avg = avgHours(sched);
-    if(earlyId){ const mh=calcDocHours(earlyId,sched); sc += (avg-mh) * earlyH * 0.12; }
-    if(lateId) { const mh=calcDocHours(lateId,sched);  sc += (avg-mh) * lateH  * 0.12; }
+    if(earlyId){ const mh=calcDocHours(earlyId,sched); sc += (avg-mh) * earlyH * 0.35; }
+    if(lateId) { const mh=calcDocHours(lateId,sched);  sc += (avg-mh) * lateH  * 0.35; }
     // Point fairness for split selection
     const avgPts2=avgPoints(sched);
     const avgH2=avgHours(sched);
