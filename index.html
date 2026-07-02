@@ -342,26 +342,21 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
         <thead>
           <tr>
             <th rowspan="2">醫師</th>
-            <th colspan="3">主白 08-20</th>
-            <th colspan="3">早班</th>
-            <th colspan="3">小夜</th>
-            <th colspan="3">大夜 20-08</th>
-            <th rowspan="2">總班次</th>
+            <th colspan="2" style="background:#1565c0">08:00–16:00</th>
+            <th colspan="2" style="background:#00695c">16:00–02:00</th>
+            <th colspan="2" style="background:#4527a0">02:00–08:00</th>
+            <th rowspan="2">點值</th>
             <th rowspan="2">總時數</th>
-            <th colspan="3">假日各班時數</th>
-            <th colspan="3">點值</th>
             <th rowspan="2">轉班次</th>
             <th rowspan="2">最長連班</th>
           </tr>
           <tr>
-            <th class="sub-hd">次</th><th class="sub-hd">平日h</th><th class="sub-hd">假日h</th>
-            <th class="sub-hd">次</th><th class="sub-hd">平日h</th><th class="sub-hd">假日h</th>
-            <th class="sub-hd">次</th><th class="sub-hd">平日h</th><th class="sub-hd">假日h</th>
-            <th class="sub-hd">次</th><th class="sub-hd">平日h</th><th class="sub-hd">假日h</th>
-            <th class="sub-hd" style="background:#e67e22">假日白h</th>
-            <th class="sub-hd" style="background:#e67e22">假日小夜h</th>
-            <th class="sub-hd" style="background:#e67e22">假日大夜h</th>
-            <th class="sub-hd">平日</th><th class="sub-hd">假日</th><th class="sub-hd">合計</th>
+            <th class="sub-hd" style="background:#bbdefb;color:#0d47a1">平日H</th>
+            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H</th>
+            <th class="sub-hd" style="background:#b2dfdb;color:#004d40">平日H</th>
+            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H</th>
+            <th class="sub-hd" style="background:#ce93d8;color:#4a148c">平日H</th>
+            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H</th>
           </tr>
         </thead>
         <tbody id="stats-tbody"></tbody>
@@ -2139,19 +2134,23 @@ function prShortLabel(pr){
 // ============================================================
 // STATISTICS
 // ============================================================
+// 將班次拆解為各時段(08-16/16-02/02-08)的平日/假日時數
+function _addZone(stat, startH, endH, dateStr){
+  const nd=addDays(dateStr,1);
+  for(let i=startH;i<endH;i++){
+    const ah=i%24; const d=i>=24?nd:dateStr; const hol=isHoliday(d);
+    if(ah>=8&&ah<16)      hol?stat.h816++:stat.w816++;
+    else if(ah>=2&&ah<8)  hol?stat.h028++:stat.w028++;
+    else                   hol?stat.h1602++:stat.w1602++;
+  }
+}
+
 function renderStats(){
   document.getElementById('stats-month').textContent=`${_statsYear}年${_statsMonth+1}月`;
   const dates=monthDates(_statsYear,_statsMonth);
   const st={};
   for(const doc of state.doctors){
-    st[doc.id]={
-      cnt:{主白:[0,0],早班:[0,0],小夜:[0,0],大夜:[0,0]},
-      hrs:{主白:[0,0],早班:[0,0],小夜:[0,0],大夜:[0,0]},
-      pts:{wd:0,hol:0},
-      holZone:{bai:0,sn:0,bn:0},
-      // Track shift-type sequence for 轉班 counting
-      lastSlot:null, lastDate:null, shifts:0, consecCur:0, consecMax:0,
-    };
+    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:null,consecMax:0};
   }
 
   for(const dateStr of dates){
@@ -2160,76 +2159,60 @@ function renderStats(){
     for(const slot of SLOTS){
       const docId=ds[slot]; if(!docId||!st[docId]) continue;
       const s=st[docId];
-      const hrs=slotHours(slot,sp);
-      const pts=calcSlotPoints(slot,sp,dateStr);
-      const hol=isHoliday(dateStr)?1:0;
-      s.cnt[slot][hol]++;
-      s.hrs[slot][hol]+=hrs;
-      if(hol) s.pts.hol+=pts; else s.pts.wd+=pts;
-      const z=zoneHours(slot,sp,dateStr);
-      s.holZone.bai+=z.bai; s.holZone.sn+=z.sn; s.holZone.bn+=z.bn;
-      // 轉班: only count 大夜→主白/早班 or 主白→大夜
+      s.cnt++;
+      // 時段分解 (自訂時間優先)
+      const ct=ds.customTimes&&ds.customTimes[slot];
+      if(ct){
+        const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+        let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
+        _addZone(s,sh,eh,dateStr);
+        s.pts+=calcCustomPoints(ct,dateStr);
+      } else {
+        const{s:sh,e:eh}=slotRange(slot,sp);
+        _addZone(s,sh,eh,dateStr);
+        s.pts+=calcSlotPoints(slot,sp,dateStr);
+      }
+      // 轉班: 大夜→白班 或 白班→大夜
       if(s.lastSlot){
-        const isTurnover=
-          (s.lastSlot==='大夜'&&(slot==='主白'||slot==='早班')) ||
-          (s.lastSlot==='主白'&&slot==='大夜');
-        if(isTurnover) s.shifts++;
+        if((s.lastSlot==='大夜'&&(slot==='主白'||slot==='早班'))||
+           ((s.lastSlot==='主白'||s.lastSlot==='早班')&&slot==='大夜')) s.shifts++;
       }
       s.lastSlot=slot;
     }
-    // Account for custom time overrides on standard slots
-    for(const slot of SLOTS){
-      const docId=ds[slot]; if(!docId||!st[docId]) continue;
-      const ct=ds.customTimes&&ds.customTimes[slot];
-      if(!ct) continue;
-      const s=st[docId];
-      const hol=isHoliday(dateStr)?1:0;
-      // Subtract default hours/pts already added, add custom hours/pts
-      s.hrs[slot][hol]-=slotHours(slot,sp);
-      s.hrs[slot][hol]+=customTimeHours(ct);
-      const cpPts=calcCustomPoints(ct,dateStr);
-      if(hol) s.pts.hol+=cpPts-calcSlotPoints(slot,sp,dateStr);
-      else s.pts.wd+=cpPts-calcSlotPoints(slot,sp,dateStr);
-    }
     // Extra doctors
     for(const ex of (ds.extras||[])){
-      if(!ex.docId||!st[ex.docId]) continue;
+      if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
       const s=st[ex.docId];
-      const hol=isHoliday(dateStr)?1:0;
-      const exH=customTimeHours(ex.timeRange||'');
-      const exPts=calcCustomPoints(ex.timeRange||'',dateStr);
-      s.hrs['主白'][hol]+=exH; // bucket into 主白 for display simplicity
-      s.pts[hol?'hol':'wd']+=exPts;
+      const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+      let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
+      _addZone(s,sh,eh,dateStr);
+      s.pts+=calcCustomPoints(ex.timeRange,dateStr);
+      s.cnt++;
     }
   }
 
-  // Consecutive days
+  // 連班最大值
   for(const doc of state.doctors){
-    const s=st[doc.id];
-    let cur=0;
+    const s=st[doc.id]; let cur=0;
     for(const dateStr of dates){
       const ds=state.schedule[dateStr]||{};
-      if(SLOTS.some(sl=>ds[sl]===doc.id)){cur++;s.consecMax=Math.max(s.consecMax,cur);}else cur=0;
+      const worked=SLOTS.some(sl=>ds[sl]===doc.id)||(ds.extras||[]).some(e=>e.docId===doc.id);
+      if(worked){cur++;s.consecMax=Math.max(s.consecMax,cur);}else cur=0;
     }
   }
 
+  const WD='background:#dbeafe', HD='background:#fef9c3';
   document.getElementById('stats-tbody').innerHTML=state.doctors.map(doc=>{
     const s=st[doc.id];
-    const totalH=SLOTS.reduce((sum,sl)=>sum+s.hrs[sl][0]+s.hrs[sl][1],0);
-    const totalCnt=SLOTS.reduce((sum,sl)=>sum+s.cnt[sl][0]+s.cnt[sl][1],0);
-    const totalPts=s.pts.wd+s.pts.hol;
-    const td=sl=>`<td>${s.cnt[sl][0]+s.cnt[sl][1]}</td><td>${s.hrs[sl][0]}</td><td>${s.hrs[sl][1]}</td>`;
+    const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     return `<tr>
       <td style="text-align:left"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
-      ${td('主白')}${td('早班')}${td('小夜')}${td('大夜')}
-      <td><strong>${totalCnt}</strong></td>
+      <td style="${WD}">${s.w816||'-'}</td><td style="${HD}">${s.h816||'-'}</td>
+      <td style="${WD}">${s.w1602||'-'}</td><td style="${HD}">${s.h1602||'-'}</td>
+      <td style="${WD}">${s.w028||'-'}</td><td style="${HD}">${s.h028||'-'}</td>
+      <td><strong>${s.pts.toFixed(1)}</strong></td>
+      <td>${s.cnt}</td>
       <td><strong>${totalH}</strong></td>
-      <td style="background:#fff3e0">${s.holZone.bai}</td>
-      <td style="background:#fff3e0">${s.holZone.sn}</td>
-      <td style="background:#fff3e0">${s.holZone.bn}</td>
-      <td>${s.pts.wd.toFixed(1)}</td>
-      <td>${s.pts.hol.toFixed(1)}</td>
-      <td><strong>${totalPts.toFixed(1)}</strong></td>
       <td>${s.shifts}</td>
       <td>${s.consecMax}天</td>
     </tr>`;
