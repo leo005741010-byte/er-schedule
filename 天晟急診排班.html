@@ -446,7 +446,8 @@ let state = {
 };
 let _idCnt = 10;
 let _filterDocId = null;
-let _schedLocked = false;
+const _lockedMonths = new Set(); // "YYYY-M" keys，per-month 鎖
+function isCurrentMonthLocked(){ return _lockedMonths.has(`${state.year}-${state.month}`); }
 let _undoStack = [];
 let _redoStack = [];
 function pushUndo(){
@@ -456,7 +457,7 @@ function pushUndo(){
   updateUndoBtn(); updateRedoBtn();
 }
 function undoLast(){
-  if(_schedLocked){showToast('班表已鎖定，無法還原','warn');return;}
+  if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法還原','warn');return;}
   if(!_undoStack.length){showToast('沒有可還原的操作','warn');return;}
   if(!confirm('確定還原到上一個狀態？')) return;
   _redoStack.push(JSON.stringify({schedule:state.schedule,preRequests:state.preRequests}));
@@ -467,7 +468,7 @@ function undoLast(){
   showToast('✅ 已還原','ok'); updateUndoBtn(); updateRedoBtn();
 }
 function redoLast(){
-  if(_schedLocked){showToast('班表已鎖定，無法重做','warn');return;}
+  if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法重做','warn');return;}
   if(!_redoStack.length){showToast('沒有可重做的操作','warn');return;}
   if(!confirm('確定重做？')) return;
   _undoStack.push(JSON.stringify({schedule:state.schedule,preRequests:state.preRequests}));
@@ -478,29 +479,37 @@ function redoLast(){
   showToast('✅ 已重做','ok'); updateUndoBtn(); updateRedoBtn();
 }
 function toggleLock(){
-  _schedLocked=!_schedLocked;
+  const locked=isCurrentMonthLocked();
+  const pwd=prompt(locked?`請輸入密碼以解鎖 ${state.year}年${state.month+1}月：`:`請輸入密碼以鎖定 ${state.year}年${state.month+1}月：`);
+  if(pwd===null) return; // 取消
+  if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
+  const key=`${state.year}-${state.month}`;
+  if(locked){ _lockedMonths.delete(key); showToast(`🔓 ${state.year}年${state.month+1}月 已解鎖`,'ok'); }
+  else { _lockedMonths.add(key); showToast(`🔒 ${state.year}年${state.month+1}月 已鎖定`,'ok'); }
   updateLockBtn(); updateUndoBtn(); updateRedoBtn();
-  showToast(_schedLocked?'🔒 班表已鎖定，防止誤操作':'🔓 班表已解鎖','ok');
 }
 function updateLockBtn(){
   const b=document.getElementById('btn-lock');
   if(!b) return;
-  b.textContent=_schedLocked?'🔒 已鎖定':'🔓 鎖定';
-  b.style.background=_schedLocked?'#b71c1c':'#546e7a';
+  const locked=isCurrentMonthLocked();
+  b.textContent=locked?'🔒 已鎖定':'🔓 鎖定';
+  b.style.background=locked?'#b71c1c':'#546e7a';
 }
 function updateUndoBtn(){
   const b=document.getElementById('btn-undo');
   if(!b) return;
-  const ok=_undoStack.length>0&&!_schedLocked;
+  const locked=isCurrentMonthLocked();
+  const ok=_undoStack.length>0&&!locked;
   b.disabled=!ok; b.style.opacity=ok?'1':'0.4';
-  b.title=_schedLocked?'班表已鎖定':(_undoStack.length?`可還原 ${_undoStack.length} 步`:'無可還原操作');
+  b.title=locked?'本月班表已鎖定':(_undoStack.length?`可還原 ${_undoStack.length} 步`:'無可還原操作');
 }
 function updateRedoBtn(){
   const b=document.getElementById('btn-redo');
   if(!b) return;
-  const ok=_redoStack.length>0&&!_schedLocked;
+  const locked=isCurrentMonthLocked();
+  const ok=_redoStack.length>0&&!locked;
   b.disabled=!ok; b.style.opacity=ok?'1':'0.4';
-  b.title=_schedLocked?'班表已鎖定':(_redoStack.length?`可重做 ${_redoStack.length} 步`:'無可重做操作');
+  b.title=locked?'本月班表已鎖定':(_redoStack.length?`可重做 ${_redoStack.length} 步`:'無可重做操作');
 }
 function toggleDocFilter(docId){
   _filterDocId = (_filterDocId===docId) ? null : docId;
@@ -1066,7 +1075,7 @@ function bestSplitForPair(earlyId, lateId, date, sched){
 // AUTO-SCHEDULE
 // ============================================================
 function autoSchedule(){
-  if(_schedLocked){showToast('🔒 班表已鎖定，請先解鎖','warn');return;}
+  if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，請先解鎖','warn');return;}
   if(!window.__skipConfirm && !confirm('確定要自動排班？這將覆蓋本月班表。')) return;
   pushUndo();
   const y=state.year, m=state.month;
@@ -2610,6 +2619,7 @@ function changeMonth(delta){
   if(state.month>11){state.month=0;state.year++;}
   autoSave();
   renderCalendar();
+  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
 }
 
 let _pickerYear=new Date().getFullYear();
@@ -2639,6 +2649,7 @@ function _gotoMonth(y,m){
   state.year=y; state.month=m;
   document.getElementById('month-picker').style.display='none';
   autoSave(); renderCalendar();
+  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
 }
 function switchTab(name){
   const names=['schedule','doctors','prereq','stats','personal'];
@@ -2651,7 +2662,7 @@ function switchTab(name){
   if(name==='personal') renderPersonalTab();
 }
 function clearSchedule(){
-  if(_schedLocked){showToast('🔒 班表已鎖定，請先解鎖','warn');return;}
+  if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，請先解鎖','warn');return;}
   if(!confirm('確定清空本月排班？')) return;
   pushUndo();
   for(const d of monthDates(state.year,state.month)){
