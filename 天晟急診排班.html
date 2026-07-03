@@ -2811,7 +2811,8 @@ function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
       holidays:[...state.holidays],year:state.year,month:state.month,
-      defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt};
+      defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+      lockedMonths:[..._lockedMonths]};
     localStorage.setItem(LS_KEY,JSON.stringify(data));
     const ind=document.getElementById('_autosave_ind');
     if(ind){ind.style.opacity='1';clearTimeout(ind._t);ind._t=setTimeout(()=>ind.style.opacity='0',1500);}
