@@ -3148,7 +3148,7 @@ function generateMedPDF(){
     ['賴雨濃','320206'],['鄧世達','320327'],['陳孝綱','320409'],
     ['許景棠','320133'],['謝見杰','320012'],['張豐圃','360621'],
     ['楊尚衡','320156'],['急診室值班室','21109'],
-  ].map(([n,p])=>`<div class="cr"><span class="cn">${n}</span><span class="cp">${p}</span></div>`).join('');
+  ].map(([n,p])=>`<tr><td class="cn">${n}</td><td class="cp">${p}</td></tr>`).join('');
 
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
   <title>天晟急診 ${monthStr} 值班表</title>
@@ -3156,42 +3156,55 @@ function generateMedPDF(){
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'標楷體','DFKai-SB',serif;font-size:11px;color:#000;padding:8mm;}
     h1{text-align:center;font-size:18px;font-weight:bold;margin-bottom:2px;}
-    .sub{text-align:center;font-size:15px;font-weight:bold;margin-bottom:6px;}
-    .top-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;}
-    .sub-wrap{flex:1;}
-    .contact-box{border:1.5px solid #000;padding:4px 8px;min-width:130px;font-size:10px;flex-shrink:0;}
-    .contact-box .ctitle{font-weight:bold;font-size:11px;text-align:center;border-bottom:1px solid #000;margin-bottom:3px;padding-bottom:2px;}
-    .cr{display:flex;justify-content:space-between;gap:8px;padding:1px 0;}
-    .cn{white-space:nowrap;}
-    .cp{white-space:nowrap;}
-    .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;border:1px solid #000;}
+    .sub{text-align:center;font-size:15px;font-weight:bold;margin-bottom:5px;}
+    .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;border:1px solid #000;margin-bottom:6px;}
     .wh{background:#1a4a7a;color:#fff;text-align:center;padding:3px 0;font-weight:bold;font-size:11px;border:1px solid #000;}
     .wh.wknd{background:#4a7aa0;}
-    .dc{border:1px solid #888;padding:2px 3px;min-height:85px;vertical-align:top;background:#fff;}
+    .dc{border:1px solid #888;padding:2px 3px;min-height:80px;vertical-align:top;background:#fff;}
     .dc.wknd{background:#eef6ff;}
     .dc.empty{border:none;background:transparent;}
     .dnum{font-weight:bold;font-size:12px;text-align:left;}
     .dnum.wknd-num{color:#c0392b;}
     .dbar{height:2px;background:#a0a0a0;margin:2px 0 3px;}
-    .dr{display:flex;align-items:baseline;gap:1px;line-height:1.5;flex-wrap:nowrap;}
+    .dr{display:flex;align-items:baseline;gap:1px;line-height:1.5;}
     .dn{font-size:10px;font-weight:bold;white-space:nowrap;}
     .dt{font-size:9px;color:#333;white-space:nowrap;}
+    .notices{font-size:10.5px;line-height:1.8;margin-bottom:6px;}
+    .notices .star{font-weight:bold;}
+    .bottom-row{display:flex;gap:16px;align-items:flex-start;margin-top:4px;}
+    .contact-box{border:1.5px solid #000;padding:4px 8px;font-size:10.5px;}
+    .contact-box .ctitle{font-weight:bold;font-size:11px;text-align:center;border-bottom:1px solid #000;margin-bottom:3px;padding-bottom:2px;}
+    .contact-box table{border-collapse:collapse;}
+    .cn{padding:1px 8px 1px 0;white-space:nowrap;}
+    .cp{padding:1px 0;white-space:nowrap;}
     @media print{
       @page{size:A4 portrait;margin:8mm;}
       body{padding:0;}
     }
   </style></head><body>
   <h1>天成醫療社團法人天晟醫院</h1>
-  <div class="top-row">
-    <div class="sub-wrap"><div class="sub">${rocYear}年${m+1}月份急診醫師值班表</div></div>
-    <div class="contact-box">
-      <div class="ctitle">醫師聯絡電話</div>
-      ${contactRows}
-    </div>
-  </div>
+  <div class="sub">${rocYear}年${m+1}月份急診醫師值班表</div>
   <div class="cal">
     ${wdHdr}
     ${cells}
+  </div>
+  <div class="notices">
+    <div class="star">※嚴禁急診值班時間離開急診去查房及開刀，如有查獲則上班時數扣除！</div>
+    <div style="text-align:right;font-weight:bold;">敬請準時交班！</div>
+    <div>1.嚴禁班內時間擅離工作崗位，查獲屬實，依曠班論！</div>
+    <div>2.如遇危急病人務必處理完畢後方能下班交班必須確實，</div>
+    <div style="padding-left:1.5em;">以避免醫療糾紛！</div>
+    <div>3.所有病人必須理學檢查，抽血報告及X光必須向病人及家屬解釋。</div>
+    <div>4.留觀中必須隨時探視病人病情。</div>
+    <div>5.病人離院前必須再次探視，並告知門診追蹤。</div>
+    <div>6.每位醫師需教育member並且提出當週急重症討論case。</div>
+    <div>7.每位醫師每月限約班五天。</div>
+    <div>8.急診醫師請依排班表值班勿自行調動，否則以曠職論處。</div>
+    <div class="star">※如需調班請醫師填寫「急診醫師調班單」，繳至醫務秘書協助異動值班作業。</div>
+  </div>
+  <div class="contact-box" style="display:inline-block;">
+    <div class="ctitle">醫師聯絡電話</div>
+    <table><tbody>${contactRows}</tbody></table>
   </div>
   <script>window.onload=function(){window.print();}<\/script>
   </body></html>`;
