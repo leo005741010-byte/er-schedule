@@ -30,7 +30,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
 .cal-weekday.weekend{background:#c0392b;}
 .cal-day{background:#fff;border:1px solid #ddd;border-radius:4px;min-height:135px;padding:4px;cursor:pointer;transition:border-color .15s;position:relative;}
 .cal-day:hover{border-color:#1a4a7a;box-shadow:0 0 0 2px rgba(26,74,122,0.12);}
-.cal-day.holiday{background:#fff5f5;}
+.cal-day.holiday{background:#fde8e8;}
 .cal-day.empty{background:transparent;border:none;cursor:default;}
 .day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;}
 .day-num{font-size:12px;font-weight:700;}
@@ -598,15 +598,13 @@ function slotHours(slot, split){ return slotRange(slot,split).h; }
 
 function calcSlotPoints(slot, split, startDate){
   const {s,e}=slotRange(slot,split);
-  const nextDate=addDays(startDate,1);
+  const isHol=isHoliday(startDate); // 以班次所在日期決定假/平日，不依實際小時跨日
   let pts=0;
   for(let h=s;h<e;h++){
-    const actualH=h%24;
-    const d=h>=24?nextDate:startDate;
-    const isHol=isHoliday(d);
-    if(actualH>=2&&actualH<8)       pts+=isHol?2.0:1.6;
-    else if(actualH>=8&&actualH<16) pts+=isHol?1.2:1.0;
-    else                             pts+=isHol?1.4:1.2;
+    const ah=h%24;
+    if(ah>=2&&ah<8)       pts+=isHol?2.0:1.6;
+    else if(ah>=8&&ah<16) pts+=isHol?1.2:1.0;
+    else                   pts+=isHol?1.4:1.2;
   }
   return Math.round(pts*10)/10;
 }
@@ -876,10 +874,10 @@ function calcCustomPoints(timeRange,dateStr){
   if(!m) return 0;
   let s=parseInt(m[1]),e=parseInt(m[2]);
   if(e<=s) e+=24;
-  const nextDate=addDays(dateStr,1);
+  const isHol=isHoliday(dateStr); // 以班次所在日期決定假/平日
   let pts=0;
   for(let h=s;h<e;h++){
-    const ah=h%24; const d=h>=24?nextDate:dateStr; const isHol=isHoliday(d);
+    const ah=h%24;
     if(ah>=2&&ah<8) pts+=isHol?2.0:1.6;
     else if(ah>=8&&ah<16) pts+=isHol?1.2:1.0;
     else pts+=isHol?1.4:1.2;
@@ -1612,8 +1610,13 @@ function checkConstraints(dateStr){
 // ============================================================
 function toggleHol(dateStr,e){
   e.stopPropagation();
-  if(state.holidays.has(dateStr)) state.holidays.delete(dateStr);
-  else state.holidays.add(dateStr);
+  if(state.holidays.has(dateStr)){
+    if(!confirm(`確定要取消 ${dateStr} 的自訂假日嗎？`)) return;
+    state.holidays.delete(dateStr);
+  } else {
+    if(!confirm(`確定要將 ${dateStr} 設為假日嗎？`)) return;
+    state.holidays.add(dateStr);
+  }
   autoSave();
   renderCalendar();
 }
@@ -2135,13 +2138,12 @@ function prShortLabel(pr){
 // STATISTICS
 // ============================================================
 // 將班次拆解為各時段(08-16/16-02/02-08)的平日/假日時數
-function _addZone(stat, startH, endH, dateStr){
-  const nd=addDays(dateStr,1);
+function _addZone(stat, startH, endH, isHol){
   for(let i=startH;i<endH;i++){
-    const ah=i%24; const d=i>=24?nd:dateStr; const hol=isHoliday(d);
-    if(ah>=8&&ah<16)      hol?stat.h816++:stat.w816++;
-    else if(ah>=2&&ah<8)  hol?stat.h028++:stat.w028++;
-    else                   hol?stat.h1602++:stat.w1602++;
+    const ah=i%24;
+    if(ah>=8&&ah<16)      isHol?stat.h816++:stat.w816++;
+    else if(ah>=2&&ah<8)  isHol?stat.h028++:stat.w028++;
+    else                   isHol?stat.h1602++:stat.w1602++;
   }
 }
 
@@ -2162,14 +2164,15 @@ function renderStats(){
       s.cnt++;
       // 時段分解 (自訂時間優先)
       const ct=ds.customTimes&&ds.customTimes[slot];
+      const hol=isHoliday(dateStr);
       if(ct){
         const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
         let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
-        _addZone(s,sh,eh,dateStr);
+        _addZone(s,sh,eh,hol);
         s.pts+=calcCustomPoints(ct,dateStr);
       } else {
         const{s:sh,e:eh}=slotRange(slot,sp);
-        _addZone(s,sh,eh,dateStr);
+        _addZone(s,sh,eh,hol);
         s.pts+=calcSlotPoints(slot,sp,dateStr);
       }
       // 轉班: 大夜→白班 或 白班→大夜
@@ -2185,7 +2188,7 @@ function renderStats(){
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
-      _addZone(s,sh,eh,dateStr);
+      _addZone(s,sh,eh,isHoliday(dateStr));
       s.pts+=calcCustomPoints(ex.timeRange,dateStr);
       s.cnt++;
     }
@@ -2219,9 +2222,8 @@ function renderStats(){
   }).join('');
 
   // Compute overall average points for target reference
-  const allPts=state.doctors.filter(d=>d.type==='full').map(d=>{
-    const s=st[d.id]; return s.pts.wd+s.pts.hol;
-  });
+  const fullDocs=state.doctors.filter(d=>d.type==='full');
+  const allPts=fullDocs.map(d=>st[d.id].pts);
   const overallAvgPts=allPts.length?allPts.reduce((a,b)=>a+b,0)/allPts.length:0;
 
   const viols=[];
@@ -2229,14 +2231,12 @@ function renderStats(){
   for(const doc of state.doctors){
     if(doc.type!=='full') continue;
     const s=st[doc.id];
-    const totalH=SLOTS.reduce((sum,sl)=>sum+s.hrs[sl][0]+s.hrs[sl][1],0);
+    const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
     if(s.shifts>=3) viols.push(`⚠ ${doc.name} 轉班次數${s.shifts}次（目標 < 3次）`);
     const offDays=countDocOffDays(doc.id);
     if(totalH<135) viols.push(`⚠ ${doc.name} 時數不足135h（實際${totalH}h，預假${offDays}天）`);
-    const totalPts2=s.pts.wd+s.pts.hol;
-    const targetH2=overallAvgPts>0?overallAvgPts:0; // unused now
-    const avgHrs=state.doctors.filter(d=>d.type==='full').reduce((s,d2)=>{const st2=st[d2.id];return s+SLOTS.reduce((a,sl)=>a+st2.hrs[sl][0]+st2.hrs[sl][1],0);},0)/(state.doctors.filter(d=>d.type==='full').length||1);
+    const avgHrs=fullDocs.reduce((acc,d2)=>{const z=st[d2.id];return acc+z.w816+z.h816+z.w1602+z.h1602+z.w028+z.h028;},0)/(fullDocs.length||1);
     const availScale2=Math.max(0.25,1-offDays/30);
     const tgtH=avgHrs+(doc.prefs.htPref||0)*availScale2*10;
     if(offDays<=15&&Math.abs(totalH-tgtH)>20) viols.push(`⚠ ${doc.name} 時數偏離目標(實際${totalH}h vs 目標${Math.round(tgtH)}h)`);
