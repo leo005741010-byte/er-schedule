@@ -166,13 +166,11 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   </div>
   <button class="nav-btn" onclick="changeMonth(1)">下月 &#9654;</button>
   <button class="action-btn btn-green" onclick="autoSchedule()">⚡ 自動排班</button>
+  <button class="action-btn" style="background:#c0392b;color:#fff" onclick="finishAutoSchedule()">🔒 結束自動排班</button>
   <button class="action-btn btn-orange" onclick="clearSchedule()">🗑 清空</button>
   <button id="btn-undo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="undoLast()" disabled title="無可還原操作">↩ 還原</button>
   <button id="btn-redo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="redoLast()" disabled title="無可重做操作">↪ 重做</button>
-  <button id="btn-lock" class="action-btn" style="background:#546e7a" onclick="toggleLock()">🔓 鎖定</button>
   <button class="action-btn btn-blue" onclick="exportCSV()">📊 匯出CSV</button>
-  <button class="action-btn btn-red" onclick="saveData()">💾 儲存</button>
-  <button class="action-btn btn-gray" onclick="loadData()">📂 載入</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
   <button class="action-btn btn-purple" onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
   <span id="_cloud_status" style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
@@ -1069,7 +1067,13 @@ function bestSplitForPair(earlyId, lateId, date, sched){
 // AUTO-SCHEDULE
 // ============================================================
 function autoSchedule(){
-  if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，請先解鎖','warn');return;}
+  if(isCurrentMonthLocked()){
+    const pwd=prompt(`本月班表已鎖定，請輸入密碼以解鎖並重新自動排班：`);
+    if(pwd===null) return;
+    if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
+    _lockedMonths.delete(`${state.year}-${state.month}`);
+    updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+  }
   if(!window.__skipConfirm && !confirm('確定要自動排班？這將覆蓋本月班表。')) return;
   pushUndo();
   const y=state.year, m=state.month;
@@ -2645,8 +2649,20 @@ function switchTab(name){
   if(name==='stats'){_statsYear=state.year;_statsMonth=state.month;renderStats();}
   if(name==='personal') renderPersonalTab();
 }
+function finishAutoSchedule(){
+  const pwd=prompt(`請輸入密碼以結束自動排班並鎖定 ${state.year}年${state.month+1}月：`);
+  if(pwd===null) return;
+  if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
+  _lockedMonths.add(`${state.year}-${state.month}`);
+  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+  showToast(`🔒 ${state.year}年${state.month+1}月 已鎖定`,'ok');
+}
+
 function clearSchedule(){
-  if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，請先解鎖','warn');return;}
+  if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法清空','warn');return;}
+  const pwd=prompt('請輸入密碼以清空本月排班：');
+  if(pwd===null) return;
+  if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
   if(!confirm('確定清空本月排班？')) return;
   pushUndo();
   for(const d of monthDates(state.year,state.month)){
