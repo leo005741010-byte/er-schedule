@@ -3154,30 +3154,30 @@ function generateMedPDF(){
   <title>天晟急診 ${monthStr} 值班表</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'標楷體','DFKai-SB',serif;font-size:14px;color:#000;padding:8mm;}
-    .header{width:100%;text-align:center;margin-bottom:6px;}
-    .header .h1{font-size:24px;font-weight:bold;display:block;text-align:center;margin-bottom:3px;}
-    .header .h2{font-size:20px;font-weight:bold;display:block;text-align:center;}
-    .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;border:1px solid #000;margin-bottom:8px;}
-    .wh{background:#1a4a7a;color:#fff;text-align:center;padding:4px 0;font-weight:bold;font-size:14px;border:1px solid #000;}
+    body{font-family:'標楷體','DFKai-SB',serif;font-size:12px;color:#000;padding:6mm;}
+    .header{width:100%;text-align:center;margin-bottom:4px;}
+    .header .h1{font-size:20px;font-weight:bold;display:block;text-align:center;margin-bottom:2px;}
+    .header .h2{font-size:16px;font-weight:bold;display:block;text-align:center;}
+    .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;border:1px solid #000;margin-bottom:5px;}
+    .wh{background:#1a4a7a;color:#fff;text-align:center;padding:3px 0;font-weight:bold;font-size:12px;border:1px solid #000;}
     .wh.wknd{background:#4a7aa0;}
-    .dc{border:1px solid #888;padding:3px 4px;min-height:90px;background:#fff;}
+    .dc{border:1px solid #888;padding:2px 3px;min-height:80px;background:#fff;}
     .dc.wknd{background:#eef6ff;}
     .dc.empty{border:none;background:transparent;}
-    .dnum{font-weight:bold;font-size:15px;}
+    .dnum{font-weight:bold;font-size:13px;}
     .dnum.wknd-num{color:#c0392b;}
-    .dbar{height:2px;background:#a0a0a0;margin:2px 0 3px;}
-    .dr{display:flex;align-items:baseline;gap:1px;line-height:1.7;}
-    .dn{font-size:13px;font-weight:bold;white-space:nowrap;}
-    .dt{font-size:12px;color:#333;white-space:nowrap;}
-    .bottom-area{display:flex;gap:12px;align-items:flex-start;}
-    .notices{font-size:13px;line-height:2;flex:1;}
+    .dbar{height:2px;background:#a0a0a0;margin:2px 0 2px;}
+    .dr{display:flex;align-items:baseline;gap:1px;line-height:1.55;}
+    .dn{font-size:11px;font-weight:bold;white-space:nowrap;}
+    .dt{font-size:10px;color:#333;white-space:nowrap;}
+    .bottom-area{display:flex;gap:10px;align-items:flex-start;}
+    .notices{font-size:12px;line-height:1.85;flex:1;}
     .star{font-weight:bold;}
-    .contact-box{border:1.5px solid #000;padding:6px 14px;font-size:13px;flex-shrink:0;}
-    .ctitle{font-weight:bold;font-size:14px;text-align:center;border-bottom:1px solid #000;margin-bottom:5px;padding-bottom:3px;}
+    .contact-box{border:1.5px solid #000;padding:4px 12px;font-size:12px;flex-shrink:0;}
+    .ctitle{font-weight:bold;font-size:12px;text-align:center;border-bottom:1px solid #000;margin-bottom:4px;padding-bottom:2px;}
     .contact-box table{border-collapse:collapse;}
-    .cn{padding:3px 16px 3px 0;white-space:nowrap;}
-    .cp{padding:3px 0;white-space:nowrap;}
+    .cn{padding:2px 14px 2px 0;white-space:nowrap;}
+    .cp{padding:2px 0;white-space:nowrap;}
     @media print{
       @page{size:A4 portrait;margin:8mm;}
       body{padding:0;}
@@ -3199,10 +3199,6 @@ function generateMedPDF(){
       <div>3.所有病人必須理學檢查，抽血報告及X光必須向病人及家屬解釋。</div>
       <div>4.留觀中必須隨時探視病人病情。</div>
       <div>5.病人離院前必須再次探視，並告知門診追蹤。</div>
-      <div>6.每位醫師需教育member並且提出當週急重症討論case。</div>
-      <div>7.每位醫師每月限約班五天。</div>
-      <div>8.急診醫師請依排班表值班勿自行調動，否則以曠職論處。</div>
-      <div class="star">※如需調班請醫師填寫「急診醫師調班單」，繳至醫務秘書協助異動值班作業。</div>
     </div>
     <div class="contact-box">
       <div class="ctitle">醫師聯絡電話</div>
