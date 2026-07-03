@@ -345,9 +345,9 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
             <th colspan="2" style="background:#1565c0">08:00–16:00</th>
             <th colspan="2" style="background:#00695c">16:00–02:00</th>
             <th colspan="2" style="background:#4527a0">02:00–08:00</th>
-            <th rowspan="2">點值</th>
-            <th rowspan="2">總班次</th>
             <th rowspan="2">總時數</th>
+            <th rowspan="2">點值</th>
+            <th rowspan="2">班數</th>
             <th rowspan="2">轉班次</th>
             <th rowspan="2">最長連班</th>
           </tr>
@@ -2214,9 +2214,9 @@ function renderStats(){
       <td style="${WD}">${s.w816||'-'}</td><td style="${HD}">${s.h816||'-'}</td>
       <td style="${WD}">${s.w1602||'-'}</td><td style="${HD}">${s.h1602||'-'}</td>
       <td style="${WD}">${s.w028||'-'}</td><td style="${HD}">${s.h028||'-'}</td>
+      <td><strong>${totalH}</strong></td>
       <td><strong>${s.pts.toFixed(1)}</strong></td>
       <td>${s.cnt}</td>
-      <td><strong>${totalH}</strong></td>
       <td>${s.shifts}</td>
       <td>${s.consecMax}天</td>
     </tr>`;
