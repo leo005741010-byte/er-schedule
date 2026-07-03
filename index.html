@@ -171,6 +171,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <button id="btn-undo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="undoLast()" disabled title="無可還原操作">↩ 還原</button>
   <button id="btn-redo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="redoLast()" disabled title="無可重做操作">↪ 重做</button>
   <button class="action-btn btn-blue" onclick="exportCSV()">📊 匯出CSV</button>
+  <button class="action-btn" style="background:#6a1b9a;color:#fff" onclick="generatePDF()">🖨 生成PDF</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
   <button class="action-btn btn-purple" onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
   <span id="_cloud_status" style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
@@ -2882,6 +2883,182 @@ function exportCSV(){
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`天晟排班_${state.year}_${state.month+1}.csv`;
   a.click();
+}
+
+// ============================================================
+// PDF 生成
+// ============================================================
+function generatePDF(){
+  const y=state.year, m=state.month;
+  const dates=monthDates(y,m);
+  const DOW=['一','二','三','四','五','六','日'];
+  const monthStr=`${y}年${m+1}月`;
+
+  // --- 排班表 ---
+  let sched='';
+  for(const d of dates){
+    const ds=state.schedule[d]||{};
+    const sp=ds.split||state.defaultSplit;
+    const dow=getDOW(d);
+    const hol=isHoliday(d);
+    const bg=hol?'#fde8e8':dow>=5?'#fff0f0':'';
+    const ct=ds.customTimes||{};
+    const tStr=slot=>{
+      const c=ct[slot];
+      if(c){const mm=c.match(/^(\d{1,2})-(\d{1,2})$/);return mm?`${String(mm[1]).padStart(2,'0')}:00-${String(mm[2]).padStart(2,'0')}:00`:slotTimeStr(slot,sp);}
+      return slotTimeStr(slot,sp);
+    };
+    sched+=`<tr style="background:${bg}">
+      <td>${d.slice(5)}</td><td>${DOW[dow]}</td><td style="color:#c0392b;font-weight:bold">${hol?'假':''}</td>
+      <td>${getDocName(ds['主白'])||'<span style="color:#bbb">空</span>'}<br><small>${tStr('主白')}</small></td>
+      <td>${getDocName(ds['早班'])||'<span style="color:#bbb">空</span>'}<br><small>${tStr('早班')}</small></td>
+      <td>${getDocName(ds['小夜'])||'<span style="color:#bbb">空</span>'}<br><small>${tStr('小夜')}</small></td>
+      <td>${getDocName(ds['大夜'])||'<span style="color:#bbb">空</span>'}<br><small>${tStr('大夜')}</small></td>
+    </tr>`;
+  }
+
+  // --- 統計報表（複製 renderStats 計算邏輯）---
+  const st={};
+  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:null,consecMax:0};
+  for(const dateStr of dates){
+    const ds=state.schedule[dateStr]||{};
+    const sp=ds.split||state.defaultSplit;
+    const hol=isHoliday(dateStr);
+    for(const slot of SLOTS){
+      const docId=ds[slot]; if(!docId||!st[docId]) continue;
+      const s=st[docId]; s.cnt++;
+      const ct2=ds.customTimes&&ds.customTimes[slot];
+      if(ct2){
+        const mm=ct2.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+        let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
+        _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ct2,dateStr);
+      } else {
+        const{s:sh,e:eh}=slotRange(slot,sp);
+        _addZone(s,sh,eh,hol); s.pts+=calcSlotPoints(slot,sp,dateStr);
+      }
+      if(s.lastSlot&&((s.lastSlot==='大夜'&&(slot==='主白'||slot==='早班'))||((s.lastSlot==='主白'||s.lastSlot==='早班')&&slot==='大夜'))) s.shifts++;
+      s.lastSlot=slot;
+    }
+    for(const ex of (ds.extras||[])){
+      if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
+      const s=st[ex.docId];
+      const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+      let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
+      _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
+    }
+  }
+  for(const doc of state.doctors){
+    const s=st[doc.id]; let cur=0;
+    for(const dateStr of dates){
+      const ds=state.schedule[dateStr]||{};
+      const worked=SLOTS.some(sl=>ds[sl]===doc.id)||(ds.extras||[]).some(e=>e.docId===doc.id);
+      if(worked){cur++;s.consecMax=Math.max(s.consecMax,cur);}else cur=0;
+    }
+  }
+  const statsRows=state.doctors.map(doc=>{
+    const s=st[doc.id];
+    const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
+    return `<tr>
+      <td style="text-align:left">${doc.name}</td>
+      <td style="background:#dbeafe">${s.w816||'-'}</td><td style="background:#fef9c3">${s.h816||'-'}</td>
+      <td style="background:#dbeafe">${s.w1602||'-'}</td><td style="background:#fef9c3">${s.h1602||'-'}</td>
+      <td style="background:#dbeafe">${s.w028||'-'}</td><td style="background:#fef9c3">${s.h028||'-'}</td>
+      <td><b>${totalH}</b></td><td><b>${s.pts.toFixed(1)}</b></td><td>${s.cnt}</td><td>${s.shifts}</td><td>${s.consecMax}天</td>
+    </tr>`;
+  }).join('');
+
+  // --- 預假/預班清單 ---
+  const monthPrefix=`${y}-${String(m+1).padStart(2,'0')}-`;
+  const grouped={};
+  for(const[date,prs] of Object.entries(state.preRequests)){
+    if(!date.startsWith(monthPrefix)) continue;
+    for(const pr of prs){
+      if(!grouped[pr.docId]) grouped[pr.docId]={};
+      const key=pr.type+'|'+(pr.custom||'');
+      if(!grouped[pr.docId][key]) grouped[pr.docId][key]={type:pr.type,custom:pr.custom||'',note:pr.note||'',dates:[]};
+      grouped[pr.docId][key].dates.push(date);
+    }
+  }
+  const prRows=[];
+  for(const doc of state.doctors){
+    const docG=grouped[doc.id]; if(!docG) continue;
+    for(const g of Object.values(docG)){
+      g.dates.sort();
+      let rs=null,re=null;
+      for(const d of g.dates){
+        if(!rs){rs=d;re=d;}
+        else if(addDays(re,1)===d){re=d;}
+        else{prRows.push({docName:doc.name,docId:doc.id,type:g.type,custom:g.custom,note:g.note,start:rs,end:re});rs=d;re=d;}
+      }
+      if(rs) prRows.push({docName:doc.name,docId:doc.id,type:g.type,custom:g.custom,note:g.note,start:rs,end:re});
+    }
+  }
+  const _di={};state.doctors.forEach((d,i)=>_di[d.id]=i);
+  prRows.sort((a,b)=>{const di=_di[a.docId]-_di[b.docId];return di!==0?di:a.start<b.start?-1:1;});
+  const prHTML=prRows.length?prRows.map(r=>{
+    const[,sm,sd]=r.start.split('-');
+    const[,em,ed]=r.end.split('-');
+    const dateDisp=r.start===r.end?`${sm}/${sd}`:sm===em?`${sm}/${sd}-${ed}`:`${r.start.slice(5)}～${r.end.slice(5)}`;
+    return `<tr><td>${r.docName}</td><td>${dateDisp}</td><td>${prLabel({type:r.type,custom:r.custom})}</td><td>${r.note||''}</td></tr>`;
+  }).join(''):`<tr><td colspan="4" style="text-align:center;color:#999">本月無預假/預班記錄</td></tr>`;
+
+  // --- 組合 HTML ---
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>天晟急診 ${monthStr} 排班資料</title>
+  <style>
+    *{box-sizing:border-box;}
+    body{font-family:'微軟正黑體','Noto Sans TC',sans-serif;font-size:11px;color:#222;margin:0;padding:16px;}
+    h1{font-size:15px;text-align:center;margin:0 0 12px;}
+    h2{font-size:12px;margin:0 0 6px;padding:4px 8px;background:#1a4a7a;color:#fff;border-radius:3px;}
+    table{border-collapse:collapse;width:100%;margin-bottom:16px;}
+    th,td{border:1px solid #bbb;padding:3px 5px;text-align:center;vertical-align:middle;font-size:10px;}
+    th{background:#1a4a7a;color:#fff;}
+    .sub-th{font-size:9px;}
+    small{font-size:9px;color:#888;display:block;}
+    @media print{
+      @page{size:A4 landscape;margin:8mm;}
+      .pb{page-break-before:always;margin-top:0;}
+    }
+  </style></head><body>
+  <h1>天晟急診排班 ${monthStr}</h1>
+
+  <h2>一、排班表</h2>
+  <table><thead><tr>
+    <th>日期</th><th>星期</th><th>假日</th>
+    <th>主白</th><th>早班</th><th>小夜</th><th>大夜</th>
+  </tr></thead><tbody>${sched}</tbody></table>
+
+  <div class="pb">
+  <h2>二、統計報表</h2>
+  <table><thead>
+    <tr>
+      <th rowspan="2">醫師</th>
+      <th colspan="2" style="background:#1565c0">08:00–16:00</th>
+      <th colspan="2" style="background:#00695c">16:00–02:00</th>
+      <th colspan="2" style="background:#4527a0">02:00–08:00</th>
+      <th rowspan="2">總時數</th><th rowspan="2">點值</th><th rowspan="2">班數</th><th rowspan="2">轉班次</th><th rowspan="2">最長連班</th>
+    </tr>
+    <tr>
+      <th class="sub-th" style="background:#bbdefb;color:#0d47a1">平日H</th><th class="sub-th" style="background:#ffe0b2;color:#bf360c">假日H</th>
+      <th class="sub-th" style="background:#b2dfdb;color:#004d40">平日H</th><th class="sub-th" style="background:#ffe0b2;color:#bf360c">假日H</th>
+      <th class="sub-th" style="background:#ce93d8;color:#4a148c">平日H</th><th class="sub-th" style="background:#ffe0b2;color:#bf360c">假日H</th>
+    </tr>
+  </thead><tbody>${statsRows}</tbody></table>
+  </div>
+
+  <div class="pb">
+  <h2>三、預假/預班清單</h2>
+  <table><thead><tr><th>醫師</th><th>日期</th><th>類型</th><th>備註</th></tr></thead>
+  <tbody>${prHTML}</tbody></table>
+  </div>
+
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+
+  const win=window.open('','_blank');
+  if(!win){showToast('⚠️ 請允許瀏覽器彈出視窗後再試','warn');return;}
+  win.document.write(html);
+  win.document.close();
 }
 
 // ============================================================
