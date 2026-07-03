@@ -172,6 +172,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <button id="btn-redo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="redoLast()" disabled title="無可重做操作">↪ 重做</button>
   <button class="action-btn btn-blue" onclick="exportCSV()">📊 匯出CSV</button>
   <button class="action-btn" style="background:#6a1b9a;color:#fff" onclick="generatePDF()">🖨 生成PDF</button>
+  <button class="action-btn" style="background:#1a5276;color:#fff" onclick="generateMedPDF()">🖨 PDF醫務</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
   <button class="action-btn btn-purple" onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
   <span id="_cloud_status" style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
@@ -3077,6 +3078,121 @@ function generatePDF(){
   <tbody>${prHTML}</tbody></table>
   </div>
 
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+
+  const win=window.open('','_blank');
+  if(!win){showToast('⚠️ 請允許瀏覽器彈出視窗後再試','warn');return;}
+  win.document.write(html);
+  win.document.close();
+}
+
+// ============================================================
+// PDF 醫務格式
+// ============================================================
+function generateMedPDF(){
+  const y=state.year, m=state.month;
+  const dates=monthDates(y,m);
+  const rocYear=y-1911;
+  const monthStr=`${rocYear}年${m+1}月`;
+
+  // 時間格式 HH-HH (與原始文件一致)
+  const slotT=(slot,sp,ct)=>{
+    if(ct&&ct[slot]){
+      const mm=ct[slot].match(/^(\d{1,2})-(\d{1,2})$/);
+      if(mm) return `${String(mm[1]).padStart(2,'0')}-${String(mm[2]).padStart(2,'0')}`;
+      return ct[slot];
+    }
+    const {s,e}=slotRange(slot,sp);
+    return `${String(s).padStart(2,'0')}-${String(e%24||24).padStart(2,'0')}`;
+  };
+
+  // 假日顏色：週六日用淡青色 (同原始文件 D7FFFF)
+  const DOW_LABEL=['一','二','三','四','五','六','日'];
+  const wdHdr=DOW_LABEL.map((d,i)=>`<div class="wh${i>=5?' wknd':''}">${d}</div>`).join('');
+
+  const firstDow=getDOW(dates[0]);
+  let cells=Array(firstDow).fill('<div class="dc empty"></div>').join('');
+
+  for(const d of dates){
+    const ds=state.schedule[d]||{};
+    const sp=ds.split||state.defaultSplit;
+    const dow=getDOW(d); const hol=isHoliday(d);
+    const day=parseInt(d.slice(-2));
+    const wknd=dow>=5||hol;
+    const ct=ds.customTimes||{};
+
+    let rows='';
+    for(const slot of SLOTS){
+      const docId=ds[slot];
+      if(!docId) continue;
+      const doc=state.doctors.find(x=>x.id===docId); if(!doc) continue;
+      rows+=`<div class="dr"><span class="dn">${doc.name}</span><span class="dt">(${slotT(slot,sp,ct)})</span></div>`;
+    }
+    for(const ex of (ds.extras||[])){
+      if(!ex.docId) continue;
+      const doc=state.doctors.find(x=>x.id===ex.docId); if(!doc) continue;
+      const mm=(ex.timeRange||'').match(/^(\d{1,2})-(\d{1,2})$/);
+      const t=mm?`${String(mm[1]).padStart(2,'0')}-${String(mm[2]).padStart(2,'0')}`:ex.timeRange||'';
+      rows+=`<div class="dr"><span class="dn">${doc.name}</span><span class="dt">(${t})</span></div>`;
+    }
+
+    cells+=`<div class="dc${wknd?' wknd':''}">
+      <div class="dnum${wknd?' wknd-num':''}">${day}</div>
+      <div class="dbar"></div>
+      ${rows}
+    </div>`;
+  }
+
+  const contactRows=[
+    ['賴雨濃','320206'],['鄧世達','320327'],['陳孝綱','320409'],
+    ['許景棠','320133'],['謝見杰','320012'],['張豐圃','360621'],
+    ['楊尚衡','320156'],['急診室值班室','21109'],
+  ].map(([n,p])=>`<div class="cr"><span class="cn">${n}</span><span class="cp">${p}</span></div>`).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>天晟急診 ${monthStr} 值班表</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'標楷體','DFKai-SB',serif;font-size:11px;color:#000;padding:8mm;}
+    h1{text-align:center;font-size:18px;font-weight:bold;margin-bottom:2px;}
+    .sub{text-align:center;font-size:15px;font-weight:bold;margin-bottom:6px;}
+    .top-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;}
+    .sub-wrap{flex:1;}
+    .contact-box{border:1.5px solid #000;padding:4px 8px;min-width:130px;font-size:10px;flex-shrink:0;}
+    .contact-box .ctitle{font-weight:bold;font-size:11px;text-align:center;border-bottom:1px solid #000;margin-bottom:3px;padding-bottom:2px;}
+    .cr{display:flex;justify-content:space-between;gap:8px;padding:1px 0;}
+    .cn{white-space:nowrap;}
+    .cp{white-space:nowrap;}
+    .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;border:1px solid #000;}
+    .wh{background:#1a4a7a;color:#fff;text-align:center;padding:3px 0;font-weight:bold;font-size:11px;border:1px solid #000;}
+    .wh.wknd{background:#4a7aa0;}
+    .dc{border:1px solid #888;padding:2px 3px;min-height:85px;vertical-align:top;background:#fff;}
+    .dc.wknd{background:#eef6ff;}
+    .dc.empty{border:none;background:transparent;}
+    .dnum{font-weight:bold;font-size:12px;text-align:left;}
+    .dnum.wknd-num{color:#c0392b;}
+    .dbar{height:2px;background:#a0a0a0;margin:2px 0 3px;}
+    .dr{display:flex;align-items:baseline;gap:1px;line-height:1.5;flex-wrap:nowrap;}
+    .dn{font-size:10px;font-weight:bold;white-space:nowrap;}
+    .dt{font-size:9px;color:#333;white-space:nowrap;}
+    @media print{
+      @page{size:A4 portrait;margin:8mm;}
+      body{padding:0;}
+    }
+  </style></head><body>
+  <h1>天成醫療社團法人天晟醫院</h1>
+  <div class="top-row">
+    <div class="sub-wrap"><div class="sub">${rocYear}年${m+1}月份急診醫師值班表</div></div>
+    <div class="contact-box">
+      <div class="ctitle">醫師聯絡電話</div>
+      ${contactRows}
+    </div>
+  </div>
+  <div class="cal">
+    ${wdHdr}
+    ${cells}
+  </div>
   <script>window.onload=function(){window.print();}<\/script>
   </body></html>`;
 
