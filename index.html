@@ -2214,9 +2214,12 @@ function renderStats(){
   }
 
   const WD='background:#dbeafe', HD='background:#fef9c3';
-  document.getElementById('stats-tbody').innerHTML=state.doctors.map(doc=>{
+  let totW816=0,totH816=0,totW1602=0,totH1602=0,totW028=0,totH028=0,totPts=0;
+  const rows=state.doctors.map(doc=>{
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
+    totW816+=s.w816; totH816+=s.h816; totW1602+=s.w1602; totH1602+=s.h1602;
+    totW028+=s.w028; totH028+=s.h028; totPts+=s.pts;
     return `<tr>
       <td style="text-align:left"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
       <td style="${WD}">${s.w816||'-'}</td><td style="${HD}">${s.h816||'-'}</td>
@@ -2228,7 +2231,18 @@ function renderStats(){
       <td>${s.shifts}</td>
       <td>${s.consecMax}天</td>
     </tr>`;
-  }).join('');
+  });
+  const totH=totW816+totH816+totW1602+totH1602+totW028+totH028;
+  const totRow=`<tr style="background:#f0fdf4;font-weight:bold;border-top:2px solid #666">
+    <td style="text-align:left">📊 當月合計</td>
+    <td style="${WD}">${totW816||'-'}</td><td style="${HD}">${totH816||'-'}</td>
+    <td style="${WD}">${totW1602||'-'}</td><td style="${HD}">${totH1602||'-'}</td>
+    <td style="${WD}">${totW028||'-'}</td><td style="${HD}">${totH028||'-'}</td>
+    <td><strong>${totH}</strong></td>
+    <td><strong>${totPts.toFixed(1)}</strong></td>
+    <td>-</td><td>-</td><td>-</td>
+  </tr>`;
+  document.getElementById('stats-tbody').innerHTML=rows.join('')+totRow;
 
   // Compute overall average points for target reference
   const fullDocs=state.doctors.filter(d=>d.type==='full');
