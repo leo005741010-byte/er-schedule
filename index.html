@@ -166,7 +166,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   </div>
   <button class="nav-btn" onclick="changeMonth(1)">下月 &#9654;</button>
   <button class="action-btn btn-green" onclick="autoSchedule()">⚡ 自動排班</button>
-  <button class="action-btn" style="background:#c0392b;color:#fff" onclick="finishAutoSchedule()">🔒 結束自動排班</button>
+  <button id="btn-finish-lock" class="action-btn" style="background:#c0392b;color:#fff" onclick="finishAutoSchedule()">🔓 結束自動排班</button>
   <button class="action-btn btn-orange" onclick="clearSchedule()">🗑 清空</button>
   <button id="btn-undo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="undoLast()" disabled title="無可還原操作">↩ 還原</button>
   <button id="btn-redo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="redoLast()" disabled title="無可重做操作">↪ 重做</button>
@@ -486,11 +486,12 @@ function toggleLock(){
   autoSave();
 }
 function updateLockBtn(){
-  const b=document.getElementById('btn-lock');
+  const b=document.getElementById('btn-finish-lock');
   if(!b) return;
   const locked=isCurrentMonthLocked();
-  b.textContent=locked?'🔒 已鎖定':'🔓 鎖定';
-  b.style.background=locked?'#b71c1c':'#546e7a';
+  b.textContent=locked?'🔒 已鎖定（點擊解鎖）':'🔓 結束自動排班';
+  b.style.background=locked?'#7f1d1d':'#c0392b';
+  b.style.outline=locked?'3px solid #fca5a5':'none';
 }
 function updateUndoBtn(){
   const b=document.getElementById('btn-undo');
@@ -2690,6 +2691,8 @@ function clearSchedule(){
   }
   autoSave();
   renderCalendar();
+  renderDoctorTable();
+  renderStats();
 }
 
 
