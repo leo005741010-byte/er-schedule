@@ -183,6 +183,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <div class="tab" onclick="switchTab('doctors')">👨‍⚕️ 醫師設定</div>
   <div class="tab" onclick="switchTab('prereq')">📝 預假/預班</div>
   <div class="tab" onclick="switchTab('stats')">📈 統計報表</div>
+  <div class="tab" onclick="switchTab('manual')">📖 操作說明</div>
 </div>
 
 <div id="content">
@@ -365,6 +366,272 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     </div>
     <div id="stats-violations" style="margin-top:10px;"></div>
   </div>
+
+  <!-- ======= 操作說明 ======= -->
+  <div id="tab-manual" class="tab-pane">
+  <style>
+  #tab-manual{max-width:860px;margin:0 auto;padding:10px 4px;}
+  .man-title{background:linear-gradient(135deg,#1a4a7a,#2980b9);color:#fff;padding:20px 24px;border-radius:8px;margin-bottom:20px;}
+  .man-title h2{font-size:20px;margin-bottom:4px;}
+  .man-title p{font-size:12px;opacity:.85;}
+  .man-sec{background:#fff;border-radius:8px;padding:20px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.07);}
+  .man-sec h3{font-size:15px;color:#1a4a7a;border-bottom:2px solid #e8eef5;padding-bottom:8px;margin-bottom:14px;}
+  .man-sec h4{font-size:13px;color:#2c6fad;margin:14px 0 8px;font-weight:700;}
+  .man-sec p,.man-sec li{font-size:13px;color:#444;line-height:1.75;}
+  .man-sec ul,.man-sec ol{padding-left:20px;margin-bottom:10px;}
+  .man-sec li{margin-bottom:4px;}
+  .man-tbl{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px;}
+  .man-tbl th{background:#1a4a7a;color:#fff;padding:7px 10px;text-align:left;}
+  .man-tbl td{padding:7px 10px;border-bottom:1px solid #eee;vertical-align:top;}
+  .man-tbl tr:nth-child(even) td{background:#f8f9ff;}
+  .man-note{background:#e8f4fd;border-left:4px solid #2980b9;padding:10px 14px;border-radius:0 6px 6px 0;margin:10px 0;font-size:12px;}
+  .man-note.warn{background:#fef9e7;border-color:#e67e22;}
+  .man-note.danger{background:#fdecea;border-color:#e74c3c;}
+  .man-step{display:flex;gap:12px;margin-bottom:10px;align-items:flex-start;}
+  .man-sn{width:24px;height:24px;min-width:24px;background:#1a4a7a;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+  .man-sb{flex:1;font-size:13px;color:#444;padding-top:2px;line-height:1.7;}
+  .man-badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:700;vertical-align:middle;}
+  .mb-主白{background:#fff8e1;color:#e65100;border:1px solid #ffcc02;}
+  .mb-早班{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+  .mb-小夜{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;}
+  .mb-大夜{background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;}
+  .mb-pwd{background:#2c3e50;color:#fff;font-family:monospace;letter-spacing:2px;}
+  .man-toc{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
+  .man-toc a{background:#e8f0fb;color:#1a4a7a;padding:4px 12px;border-radius:14px;font-size:12px;text-decoration:none;font-weight:600;border:1px solid #c5d8f5;}
+  .man-toc a:hover{background:#1a4a7a;color:#fff;}
+  </style>
+
+  <div class="man-title">
+    <h2>🏥 天晟急診排班系統 操作說明書</h2>
+    <p>天成醫療集團急診部&nbsp;|&nbsp;版本 2026.07</p>
+  </div>
+
+  <div class="man-toc">
+    <a href="#man-intro">系統介紹</a>
+    <a href="#man-interface">介面總覽</a>
+    <a href="#man-calendar">排班表</a>
+    <a href="#man-doctors">醫師設定</a>
+    <a href="#man-prereq">預假/預班</a>
+    <a href="#man-holiday">假日設定</a>
+    <a href="#man-stats">統計報表</a>
+    <a href="#man-auto">自動排班</a>
+    <a href="#man-lock">鎖定/解鎖</a>
+    <a href="#man-clear">清空排班</a>
+    <a href="#man-pdf">生成 PDF</a>
+    <a href="#man-cloud">雲端同步</a>
+    <a href="#man-points">點值規則</a>
+    <a href="#man-rules">排班規則</a>
+  </div>
+
+  <!-- 1 系統介紹 -->
+  <div class="man-sec" id="man-intro">
+    <h3>1. 系統介紹</h3>
+    <p>本系統為天晟醫院急診部專用的月班排班工具，支援：</p>
+    <ul>
+      <li>月曆式排班檢視與手動調整</li>
+      <li>一鍵自動排班（依照醫師偏好與規則自動分配）</li>
+      <li>預假、預班、假日管理</li>
+      <li>即時統計報表（時數、點值、班次）</li>
+      <li>PDF 輸出（一般版 / 醫務格式）</li>
+      <li>雲端多裝置同步（Firebase）</li>
+    </ul>
+    <div class="man-note"><strong>🌐 系統網址</strong> https://leo005741010-byte.github.io/er-schedule/</div>
+  </div>
+
+  <!-- 2 介面總覽 -->
+  <div class="man-sec" id="man-interface">
+    <h3>2. 操作介面總覽</h3>
+    <h4>① 頂部工具列按鈕</h4>
+    <table class="man-tbl">
+      <thead><tr><th>按鈕</th><th>功能說明</th></tr></thead>
+      <tbody>
+        <tr><td>◀ 上月 / 下月 ▶</td><td>切換查看月份</td></tr>
+        <tr><td>⚡ 自動排班</td><td>演算法自動填滿本月班表（已鎖定時需密碼）</td></tr>
+        <tr><td>🔓 結束自動排班<br>🔒 已鎖定（點擊解鎖）</td><td>鎖定/解鎖本月班表，需密碼 <span class="man-badge mb-pwd">0320</span></td></tr>
+        <tr><td>🗑 清空</td><td>清除本月所有班別（需密碼）</td></tr>
+        <tr><td>↩ 還原 / ↪ 重做</td><td>步驟式還原或重做操作</td></tr>
+        <tr><td>📊 匯出 CSV</td><td>下載班表 CSV 檔案</td></tr>
+        <tr><td>🖨 生成 PDF</td><td>輸出月曆＋統計報表＋預假預班清單</td></tr>
+        <tr><td>🖨 PDF 醫務</td><td>輸出醫務行政格式 PDF（標楷體、民國年）</td></tr>
+      </tbody>
+    </table>
+    <h4>② 頁籤說明</h4>
+    <table class="man-tbl">
+      <thead><tr><th>頁籤</th><th>內容</th></tr></thead>
+      <tbody>
+        <tr><td>📅 排班表</td><td>月曆形式的排班主畫面</td></tr>
+        <tr><td>👨‍⚕️ 醫師設定</td><td>新增、編輯醫師資料與偏好</td></tr>
+        <tr><td>📝 預假/預班</td><td>登錄醫師預定假日或預定上班</td></tr>
+        <tr><td>📈 統計報表</td><td>各醫師時數、點值、班次統計</td></tr>
+        <tr><td>📖 操作說明</td><td>本說明書</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 3 排班表 -->
+  <div class="man-sec" id="man-calendar">
+    <h3>3. 排班表</h3>
+    <h4>班別說明</h4>
+    <table class="man-tbl">
+      <thead><tr><th>班別</th><th>時間</th><th>時數</th></tr></thead>
+      <tbody>
+        <tr><td><span class="man-badge mb-主白">主白</span></td><td>08:00 – 20:00</td><td>12 小時（固定）</td></tr>
+        <tr><td><span class="man-badge mb-早班">早班</span></td><td>08:00 – 切割點</td><td>依切割點</td></tr>
+        <tr><td><span class="man-badge mb-小夜">小夜</span></td><td>切割點 – 02:00</td><td>依切割點</td></tr>
+        <tr><td><span class="man-badge mb-大夜">大夜</span></td><td>20:00 – 08:00</td><td>12 小時（固定）</td></tr>
+      </tbody>
+    </table>
+    <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間，預設 20:00，可在排班表上方下拉選單選擇（16:00–20:00）。</div>
+    <h4>月曆顏色說明</h4>
+    <table class="man-tbl">
+      <thead><tr><th>顏色</th><th>意義</th></tr></thead>
+      <tbody>
+        <tr><td>白色底</td><td>平日</td></tr>
+        <tr><td style="background:#fde8e8">粉紅色底</td><td>假日（週六、週日、國定或自訂）</td></tr>
+        <tr><td style="background:#1a4a7a;color:#fff">深藍欄標</td><td>週一至週五</td></tr>
+        <tr><td style="background:#c0392b;color:#fff">深紅欄標</td><td>週六、週日</td></tr>
+      </tbody>
+    </table>
+    <h4>手動修改排班</h4>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點擊月曆中任一日期格，開啟「當日排班」編輯視窗。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">在下拉選單中選擇各班別對應的醫師，或留空。</div></div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 加班醫師」填入姓名與時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）。</div></div>
+    <div class="man-step"><div class="man-sn">4</div><div class="man-sb">點「確認」儲存，系統自動存檔。</div></div>
+    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。</p>
+  </div>
+
+  <!-- 4 醫師設定 -->
+  <div class="man-sec" id="man-doctors">
+    <h3>4. 醫師設定</h3>
+    <h4>新增 / 編輯醫師</h4>
+    <p>切換到「醫師設定」頁籤，點右上角「+ 新增醫師」，填入姓名、類型（正職/兼職）及各項偏好後儲存。點醫師列右側鉛筆圖示可編輯。</p>
+    <h4>偏好設定說明</h4>
+    <table class="man-tbl">
+      <thead><tr><th>設定</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td>白班 / 小夜 / 大夜 / 假日偏好</td><td>-2（少）至 +2（多），影響自動排班分配比例</td></tr>
+        <tr><td>時數偏好</td><td>-2 至 +2，微調個人目標總時數</td></tr>
+        <tr><td>連班上限</td><td>連續上班天數最大值，超過觸發違規警告</td></tr>
+        <tr><td>不排白班</td><td>勾選後僅排小夜或大夜</td></tr>
+        <tr><td>不排大夜</td><td>勾選後演算法強制不指派大夜（20–08）</td></tr>
+        <tr><td>醫務會議</td><td>系統確認每月至少有一個週四主白/早班</td></tr>
+        <tr><td>晨會報告</td><td>系統確認報告週四當天有主白/早班，或前天有大夜</td></tr>
+      </tbody>
+    </table>
+    <h4>避免同時上班</h4>
+    <p>在醫師設定頁籤下方，可設定兩位醫師「不在同一天同時出現」，自動排班時強制套用。</p>
+  </div>
+
+  <!-- 5 預假預班 -->
+  <div class="man-sec" id="man-prereq">
+    <h3>5. 預假 / 預班</h3>
+    <p>在「預假/預班」頁籤登錄醫師的請假或預定上班，自動排班時優先套用。</p>
+    <ul>
+      <li><strong>預假</strong>：選擇醫師、假別（特休/事假/病假…）、日期 → 新增預假</li>
+      <li><strong>預班</strong>：選擇醫師、指定班別、日期 → 新增預班</li>
+    </ul>
+    <div class="man-note warn"><strong>⚠ 注意</strong> 預假與預班只在「自動排班」時自動套用，手動修改不受限制。</div>
+  </div>
+
+  <!-- 6 假日設定 -->
+  <div class="man-sec" id="man-holiday">
+    <h3>6. 假日設定</h3>
+    <p>系統自動將週六、週日標記為假日（粉紅色底）。在「假日設定」頁籤中可手動新增或移除自訂假日，點擊後需確認操作。</p>
+    <div class="man-note"><strong>💡 提示</strong> 國定補班日（週六上班日）可在假日設定中移除，不計為假日。假日狀態影響點值計算。</div>
+  </div>
+
+  <!-- 7 統計報表 -->
+  <div class="man-sec" id="man-stats">
+    <h3>7. 統計報表</h3>
+    <table class="man-tbl">
+      <thead><tr><th>欄位</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td>08-16 平/假</td><td>08:00–16:00 時段的平日/假日時數</td></tr>
+        <tr><td>16-02 平/假</td><td>16:00–02:00 時段的平日/假日時數</td></tr>
+        <tr><td>02-08 平/假</td><td>02:00–08:00 時段的平日/假日時數</td></tr>
+        <tr><td>總時數</td><td>六個時段總和</td></tr>
+        <tr><td>點值</td><td>依時段與假日加權計算的總點數</td></tr>
+        <tr><td>班數</td><td>本月上班次數（含加班）</td></tr>
+        <tr><td>轉班次</td><td>大夜↔白班轉換次數（目標 &lt; 3 次）</td></tr>
+        <tr><td>最長連班</td><td>連續上班最多幾天</td></tr>
+        <tr><td>📊 當月合計</td><td>所有醫師時數與點值加總</td></tr>
+      </tbody>
+    </table>
+    <p>統計頁下方顯示違規事項（連班超標、時數不足、醫務會議無法出席等）。</p>
+  </div>
+
+  <!-- 8 自動排班 -->
+  <div class="man-sec" id="man-auto">
+    <h3>8. 自動排班</h3>
+    <div class="man-note danger"><strong>⚠ 重要</strong> 自動排班會覆蓋本月現有班表，操作前請確認。</div>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">確認假日設定、預假預班、醫師偏好已設定完畢。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">點「⚡ 自動排班」。若已鎖定，輸入密碼 <span class="man-badge mb-pwd">0320</span> 解鎖。</div></div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">確認覆蓋提示，系統自動填入班表。</div></div>
+    <div class="man-step"><div class="man-sn">4</div><div class="man-sb">至統計報表確認結果，如有需要可手動微調個別日期。</div></div>
+    <div class="man-note"><strong>💡 提示</strong> 自動排班後可用「↩ 還原」回到排班前的狀態。</div>
+  </div>
+
+  <!-- 9 鎖定 -->
+  <div class="man-sec" id="man-lock">
+    <h3>9. 鎖定 / 解鎖</h3>
+    <p>排班確認後可鎖定本月，防止自動排班意外覆蓋。鎖定狀態儲存於本機與雲端，重新整理後仍維持。</p>
+    <h4>鎖定</h4>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點「🔓 結束自動排班」→ 輸入密碼 <span class="man-badge mb-pwd">0320</span>。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">按鈕變為深紅色「🔒 已鎖定（點擊解鎖）」表示鎖定成功。</div></div>
+    <h4>解鎖</h4>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點「🔒 已鎖定（點擊解鎖）」→ 輸入密碼 <span class="man-badge mb-pwd">0320</span>。</div></div>
+    <div class="man-note warn"><strong>⚠ 注意</strong> 鎖定後仍可手動修改個別日期，但「自動排班」與「清空」會被阻擋。</div>
+  </div>
+
+  <!-- 10 清空 -->
+  <div class="man-sec" id="man-clear">
+    <h3>10. 清空排班</h3>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點「🗑 清空」→ 輸入密碼 <span class="man-badge mb-pwd">0320</span>。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">確認「確定清空本月排班？」，頁面立即更新為全空白狀態。</div></div>
+    <div class="man-note danger"><strong>⚠ 注意</strong> 清空前系統自動記錄還原點，可用「↩ 還原」回復。已鎖定月份無法清空。</div>
+  </div>
+
+  <!-- 11 PDF -->
+  <div class="man-sec" id="man-pdf">
+    <h3>11. 生成 PDF</h3>
+    <h4>一般版 PDF（🖨 生成 PDF）</h4>
+    <p>依序輸出：排班月曆 → 統計報表 → 預假/預班清單。</p>
+    <h4>醫務格式 PDF（🖨 PDF 醫務）</h4>
+    <p>含院名標題（民國年）、月曆班表（HH-HH 格式）、5 條注意事項、醫師聯絡電話。</p>
+    <div class="man-note"><strong>💡 列印建議</strong> 瀏覽器列印對話框中選「另存為 PDF」，紙張橫向 A4，取消頁首頁尾，縮放 100%。</div>
+  </div>
+
+  <!-- 12 雲端同步 -->
+  <div class="man-sec" id="man-cloud">
+    <h3>12. 雲端同步</h3>
+    <p>支援 Firebase Realtime Database 即時同步，多台裝置共用同一份班表。點頂部「☁️ 雲端設定」貼上 Firebase URL 後連線，之後所有修改自動同步。</p>
+    <div class="man-note"><strong>💡 離線模式</strong> 未連線時資料儲存於本機（localStorage），下次開啟時自動還原。</div>
+  </div>
+
+  <!-- 附錄A 點值 -->
+  <div class="man-sec" id="man-points">
+    <h3>附錄 A：點值計算規則</h3>
+    <table class="man-tbl">
+      <thead><tr><th>時段</th><th>平日（點/小時）</th><th>假日（點/小時）</th></tr></thead>
+      <tbody>
+        <tr><td>08:00 – 16:00</td><td>1.0</td><td>1.2</td></tr>
+        <tr><td>16:00 – 02:00</td><td>1.2</td><td>1.4</td></tr>
+        <tr><td>02:00 – 08:00</td><td>1.6</td><td>2.0</td></tr>
+      </tbody>
+    </table>
+    <div class="man-note"><strong>💡 假日判斷</strong> 以班表上的指定日期為準（非每小時判斷）。例如週日 20:00 的大夜班雖上到週一 08:00，整班仍以假日計算。</div>
+  </div>
+
+  <!-- 附錄B 排班規則 -->
+  <div class="man-sec" id="man-rules">
+    <h3>附錄 B：自動排班三大絕對規則</h3>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb"><strong>不留空班</strong>：每天每個班別必須有醫師，不可空著。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb"><strong>假日時數均衡</strong>：假日班（尤其大夜）平均分配，避免同一醫師連續承擔。</div></div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb"><strong>優先套用預假與預班</strong>：有預假的醫師當天不排班；有預班的醫師優先排到指定班別。</div></div>
+    <p style="text-align:center;color:#999;font-size:12px;margin-top:20px;">天成醫療集團急診部&nbsp;|&nbsp;版本 2026.07</p>
+  </div>
+
+  </div><!-- end tab-manual -->
 
 
 </div>
@@ -2659,7 +2926,7 @@ function _gotoMonth(y,m){
   updateLockBtn(); updateUndoBtn(); updateRedoBtn();
 }
 function switchTab(name){
-  const names=['schedule','doctors','prereq','stats','personal'];
+  const names=['schedule','doctors','prereq','stats','manual','personal'];
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
