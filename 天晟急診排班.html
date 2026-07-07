@@ -266,7 +266,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
           </div>
         </div>
         <div>
-          <div style="margin-bottom:4px">選取日期（點選單日或拖曳選範圍）</div>
+          <div style="margin-bottom:4px">選取日期（點擊選取，可連點多日）</div>
           <div class="pr-cal-wrap">
             <div class="pr-cal-nav" style="position:relative">
               <button onclick="prCalPrev()">&#9664;</button>
@@ -282,7 +282,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
               </div>
             </div>
             <div id="pr-cal-grid" class="pr-cal-grid"></div>
-            <div class="pr-cal-hint">點選單日；或按住拖曳選多日</div>
+            <div class="pr-cal-hint">點擊日期選取／取消，可連續點選多日</div>
             <div class="pr-cal-selected" id="pr-cal-selected">尚未選取日期</div>
           </div>
         </div>
@@ -2071,11 +2071,11 @@ function delAvoidPair(i){
 // ============================================================
 // PREREQ CALENDAR PICKER
 // ============================================================
-const prCal={year:0,month:0,start:null,end:null,hover:null,dragging:false};
+const prCal={year:0,month:0,selected:new Set()};
 
 function initPRCal(){
   prCal.year=state.year; prCal.month=state.month;
-  prCal.start=null; prCal.end=null; prCal.hover=null; prCal.dragging=false;
+  prCal.selected.clear();
   renderPRCal();
 }
 
@@ -2118,21 +2118,16 @@ function _gotoPRCalMonth(y,m){
 }
 
 function renderPRCal(){
-  const {year,month,start,end,hover}=prCal;
+  const {year,month,selected}=prCal;
   const titleEl=document.getElementById('pr-cal-title');
   const gridEl=document.getElementById('pr-cal-grid');
   const selEl=document.getElementById('pr-cal-selected');
   if(!gridEl) return;
   if(titleEl) titleEl.textContent=`${year}年${month+1}月`;
 
-  const rangeA=start;
-  const rangeB=end||hover;
-  const lo=rangeA&&rangeB?(rangeA<rangeB?rangeA:rangeB):rangeA;
-  const hi=rangeA&&rangeB?(rangeA<rangeB?rangeB:rangeA):rangeA;
-
   const todayStr=fmtDate(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
   const days=daysInMonth(year,month);
-  const firstDOW=getDOW(fmtDate(year,month,1)); // 0=Mon..6=Sun
+  const firstDOW=getDOW(fmtDate(year,month,1));
 
   const hdrs=['一','二','三','四','五','六','日'];
   let html=hdrs.map((h,i)=>`<div class="pr-cal-hd${i>=5?' wknd':''}">${h}</div>`).join('');
@@ -2143,50 +2138,28 @@ function renderPRCal(){
     const dow=getDOW(ds);
     const isWknd=dow>=5;
     const isToday=ds===todayStr;
-    let cls='pr-cal-cell'+(isWknd?' wknd':'')+(isToday?' today':'');
-    if(lo&&hi){
-      if(ds===lo&&ds===hi) cls+=' range-single';
-      else if(ds===lo) cls+=' range-start';
-      else if(ds===hi) cls+=' range-end';
-      else if(ds>lo&&ds<hi) cls+=' in-range';
-    } else if(lo&&ds===lo) cls+=' range-single';
-    html+=`<div class="${cls}"
-      onmousedown="prCellDown('${ds}',event)"
-      onmouseenter="prCellEnter('${ds}')"
-      onmouseup="prCellUp('${ds}')">${d}</div>`;
+    const isSel=selected.has(ds);
+    let cls='pr-cal-cell'+(isWknd?' wknd':'')+(isToday?' today':'')+(isSel?' range-single':'');
+    html+=`<div class="${cls}" onclick="prCellClick('${ds}')">${d}</div>`;
   }
   gridEl.innerHTML=html;
 
   if(selEl){
-    if(prCal.start&&prCal.end&&prCal.start!==prCal.end){
-      const a=prCal.start<prCal.end?prCal.start:prCal.end;
-      const b=prCal.start<prCal.end?prCal.end:prCal.start;
-      selEl.textContent=`選取：${a} ～ ${b}`;
-    } else if(prCal.start){
-      selEl.textContent=`選取：${prCal.start}`;
-    } else {
+    const sorted=[...selected].sort();
+    if(sorted.length===0){
       selEl.textContent='尚未選取日期';
+    } else if(sorted.length<=5){
+      selEl.textContent=`已選：${sorted.map(s=>s.slice(5)).join('、')}（共 ${sorted.length} 天）`;
+    } else {
+      selEl.textContent=`已選 ${sorted.length} 天（${sorted[0].slice(5)} ～ ${sorted[sorted.length-1].slice(5)}）`;
     }
   }
 }
 
-function prCellDown(ds,e){
-  e.preventDefault();
-  prCal.dragging=true; prCal.start=ds; prCal.end=null; prCal.hover=null;
+function prCellClick(ds){
+  if(prCal.selected.has(ds)) prCal.selected.delete(ds);
+  else prCal.selected.add(ds);
   renderPRCal();
-}
-function prCellEnter(ds){
-  if(!prCal.dragging) return;
-  prCal.hover=ds; renderPRCal();
-}
-function prCellUp(ds){
-  if(!prCal.dragging) return;
-  prCal.dragging=false;
-  if(ds!==prCal.start){
-    prCal.end=ds;
-    if(prCal.end<prCal.start){const t=prCal.start;prCal.start=prCal.end;prCal.end=t;}
-  }
-  prCal.hover=null; renderPRCal();
 }
 
 function togglePRDocDropdown(e){
@@ -2323,31 +2296,25 @@ function delPRRange(docId,type,custom,dateStart,dateEnd){
 }
 function addPR(){
   const docId=document.getElementById('pr-doc').value;
-  const dateStart=prCal.start;
-  const dateEnd=prCal.end||prCal.start;
   const type=document.getElementById('pr-type').value;
   const note=document.getElementById('pr-note').value.trim();
   const custom=type==='WORK_CUSTOM'?document.getElementById('pr-custom').value.trim():'';
   if(!docId){showToast('請先選擇醫師','warn');return;}
-  if(!dateStart){showToast('請先在日曆選取日期','warn');return;}
+  if(prCal.selected.size===0){showToast('請先在日曆點選日期','warn');return;}
   if(type==='WORK_CUSTOM'&&!custom){showToast('請填寫自訂時段，例如 08-17','warn');return;}
 
-  // Validate custom format
   if(custom&&!parseCustomShift(custom)){
     showToast('自訂時段格式有誤，請用 HH-HH，例如 08-17 或 17-02','warn');return;
   }
 
-  // Build date range
-  let cur=dateStart;
   let count=0;
-  while(cur<=dateEnd && count<62){
-    if(!state.preRequests[cur]) state.preRequests[cur]=[];
-    state.preRequests[cur]=state.preRequests[cur].filter(r=>!(r.docId===docId&&r.type===type&&(r.custom||'')===(custom||'')));
-    state.preRequests[cur].push({docId,type,note,custom});
-    cur=addDays(cur,1);
+  for(const ds of [...prCal.selected].sort()){
+    if(!state.preRequests[ds]) state.preRequests[ds]=[];
+    state.preRequests[ds]=state.preRequests[ds].filter(r=>!(r.docId===docId&&r.type===type&&(r.custom||'')===(custom||'')));
+    state.preRequests[ds].push({docId,type,note,custom});
     count++;
   }
-  prCal.start=null; prCal.end=null; renderPRCal();
+  prCal.selected.clear(); renderPRCal();
   autoSave();
   renderPRList(); renderCalendar();
   showToast(`已新增 ${count} 筆預假/預班`);
@@ -3521,17 +3488,6 @@ window.onload=()=>{
     if(restored) showToast('已自動還原上次排班資料');
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
-    document.addEventListener('mouseup',()=>{
-      if(prCal.dragging){
-        prCal.dragging=false;
-        if(prCal.hover){
-          prCal.end=prCal.hover;
-          if(prCal.end<prCal.start){const t=prCal.start;prCal.start=prCal.end;prCal.end=t;}
-          prCal.hover=null;
-        }
-        renderPRCal();
-      }
-    });
   }
 };
 </script>
