@@ -337,6 +337,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       <span id="stats-month" style="font-weight:700;min-width:80px;text-align:center"></span>
       <button onclick="changeStatsMonth(1)" style="padding:4px 10px;border:1px solid #1a4a7a;border-radius:4px;background:#e8f0fb;color:#1a4a7a;cursor:pointer;font-size:13px;font-weight:700">&#9654;</button>
       <button class="action-btn btn-blue" onclick="renderStats()">重新計算</button>
+      <button class="action-btn btn-green" onclick="exportDoctorHoursCSV()">📥 匯出醫師時數 CSV</button>
     </div>
     <div class="stats-wrap">
       <table id="stats-table">
@@ -3141,6 +3142,49 @@ function exportCSV(){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`天晟排班_${state.year}_${state.month+1}.csv`;
+  a.click();
+}
+
+function exportDoctorHoursCSV(){
+  const dates=monthDates(_statsYear,_statsMonth);
+  const st={};
+  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0};
+  for(const dateStr of dates){
+    const ds=state.schedule[dateStr]||{};
+    const sp=ds.split||state.defaultSplit;
+    const hol=isHoliday(dateStr);
+    for(const slot of SLOTS){
+      const docId=ds[slot]; if(!docId||!st[docId]) continue;
+      const s=st[docId]; s.cnt++;
+      const ct=ds.customTimes&&ds.customTimes[slot];
+      if(ct){
+        const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+        let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
+        _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ct,dateStr);
+      } else {
+        const{s:sh,e:eh}=slotRange(slot,sp);
+        _addZone(s,sh,eh,hol); s.pts+=calcSlotPoints(slot,sp,dateStr);
+      }
+    }
+    for(const ex of (ds.extras||[])){
+      if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
+      const s=st[ex.docId];
+      const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+      let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
+      _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
+    }
+  }
+  const rows=[['醫師','白班(8-16)','小夜(16-02)','大夜(02-08)','總時數','點值','班次數']];
+  for(const doc of state.doctors){
+    const s=st[doc.id];
+    const wDay=s.w816+s.h816, wEve=s.w1602+s.h1602, wNight=s.w028+s.h028;
+    const totalH=wDay+wEve+wNight;
+    rows.push([doc.name,wDay,wEve,wNight,totalH,s.pts.toFixed(1),s.cnt]);
+  }
+  const csv='﻿'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`醫師時數_${_statsYear}_${_statsMonth+1}.csv`;
   a.click();
 }
 
