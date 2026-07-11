@@ -337,6 +337,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       <span id="stats-month" style="font-weight:700;min-width:80px;text-align:center"></span>
       <button onclick="changeStatsMonth(1)" style="padding:4px 10px;border:1px solid #1a4a7a;border-radius:4px;background:#e8f0fb;color:#1a4a7a;cursor:pointer;font-size:13px;font-weight:700">&#9654;</button>
       <button class="action-btn btn-blue" onclick="renderStats()">重新計算</button>
+      <button class="action-btn btn-green" onclick="exportDoctorHoursCSV()">📥 匯出醫師時數 CSV</button>
     </div>
     <div class="stats-wrap">
       <table id="stats-table">
@@ -536,7 +537,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <!-- 6 假日設定 -->
   <div class="man-sec" id="man-holiday">
     <h3>6. 假日設定</h3>
-    <p>系統自動將週六、週日標記為假日（粉紅色底）。在「假日設定」頁籤中可手動新增或移除自訂假日，點擊後需確認操作。</p>
+    <p>系統自動將週六、週日標記為假日（粉紅色底）。平日日期格右上角有「設假」徽章，點擊即可設為自訂假日；已設定的自訂假日顯示「假」徽章，再點一次可取消。點擊後皆需確認操作。</p>
     <div class="man-note"><strong>💡 提示</strong> 國定補班日（週六上班日）可在假日設定中移除，不計為假日。假日狀態影響點值計算。</div>
   </div>
 
@@ -566,9 +567,10 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="man-note danger"><strong>⚠ 重要</strong> 自動排班會覆蓋本月現有班表，操作前請確認。</div>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">確認假日設定、預假預班、醫師偏好已設定完畢。</div></div>
     <div class="man-step"><div class="man-sn">2</div><div class="man-sb">點「⚡ 自動排班」。若已鎖定，輸入管理密碼（請洽主管）解鎖。</div></div>
-    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">確認覆蓋提示，系統自動填入班表。</div></div>
-    <div class="man-step"><div class="man-sn">4</div><div class="man-sb">至統計報表確認結果，如有需要可手動微調個別日期。</div></div>
-    <div class="man-note"><strong>💡 提示</strong> 自動排班後可用「↩ 還原」回到排班前的狀態。</div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">確認覆蓋提示，系統自動排班 3 次並取品質最佳的一次填入班表。</div></div>
+    <div class="man-step"><div class="man-sn">4</div><div class="man-sb">排班表上方會顯示「⭐ 排班品質評分」橫幅（0–100 分），包含空缺數、時數/點值公平度、轉班次數、連班超標等指標。</div></div>
+    <div class="man-step"><div class="man-sn">5</div><div class="man-sb">至統計報表確認結果，如有需要可手動微調個別日期。</div></div>
+    <div class="man-note"><strong>💡 提示</strong> 自動排班後可用「↩ 還原」回到排班前的狀態。分數不理想時可再按一次自動排班重抽。</div>
   </div>
 
   <!-- 9 鎖定 -->
@@ -740,17 +742,6 @@ function redoLast(){
   state.schedule=snap.schedule; state.preRequests=snap.preRequests;
   autoSave(); renderCalendar(); renderPRList();
   showToast('✅ 已重做','ok'); updateUndoBtn(); updateRedoBtn();
-}
-function toggleLock(){
-  const locked=isCurrentMonthLocked();
-  const pwd=prompt(locked?`請輸入密碼以解鎖 ${state.year}年${state.month+1}月：`:`請輸入密碼以鎖定 ${state.year}年${state.month+1}月：`);
-  if(pwd===null) return; // 取消
-  if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
-  const key=`${state.year}-${state.month}`;
-  if(locked){ _lockedMonths.delete(key); showToast(`🔓 ${state.year}年${state.month+1}月 已解鎖`,'ok'); }
-  else { _lockedMonths.add(key); showToast(`🔒 ${state.year}年${state.month+1}月 已鎖定`,'ok'); }
-  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
-  autoSave();
 }
 function updateLockBtn(){
   const b=document.getElementById('btn-finish-lock');
@@ -1218,8 +1209,8 @@ function countTurnovers(docId, sched){
   return count;
 }
 
-function countDocOffDays(docId){
-  const prefix=`${state.year}-${String(state.month+1).padStart(2,'0')}-`;
+function countDocOffDays(docId,y=state.year,m=state.month){
+  const prefix=`${y}-${String(m+1).padStart(2,'0')}-`;
   let cnt=0;
   for(const[date,prs] of Object.entries(state.preRequests)){
     if(!date.startsWith(prefix)) continue;
@@ -1265,9 +1256,9 @@ function scoreDoc(docId, date, slot, sched){
   // 135h minimum: iron rule — always pull regardless of OFF days
   if(myH<135) score+=(135-myH)*10;
   // 轉班懲罰: penalize 大夜↔白班 transitions, strongly discourage ≥3rd turnover
-  const isNewTurnover=(
-    (slot==='大夜'&&SLOTS.some(s=>s==='主白'||s==='早班')&&(()=>{const la=getLastAssigned(docId,date,sched);return la&&(la.slot==='主白'||la.slot==='早班');})())||
-    ((slot==='主白'||slot==='早班')&&(()=>{const la=getLastAssigned(docId,date,sched);return la&&la.slot==='大夜';})())
+  const isNewTurnover=!!last&&(
+    (slot==='大夜'&&(last.slot==='主白'||last.slot==='早班'))||
+    ((slot==='主白'||slot==='早班')&&last.slot==='大夜')
   );
   if(isNewTurnover){
     const cur=countTurnovers(docId,sched);
@@ -1350,6 +1341,26 @@ function autoSchedule(){
   pushUndo();
   const y=state.year, m=state.month;
   const dates=monthDates(y,m);
+  // 跑多次取品質最佳的一次（演算法含隨機性，多跑幾次挑最好）
+  const RUNS=3;
+  let best=null, bestEval=null;
+  for(let i=0;i<RUNS;i++){
+    const cand=_generateOnce(y,m,dates);
+    const ev=evaluateSchedule(cand,dates);
+    if(!bestEval||ev.score>bestEval.score){best=cand;bestEval=ev;}
+  }
+  Object.assign(state.schedule,best);
+  autoSave();
+  renderCalendar();
+  switchTab('schedule');
+  showQualityBanner(bestEval,RUNS);
+  const empty=countEmpty(best);
+  showToast(empty>0
+    ?`排班完成（品質 ${bestEval.score}/100），但有 ${empty} 個空缺，請手動補填。`
+    :`✅ 自動排班完成！品質評分 ${bestEval.score}/100`,empty>0?'warn':'ok');
+}
+
+function _generateOnce(y,m,dates){
   const newSched={};
 
   for(const d of dates){
@@ -1496,51 +1507,23 @@ function autoSchedule(){
   }
 
   // 5th pass: force-fill any remaining empty slots (iron rule — no empty slots unless rest prevents all doctors)
-  for(const d of [...dates,...shuffle([...dates]),...shuffle([...dates])]){
-    for(const slot of SLOTS){
-      if(newSched[d][slot]) continue;
-      const candidates=state.doctors.filter(doc=>{
-        if(doc.type==='part') return false;
-        if(SLOTS.some(s=>newSched[d][s]===doc.id)) return false;
-        return canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched);
-      });
-      if(candidates.length){
-        const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
-        scored.sort((a,b)=>b.sc-a.sc);
-        newSched[d][slot]=scored[0].id;
-      }
-    }
-  }
+  _fillEmpties(newSched,fullSched,dates);
 
-  // ===== POST-PROCESSING: remove any surviving rest violations =====
-  for(const d of dates){
-    const ds=newSched[d]; if(!ds) continue;
-    // 大夜 on D → 主白/早班 on D+1: 0h rest
-    // 大夜 on D → OFF on D+1 → 主白/早班 on D+2: N-OFF-D
-    if(ds['大夜']){
-      const did=ds['大夜'];
-      const d1=addDays(d,1); const ds1=newSched[d1]||{};
-      if(ds1['主白']===did){newSched[d1]['主白']=null;}
-      if(ds1['早班']===did){newSched[d1]['早班']=null;}
-      if(!SLOTS.some(s=>ds1[s]===did)){
-        const d2=addDays(d,2); const ds2=newSched[d2]||{};
-        if(ds2['主白']===did){newSched[d2]['主白']=null;}
-        if(ds2['早班']===did){newSched[d2]['早班']=null;}
-      }
-    }
-    // 小夜 on D → 主白/早班 on D+1: 6h rest
-    if(ds['小夜']){
-      const did=ds['小夜'];
-      const d1=addDays(d,1); const ds1=newSched[d1]||{};
-      if(ds1['主白']===did){newSched[d1]['主白']=null;}
-      if(ds1['早班']===did){newSched[d1]['早班']=null;}
-    }
+  // POST-PROCESSING: 清除休息違規會挖出空格，清理後須再補填，循環至穩定
+  for(let round=0;round<3;round++){
+    const removed=_removeRestViolations(newSched,dates);
+    if(!removed) break;
+    _fillEmpties(newSched,fullSched,dates);
   }
 
   // Auto-optimize split for each day based on assigned 早班/小夜 doctors
   for(const d of dates){
     // Only auto-optimize if split wasn't locked by a WORK_CUSTOM pre-request
-    const hasCustomPR = (state.preRequests[d]||[]).some(pr=>pr.type==='WORK_CUSTOM'&&pr.custom&&parseCustomShift(pr.custom)?.split!==null);
+    const hasCustomPR = (state.preRequests[d]||[]).some(pr=>{
+      if(pr.type!=='WORK_CUSTOM'||!pr.custom) return false;
+      const p=parseCustomShift(pr.custom);
+      return p&&p.split!==null;
+    });
     if(!hasCustomPR){
       newSched[d].split = bestSplitForPair(newSched[d]['早班'], newSched[d]['小夜'], d, newSched);
     }
@@ -1557,13 +1540,128 @@ function autoSchedule(){
     }
   }
 
-  // Merge current month into state.schedule without destroying other months' data
-  Object.assign(state.schedule, newSched);
-  autoSave();
-  renderCalendar();
-  switchTab('schedule');
-  const empty=countEmpty(newSched);
-  showToast(empty>0?`排班完成，但有 ${empty} 個空缺，請手動補填。`:'✅ 自動排班完成！',empty>0?'warn':'ok');
+  return newSched;
+}
+
+// 補填空格：先用寬鬆規則，再用強制規則（皆保有絕對禁止事項）
+function _fillEmpties(newSched,fullSched,dates){
+  for(const d of [...dates,...shuffle([...dates]),...shuffle([...dates])]){
+    for(const slot of SLOTS){
+      if(newSched[d][slot]) continue;
+      const candidates=state.doctors.filter(doc=>{
+        if(doc.type==='part') return false;
+        if(SLOTS.some(s=>newSched[d][s]===doc.id)) return false;
+        return canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched);
+      });
+      if(candidates.length){
+        const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
+        scored.sort((a,b)=>b.sc-a.sc);
+        newSched[d][slot]=scored[0].id;
+      }
+    }
+  }
+}
+
+// 清除休息時間違規（大夜→隔日白班、大夜→OFF→白班、小夜→隔日白班），回傳清除數
+function _removeRestViolations(newSched,dates){
+  let removed=0;
+  for(const d of dates){
+    const ds=newSched[d]; if(!ds) continue;
+    if(ds['大夜']){
+      const did=ds['大夜'];
+      const d1=addDays(d,1); const ds1=newSched[d1]||{};
+      if(ds1['主白']===did){newSched[d1]['主白']=null;removed++;}
+      if(ds1['早班']===did){newSched[d1]['早班']=null;removed++;}
+      if(!SLOTS.some(s=>ds1[s]===did)){
+        const d2=addDays(d,2); const ds2=newSched[d2]||{};
+        if(ds2['主白']===did){newSched[d2]['主白']=null;removed++;}
+        if(ds2['早班']===did){newSched[d2]['早班']=null;removed++;}
+      }
+    }
+    if(ds['小夜']){
+      const did=ds['小夜'];
+      const d1=addDays(d,1); const ds1=newSched[d1]||{};
+      if(ds1['主白']===did){newSched[d1]['主白']=null;removed++;}
+      if(ds1['早班']===did){newSched[d1]['早班']=null;removed++;}
+    }
+  }
+  return removed;
+}
+
+// ============================================================
+// 排班品質評分
+// ============================================================
+function evaluateSchedule(sched,dates){
+  const full=state.doctors.filter(d=>d.type==='full');
+  const y=parseInt(dates[0].slice(0,4)), m=parseInt(dates[0].slice(5,7))-1;
+  let empty=0;
+  for(const d of dates){const ds=sched[d]||{};for(const sl of SLOTS)if(!ds[sl])empty++;}
+  const perDoc={};
+  for(const doc of full) perDoc[doc.id]={h:0,p:0,turn:0,lastSlot:null,consec:0,consecMax:0};
+  for(const d of dates){
+    const ds=sched[d]||{};
+    const sp=ds.split||state.defaultSplit;
+    for(const doc of full){
+      const rec=perDoc[doc.id];
+      let worked=false;
+      for(const sl of SLOTS){
+        if(ds[sl]!==doc.id) continue;
+        worked=true;
+        const ct=ds.customTimes&&ds.customTimes[sl];
+        rec.h+=ct?customTimeHours(ct):slotHours(sl,sp);
+        rec.p+=ct?calcCustomPoints(ct,d):calcSlotPoints(sl,sp,d);
+        if(rec.lastSlot&&((rec.lastSlot==='大夜'&&(sl==='主白'||sl==='早班'))||((rec.lastSlot==='主白'||rec.lastSlot==='早班')&&sl==='大夜'))) rec.turn++;
+        rec.lastSlot=sl;
+      }
+      if(worked){rec.consec++;rec.consecMax=Math.max(rec.consecMax,rec.consec);}
+      else rec.consec=0;
+    }
+  }
+  const sd=a=>{if(a.length<2)return 0;const mu=a.reduce((x,y)=>x+y,0)/a.length;return Math.sqrt(a.reduce((s,v)=>s+(v-mu)*(v-mu),0)/a.length);};
+  const hrs=full.map(doc=>perDoc[doc.id].h);
+  const pts=full.map(doc=>perDoc[doc.id].p);
+  const hSd=sd(hrs), pSd=sd(pts);
+  let turnTotal=0, turnExcess=0, consecViol=0, under135=0;
+  for(const doc of full){
+    const rec=perDoc[doc.id];
+    turnTotal+=rec.turn;
+    if(rec.turn>=3) turnExcess+=rec.turn-2;
+    const maxC=doc.prefs.maxConsec||6;
+    if(rec.consecMax>maxC) consecViol+=rec.consecMax-maxC;
+    const offDays=countDocOffDays(doc.id,y,m);
+    if(rec.h<135&&offDays<=10) under135+=135-rec.h; // 預假多者不重罰
+  }
+  let score=100;
+  score-=empty*8;
+  score-=hSd*1.5;
+  score-=pSd*0.8;
+  score-=turnExcess*10;
+  score-=turnTotal*1.5;
+  score-=consecViol*8;
+  score-=under135*0.4;
+  score=Math.max(0,Math.round(score));
+  return {score,empty,hSd:Math.round(hSd*10)/10,pSd:Math.round(pSd*10)/10,turnTotal,consecViol};
+}
+
+function showQualityBanner(ev,runs){
+  let el=document.getElementById('quality-banner');
+  if(!el){
+    el=document.createElement('div');
+    el.id='quality-banner';
+    const pane=document.getElementById('tab-schedule');
+    pane.insertBefore(el,pane.firstChild);
+  }
+  const color=ev.score>=85?'#27ae60':(ev.score>=70?'#e67e22':'#c0392b');
+  el.innerHTML=`<div style="background:#fff;border-left:5px solid ${color};border-radius:6px;padding:8px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px">
+    <strong style="font-size:15px;color:${color}">⭐ 排班品質 ${ev.score}/100</strong>
+    <span style="color:#666">（自動從 ${runs} 次排班中取最佳）</span>
+    <span>空缺 <strong>${ev.empty}</strong></span>
+    <span>時數差距 σ=<strong>${ev.hSd}h</strong></span>
+    <span>點值差距 σ=<strong>${ev.pSd}</strong></span>
+    <span>總轉班 <strong>${ev.turnTotal}</strong> 次</span>
+    <span>連班超標 <strong>${ev.consecViol}</strong> 天</span>
+    <button onclick="this.closest('#quality-banner').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#999;font-size:14px">✕</button>
+  </div>`;
 }
 
 function shuffle(arr){
@@ -2485,14 +2583,14 @@ function renderStats(){
   const overallAvgPts=allPts.length?allPts.reduce((a,b)=>a+b,0)/allPts.length:0;
 
   const viols=[];
-  const reportThus=getFirstThirdThursdays(state.year,state.month);
+  const reportThus=getFirstThirdThursdays(_statsYear,_statsMonth);
   for(const doc of state.doctors){
     if(doc.type!=='full') continue;
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
     if(s.shifts>=3) viols.push(`⚠ ${doc.name} 轉班次數${s.shifts}次（目標 < 3次）`);
-    const offDays=countDocOffDays(doc.id);
+    const offDays=countDocOffDays(doc.id,_statsYear,_statsMonth);
     if(totalH<135) viols.push(`⚠ ${doc.name} 時數不足135h（實際${totalH}h，預假${offDays}天）`);
     const avgHrs=fullDocs.reduce((acc,d2)=>{const z=st[d2.id];return acc+z.w816+z.h816+z.w1602+z.h1602+z.w028+z.h028;},0)/(fullDocs.length||1);
     const availScale2=Math.max(0.25,1-offDays/30);
@@ -2518,7 +2616,11 @@ function renderStats(){
       }
     }
   }
-  const empties=countEmpty(state.schedule);
+  let empties=0;
+  for(const d of dates){
+    const ds=state.schedule[d]; if(!ds) continue;
+    for(const sl of SLOTS) if(!ds[sl]) empties++;
+  }
   if(empties>0) viols.push(`❌ 尚有 ${empties} 個空缺`);
   document.getElementById('stats-violations').innerHTML=viols.length
     ?`<div class="alert alert-warn"><strong>違規事項：</strong><br>${viols.map(v=>`• ${v}`).join('<br>')}</div>`
@@ -2530,6 +2632,7 @@ function renderStats(){
 // ============================================================
 function renderPersonalTab(){
   const wrap=document.getElementById('personal-doc-links');
+  if(!wrap) return; // 個人頁面容器不存在時直接略過，避免崩潰
   wrap.innerHTML=state.doctors.map(doc=>`
     <div class="doc-link-row">
       <span class="doc-tag"><span class="color-dot" style="background:${doc.color}"></span>${doc.name}</span>
@@ -2858,9 +2961,20 @@ function changeMonth(delta){
   state.month+=delta;
   if(state.month<0){state.month=11;state.year--;}
   if(state.month>11){state.month=0;state.year++;}
-  autoSave();
+  persistViewMonth(); // 檢視月份只存本機，不推雲端（避免多裝置互搶畫面）
   renderCalendar();
   updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+}
+
+// 只把目前檢視的年月寫入 localStorage，不觸發雲端同步
+function persistViewMonth(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const d=JSON.parse(raw);
+    d.year=state.year; d.month=state.month;
+    localStorage.setItem(LS_KEY,JSON.stringify(d));
+  }catch(e){}
 }
 
 let _pickerYear=new Date().getFullYear();
@@ -2889,7 +3003,7 @@ function _renderMonthPicker(){
 function _gotoMonth(y,m){
   state.year=y; state.month=m;
   document.getElementById('month-picker').style.display='none';
-  autoSave(); renderCalendar();
+  persistViewMonth(); renderCalendar();
   updateLockBtn(); updateUndoBtn(); updateRedoBtn();
 }
 function switchTab(name){
@@ -2903,12 +3017,21 @@ function switchTab(name){
   if(name==='personal') renderPersonalTab();
 }
 function finishAutoSchedule(){
-  const pwd=prompt(`請輸入密碼以結束自動排班並鎖定 ${state.year}年${state.month+1}月：`);
+  const locked=isCurrentMonthLocked();
+  const pwd=prompt(locked
+    ?`本月已鎖定，請輸入密碼以解鎖 ${state.year}年${state.month+1}月：`
+    :`請輸入密碼以結束自動排班並鎖定 ${state.year}年${state.month+1}月：`);
   if(pwd===null) return;
   if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
-  _lockedMonths.add(`${state.year}-${state.month}`);
+  const key=`${state.year}-${state.month}`;
+  if(locked){
+    _lockedMonths.delete(key);
+    showToast(`🔓 ${state.year}年${state.month+1}月 已解鎖`,'ok');
+  } else {
+    _lockedMonths.add(key);
+    showToast(`🔒 ${state.year}年${state.month+1}月 已鎖定`,'ok');
+  }
   updateLockBtn(); updateUndoBtn(); updateRedoBtn();
-  showToast(`🔒 ${state.year}年${state.month+1}月 已鎖定`,'ok');
   autoSave();
 }
 
@@ -2942,7 +3065,9 @@ const LS_KEY='tienSheng_erSched_v1';
 // CLOUD SYNC (Firebase Realtime Database)
 // ============================================================
 const CLOUD_URL_KEY='tienSheng_cloudUrl';
-let _fbApp=null,_fbRef=null,_fbIgnoreOwn=false,_fbIgnoreTimer=null;
+let _fbApp=null,_fbRef=null;
+// 本裝置識別碼：雲端寫入時附上，收到自己的回音就略過（不再用時間盲區，避免漏收別台裝置的更新）
+const _clientId=Math.random().toString(36).slice(2)+Date.now().toString(36);
 
 function getCloudUrl(){ return localStorage.getItem(CLOUD_URL_KEY)||''; }
 
@@ -2955,9 +3080,9 @@ async function initCloud(url){
     _fbApp=firebase.initializeApp({databaseURL:url.trim()},'erSched');
     _fbRef=firebase.database(_fbApp).ref('erScheduleData');
     _fbRef.on('value', snap=>{
-      if(_fbIgnoreOwn) return;
       const data=snap.val();
       if(!data) return;
+      if(data._client===_clientId) return; // 自己寫入的回音，略過
       applyCloudData(data);
     });
     updateCloudStatus(true);
@@ -2976,18 +3101,19 @@ function applyCloudData(data){
   if(data.schedule) state.schedule=data.schedule;
   state.preRequests=data.preRequests||{};
   state.holidays=new Set(data.holidays||[]);
-  if(data.year!=null) state.year=data.year;
-  if(data.month!=null) state.month=data.month;
+  // 不套用 data.year/month：檢視月份是本機視圖狀態，不隨其他裝置跳動
   state.defaultSplit=clampSplit(data.defaultSplit||20);
   state.avoidPairs=data.avoidPairs||[];
   if(data.idCnt) _idCnt=data.idCnt;
   _lockedMonths.clear(); (data.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
   const sl=document.getElementById('default-split');
   if(sl) sl.value=state.defaultSplit;
-  const ml=document.getElementById('month-label');
-  if(ml) ml.textContent=`${state.year}年${state.month+1}月`;
   renderCalendar();
   renderDoctorTable();
+  renderPRList();
+  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+  const statsPane=document.getElementById('tab-stats');
+  if(statsPane&&statsPane.classList.contains('active')) renderStats();
   try{ localStorage.setItem(LS_KEY,JSON.stringify({
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],year:state.year,month:state.month,
@@ -2998,18 +3124,14 @@ function applyCloudData(data){
 
 function cloudSave(){
   if(!_fbRef) return;
-  _fbIgnoreOwn=true;
-  clearTimeout(_fbIgnoreTimer);
-  _fbIgnoreTimer=setTimeout(()=>{ _fbIgnoreOwn=false; },4000);
   const data={
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],year:state.year,month:state.month,
     defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],
-    idCnt:_idCnt,lockedMonths:[..._lockedMonths],_ts:Date.now()
+    idCnt:_idCnt,lockedMonths:[..._lockedMonths],_ts:Date.now(),_client:_clientId
   };
   _fbRef.set(data)
-    .then(()=>{ _fbIgnoreOwn=false; clearTimeout(_fbIgnoreTimer); })
-    .catch(e=>{ _fbIgnoreOwn=false; showToast('☁️ 雲端儲存失敗: '+e.message,'warn'); });
+    .catch(e=>{ showToast('☁️ 雲端儲存失敗: '+e.message,'warn'); });
 }
 
 function updateCloudStatus(ok,msg=''){
@@ -3107,11 +3229,13 @@ function loadData(){
     const r=new FileReader();
     r.onload=ev=>{
       try{
-        const d=JSON.parse(ev.target.result);
+        const d=migrateData(JSON.parse(ev.target.result));
+        if(!d||!Array.isArray(d.doctors)||!d.schedule) throw new Error('檔案格式不正確');
         state.doctors=d.doctors; state.schedule=d.schedule;
         state.preRequests=d.preRequests||{};
         state.holidays=new Set(d.holidays||[]);
-        state.year=d.year; state.month=d.month;
+        if(d.year!=null) state.year=d.year;
+        if(d.month!=null) state.month=d.month;
         state.defaultSplit=clampSplit(d.defaultSplit||20);
         state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
@@ -3141,6 +3265,49 @@ function exportCSV(){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`天晟排班_${state.year}_${state.month+1}.csv`;
+  a.click();
+}
+
+function exportDoctorHoursCSV(){
+  const dates=monthDates(_statsYear,_statsMonth);
+  const st={};
+  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0};
+  for(const dateStr of dates){
+    const ds=state.schedule[dateStr]||{};
+    const sp=ds.split||state.defaultSplit;
+    const hol=isHoliday(dateStr);
+    for(const slot of SLOTS){
+      const docId=ds[slot]; if(!docId||!st[docId]) continue;
+      const s=st[docId]; s.cnt++;
+      const ct=ds.customTimes&&ds.customTimes[slot];
+      if(ct){
+        const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+        let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
+        _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ct,dateStr);
+      } else {
+        const{s:sh,e:eh}=slotRange(slot,sp);
+        _addZone(s,sh,eh,hol); s.pts+=calcSlotPoints(slot,sp,dateStr);
+      }
+    }
+    for(const ex of (ds.extras||[])){
+      if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
+      const s=st[ex.docId];
+      const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+      let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
+      _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
+    }
+  }
+  const rows=[['醫師','白班(8-16)','小夜(16-02)','大夜(02-08)','總時數','點值','班次數']];
+  for(const doc of state.doctors){
+    const s=st[doc.id];
+    const wDay=s.w816+s.h816, wEve=s.w1602+s.h1602, wNight=s.w028+s.h028;
+    const totalH=wDay+wEve+wNight;
+    rows.push([doc.name,wDay,wEve,wNight,totalH,s.pts.toFixed(1),s.cnt]);
+  }
+  const csv='﻿'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`醫師時數_${_statsYear}_${_statsMonth+1}.csv`;
   a.click();
 }
 
