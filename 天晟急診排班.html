@@ -1342,7 +1342,7 @@ function autoSchedule(){
   const y=state.year, m=state.month;
   const dates=monthDates(y,m);
   // 跑多次取品質最佳的一次（演算法含隨機性，多跑幾次挑最好）
-  const RUNS=6;
+  const RUNS=10;
   let best=null, bestEval=null;
   for(let i=0;i<RUNS;i++){
     const cand=_generateOnce(y,m,dates);
