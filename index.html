@@ -173,6 +173,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <button class="action-btn btn-blue" onclick="exportCSV()">📊 匯出CSV</button>
   <button class="action-btn" style="background:#6a1b9a;color:#fff" onclick="generatePDF()">🖨 生成PDF</button>
   <button class="action-btn" style="background:#1a5276;color:#fff" onclick="generateMedPDF()">🖨 PDF醫務</button>
+  <button class="action-btn" style="background:#00897b;color:#fff" onclick="openICalModal()">📅 行事曆</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
   <button class="action-btn btn-purple" onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
   <span id="_cloud_status" style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
@@ -601,6 +602,9 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <h4>醫務格式 PDF（🖨 PDF 醫務）</h4>
     <p>含院名標題（民國年）、月曆班表（HH-HH 格式）、5 條注意事項、醫師聯絡電話。</p>
     <div class="man-note"><strong>💡 列印建議</strong> 瀏覽器列印對話框中選「另存為 PDF」，紙張橫向 A4，取消頁首頁尾，縮放 100%。</div>
+    <h4>行事曆匯出（📅 行事曆）</h4>
+    <p>點工具列「📅 行事曆」開啟視窗，每位醫師可下載自己當月班表的 <code>.ics</code> 檔。用手機開啟該檔即可匯入 iPhone／Google／Outlook 行事曆，大夜、小夜等跨日班別的起訖時間都會正確標示。</p>
+    <div class="man-note warn"><strong>※ 注意</strong> 為一次性匯入的快照，非自動同步。班表若有調整，需重新下載匯入。</div>
   </div>
 
   <!-- 12 雲端同步 -->
@@ -681,6 +685,19 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('doctor-modal')">取消</button>
       <button class="btn-primary" onclick="saveDoc()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======= iCAL 匯出 MODAL ======= -->
+<div id="ical-modal" class="modal-overlay">
+  <div class="modal" style="max-width:480px">
+    <h2>📅 匯出行事曆 (.ics)</h2>
+    <p style="font-size:12px;color:#666;margin:6px 0 4px">內容為 <strong id="ical-month-label"></strong> 的班表。下載 .ics 檔後用手機開啟，即可匯入 iPhone／Google／Outlook 行事曆。</p>
+    <p style="font-size:11px;color:#e67e22;margin-bottom:12px">※ 為一次性匯入的快照，班表若有調整需重新下載匯入。</p>
+    <div id="ical-doc-list"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('ical-modal')">關閉</button>
     </div>
   </div>
 </div>
@@ -3309,6 +3326,99 @@ function exportDoctorHoursCSV(){
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`醫師時數_${_statsYear}_${_statsMonth+1}.csv`;
   a.click();
+}
+
+// ============================================================
+// iCal (.ics) 行事曆匯出
+// ============================================================
+function openICalModal(){
+  document.getElementById('ical-month-label').textContent=`${state.year}年${state.month+1}月`;
+  const dates=monthDates(state.year,state.month);
+  const wrap=document.getElementById('ical-doc-list');
+  wrap.innerHTML=state.doctors.map(doc=>{
+    let cnt=0;
+    for(const d of dates){
+      const ds=state.schedule[d]||{};
+      for(const sl of SLOTS) if(ds[sl]===doc.id) cnt++;
+      for(const ex of (ds.extras||[])) if(ex.docId===doc.id) cnt++;
+    }
+    const btn=cnt
+      ?`<button class="action-btn btn-green" style="padding:4px 12px;font-size:12px" onclick="downloadDoctorICS('${doc.id}')">下載 .ics</button>`
+      :`<button class="action-btn" style="padding:4px 12px;font-size:12px;background:#ccc;cursor:default" disabled>無班次</button>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid #eee">
+      <span class="color-dot" style="background:${doc.color}"></span>
+      <span style="flex:1;font-weight:600">${doc.name}${doc.type==='part'?'(兼)':''}</span>
+      <span style="font-size:11px;color:#999">${cnt} 班</span>${btn}
+    </div>`;
+  }).join('');
+  document.getElementById('ical-modal').classList.add('show');
+}
+
+// 產生 DTSTART/DTEND 用時間字串（浮動當地時間；hour≥24 表跨日）
+function _icsDateTime(dateStr,hour){
+  let d=dateStr, h=hour;
+  if(h>=24){ d=addDays(dateStr,1); h-=24; }
+  return d.replace(/-/g,'')+'T'+String(h).padStart(2,'0')+'0000';
+}
+function _icsStamp(){
+  const dt=new Date(), p=n=>String(n).padStart(2,'0');
+  return dt.getUTCFullYear()+p(dt.getUTCMonth()+1)+p(dt.getUTCDate())+'T'+p(dt.getUTCHours())+p(dt.getUTCMinutes())+p(dt.getUTCSeconds())+'Z';
+}
+function buildDoctorICS(docId){
+  const doc=state.doctors.find(d=>d.id===docId);
+  if(!doc) return null;
+  const dates=monthDates(state.year,state.month);
+  const stamp=_icsStamp();
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//天晟急診//排班系統//TW',
+    'CALSCALE:GREGORIAN','METHOD:PUBLISH',`X-WR-CALNAME:${doc.name} 急診班表`,'X-WR-TIMEZONE:Asia/Taipei'];
+  const push=(dateStr,uidKey,sHour,eHour,label)=>{
+    lines.push('BEGIN:VEVENT',
+      `UID:${docId}-${dateStr}-${uidKey}@tiensheng-er`,
+      'DTSTAMP:'+stamp,
+      'DTSTART:'+_icsDateTime(dateStr,sHour),
+      'DTEND:'+_icsDateTime(dateStr,eHour),
+      'SUMMARY:'+label,
+      'LOCATION:天晟醫院急診部',
+      'END:VEVENT');
+  };
+  for(const dateStr of dates){
+    const ds=state.schedule[dateStr]||{};
+    const sp=ds.split||state.defaultSplit;
+    const hol=isHoliday(dateStr);
+    for(const slot of SLOTS){
+      if(ds[slot]!==docId) continue;
+      const ct=ds.customTimes&&ds.customTimes[slot];
+      let sHour,eHour;
+      if(ct){
+        const m=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!m) continue;
+        sHour=parseInt(m[1]); eHour=parseInt(m[2]); if(eHour<=sHour) eHour+=24;
+      } else {
+        const r=slotRange(slot,sp); sHour=r.s; eHour=r.e;
+      }
+      const timeStr=`${String(sHour%24).padStart(2,'0')}:00-${String(eHour%24).padStart(2,'0')}:00`;
+      push(dateStr,slot,sHour,eHour,`${slot} ${timeStr}${hol?' (假日)':''}`);
+    }
+    let exIdx=0;
+    for(const ex of (ds.extras||[])){
+      if(ex.docId!==docId||!ex.timeRange) continue;
+      const m=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!m) continue;
+      let sHour=parseInt(m[1]),eHour=parseInt(m[2]); if(eHour<=sHour) eHour+=24;
+      const timeStr=`${String(sHour%24).padStart(2,'0')}:00-${String(eHour%24).padStart(2,'0')}:00`;
+      push(dateStr,'extra'+(exIdx++),sHour,eHour,`加班 ${timeStr}${hol?' (假日)':''}`);
+    }
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+function downloadDoctorICS(docId){
+  const doc=state.doctors.find(d=>d.id===docId);
+  const ics=buildDoctorICS(docId);
+  if(!ics){ showToast('產生失敗','warn'); return; }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([ics],{type:'text/calendar;charset=utf-8'}));
+  a.download=`${doc.name}_急診班表_${state.year}_${state.month+1}.ics`;
+  a.click();
+  showToast(`✅ 已匯出 ${doc.name} ${state.year}年${state.month+1}月 行事曆`);
 }
 
 // ============================================================
