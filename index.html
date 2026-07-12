@@ -44,6 +44,9 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
 .cal-day{background:#fff;border:1px solid #ddd;border-radius:4px;min-height:135px;padding:4px;cursor:pointer;transition:border-color .15s;position:relative;}
 .cal-day:hover{border-color:#1a4a7a;box-shadow:0 0 0 2px rgba(26,74,122,0.12);}
 .cal-day.holiday{background:#fde8e8;}
+.cal-day.day-locked{border:2px solid #d4a017;box-shadow:0 0 0 2px rgba(212,160,23,.25);}
+.cal-day.day-locked:hover{border-color:#b8860b;}
+.badge-daylock{font-size:9px;background:#d4a017;color:#fff;padding:1px 4px;border-radius:2px;cursor:pointer;font-weight:700;}
 .cal-day.empty{background:transparent;border:none;cursor:default;}
 .day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;}
 .day-num{font-size:12px;font-weight:700;}
@@ -514,6 +517,11 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 加班醫師」填入姓名與時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）。</div></div>
     <div class="man-step"><div class="man-sn">4</div><div class="man-sb">點「確認」儲存，系統自動存檔。</div></div>
     <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。</p>
+    <h4>🔒 鎖定單日（連點兩下）</h4>
+    <p>在月曆某天的<strong>日期數字上連點兩下</strong>，即可鎖定當日排班。鎖定的日子會顯示金色外框與「🔒鎖定」標記，之後按「⚡ 自動排班」時<strong>該日內容完全不會被更動</strong>（包含班別、切割點、加班）。適合已喬好的特定日子（例如某醫師指定當天的班）先鎖住，再讓系統排其餘日子。</p>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">在日期數字上連點兩下 → 出現金框與「🔒鎖定」，該日被保護。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">再連點兩下數字、或點「🔒鎖定」標記 → 解除鎖定。</div></div>
+    <div class="man-note"><strong>💡 說明</strong> 單日鎖定只影響「自動排班」；仍可手動點該日修改。與工具列「結束自動排班」的整月鎖定是不同機制，可並用。清空本月時會一併解除當月的單日鎖定。</div>
   </div>
 
   <!-- 4 醫師設定 -->
@@ -750,6 +758,7 @@ let state = {
   year: new Date().getFullYear(),
   month: new Date().getMonth(),
   holidays: new Set(),
+  lockedDays: new Set(), // 連點兩下鎖定的單日，自動排班不更動
   defaultSplit: 20,
   schedule: {},
   preRequests: {},
@@ -1419,10 +1428,18 @@ function autoSchedule(){
 
 function _generateOnce(y,m,dates){
   const newSched={};
+  const LK=state.lockedDays||new Set(); // 已鎖定的日期，自動排班全程不更動
 
   for(const d of dates){
     const existing=state.schedule[d]||{};
-    newSched[d]={split:existing.split||state.defaultSplit, 主白:null, 早班:null, 小夜:null, 大夜:null};
+    if(state.lockedDays&&state.lockedDays.has(d)){
+      // 當日已鎖定：整份保留原內容，自動排班不更動
+      newSched[d]=JSON.parse(JSON.stringify(existing));
+      newSched[d].split=existing.split||state.defaultSplit;
+      for(const sl of SLOTS) if(!(sl in newSched[d])) newSched[d][sl]=null;
+    } else {
+      newSched[d]={split:existing.split||state.defaultSplit, 主白:null, 早班:null, 小夜:null, 大夜:null};
+    }
   }
 
   // fullSched: Proxy that reads current month from newSched (live), other months from state.schedule.
@@ -1446,6 +1463,7 @@ function _generateOnce(y,m,dates){
 
   // Apply WORK pre-requests (including CUSTOM)
   for(const d of dates){
+    if(LK.has(d)) continue; // 鎖定日不套用預班（保留原內容）
     for(const pr of (state.preRequests[d]||[])){
       if(!pr.type.startsWith('WORK_')) continue;
       const slKey=pr.type.replace('WORK_','');
@@ -1471,11 +1489,11 @@ function _generateOnce(y,m,dates){
       if(covered) continue;
       let done=false;
       for(const slot of ['主白','早班']){
-        if(!newSched[thu][slot]&&canWork(doc.id,thu,slot,fullSched)){
+        if(!LK.has(thu)&&!newSched[thu][slot]&&canWork(doc.id,thu,slot,fullSched)){
           newSched[thu][slot]=doc.id; done=true; break;
         }
       }
-      if(!done&&newSched[wed]&&!newSched[wed]['大夜']&&canWork(doc.id,wed,'大夜',fullSched)){
+      if(!done&&!LK.has(wed)&&newSched[wed]&&!newSched[wed]['大夜']&&canWork(doc.id,wed,'大夜',fullSched)){
         newSched[wed]['大夜']=doc.id;
       }
     }
@@ -1487,6 +1505,7 @@ function _generateOnce(y,m,dates){
     const hasCover=thursdays.some(d=>newSched[d]['主白']===doc.id||newSched[d]['早班']===doc.id);
     if(hasCover) continue;
     for(const thu of thursdays){
+      if(LK.has(thu)) continue;
       let done=false;
       for(const slot of ['主白','早班']){
         if(!newSched[thu][slot]&&canWork(doc.id,thu,slot,fullSched)){
@@ -1501,6 +1520,7 @@ function _generateOnce(y,m,dates){
   for(let pass=0;pass<3;pass++){
     const ordDates=pass===0?[...dates]:shuffle([...dates]);
     for(const d of ordDates){
+      if(LK.has(d)) continue;
       for(const slot of SLOTS){
         if(newSched[d][slot]) continue;
         let candidates=state.doctors.filter(doc=>{
@@ -1533,6 +1553,7 @@ function _generateOnce(y,m,dates){
       if(calcDocHours(doc.id,newSched)>=135) continue;
       for(const d of tryDates){
         if(calcDocHours(doc.id,newSched)>=135) break;
+        if(LK.has(d)) continue; // 鎖定日不動
         if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue; // already working this day
         // Pass A: fill empty slot
         let filled=false;
@@ -1581,7 +1602,7 @@ function _generateOnce(y,m,dates){
       const p=parseCustomShift(pr.custom);
       return p&&p.split!==null;
     });
-    if(!hasCustomPR){
+    if(!hasCustomPR&&!LK.has(d)){
       newSched[d].split = bestSplitForPair(newSched[d]['早班'], newSched[d]['小夜'], d, newSched);
     }
   }
@@ -1591,6 +1612,7 @@ function _generateOnce(y,m,dates){
     const ds=newSched[d]; if(!ds||!ds['大夜']) continue;
     const did=ds['大夜'];
     const d1=addDays(d,1); const ds1=newSched[d1]; if(!ds1||!ds1['小夜']) continue;
+    if(LK.has(d1)) continue; // 鎖定日的切割點不改
     if(ds1['小夜']===did){
       const sp=ds1.split||state.defaultSplit;
       if(sp<20) ds1.split=20; // force minimum 20 for 12h rest
@@ -1602,7 +1624,9 @@ function _generateOnce(y,m,dates){
 
 // 補填空格：先用寬鬆規則，再用強制規則（皆保有絕對禁止事項）
 function _fillEmpties(newSched,fullSched,dates){
+  const LK=state.lockedDays||new Set();
   for(const d of [...dates,...shuffle([...dates]),...shuffle([...dates])]){
+    if(LK.has(d)) continue; // 鎖定日不補填
     for(const slot of SLOTS){
       if(newSched[d][slot]) continue;
       const candidates=state.doctors.filter(doc=>{
@@ -1621,25 +1645,32 @@ function _fillEmpties(newSched,fullSched,dates){
 
 // 清除休息時間違規（大夜→隔日白班、大夜→OFF→白班、小夜→隔日白班），回傳清除數
 function _removeRestViolations(newSched,dates){
+  const LK=state.lockedDays||new Set();
   let removed=0;
   for(const d of dates){
     const ds=newSched[d]; if(!ds) continue;
     if(ds['大夜']){
       const did=ds['大夜'];
       const d1=addDays(d,1); const ds1=newSched[d1]||{};
-      if(ds1['主白']===did){newSched[d1]['主白']=null;removed++;}
-      if(ds1['早班']===did){newSched[d1]['早班']=null;removed++;}
+      if(!LK.has(d1)){
+        if(ds1['主白']===did){newSched[d1]['主白']=null;removed++;}
+        if(ds1['早班']===did){newSched[d1]['早班']=null;removed++;}
+      }
       if(!SLOTS.some(s=>ds1[s]===did)){
         const d2=addDays(d,2); const ds2=newSched[d2]||{};
-        if(ds2['主白']===did){newSched[d2]['主白']=null;removed++;}
-        if(ds2['早班']===did){newSched[d2]['早班']=null;removed++;}
+        if(!LK.has(d2)){
+          if(ds2['主白']===did){newSched[d2]['主白']=null;removed++;}
+          if(ds2['早班']===did){newSched[d2]['早班']=null;removed++;}
+        }
       }
     }
     if(ds['小夜']){
       const did=ds['小夜'];
       const d1=addDays(d,1); const ds1=newSched[d1]||{};
-      if(ds1['主白']===did){newSched[d1]['主白']=null;removed++;}
-      if(ds1['早班']===did){newSched[d1]['早班']=null;removed++;}
+      if(!LK.has(d1)){
+        if(ds1['主白']===did){newSched[d1]['主白']=null;removed++;}
+        if(ds1['早班']===did){newSched[d1]['早班']=null;removed++;}
+      }
     }
   }
   return removed;
@@ -1768,8 +1799,9 @@ function renderCalendar(){
     const isHol=isHoliday(dateStr);
     const isManHol=state.holidays.has(dateStr);
     const isWknd=dow>=5;
+    const isDayLocked=state.lockedDays&&state.lockedDays.has(dateStr);
     const cell=document.createElement('div');
-    cell.className='cal-day'+(isHol?' holiday':'');
+    cell.className='cal-day'+(isHol?' holiday':'')+(isDayLocked?' day-locked':'');
 
     const split=getDaySplit(dateStr);
     const dowNames=['一','二','三','四','五','六','日'];
@@ -1778,8 +1810,9 @@ function renderCalendar(){
     else if(!isWknd) badges+=`<span class="badge-sethol" onclick="toggleHol('${dateStr}',event)" title="設為假日">設假</span>`;
     else badges+=`<span style="font-size:9px;color:#c0392b">${dowNames[dow]}</span>`;
     if(split!==20) badges+=` <span class="badge-split">${split}:00切</span>`;
+    if(isDayLocked) badges+=` <span class="badge-daylock" onclick="toggleDayLock('${dateStr}',event)" title="點擊解除當日鎖定">🔒鎖定</span>`;
 
-    cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}">${day}</span><div class="day-badges">${badges}</div></div>`;
+    cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}" ondblclick="toggleDayLock('${dateStr}',event)" title="連點兩下可鎖定/解鎖當日排班" style="cursor:pointer">${day}</span><div class="day-badges">${badges}</div></div>`;
 
     const ds=state.schedule[dateStr]||{split:state.defaultSplit};
     const sp=ds.split||state.defaultSplit;
@@ -2048,6 +2081,21 @@ function toggleHol(dateStr,e){
   } else {
     if(!confirm(`確定要將 ${dateStr} 設為假日嗎？`)) return;
     state.holidays.add(dateStr);
+  }
+  autoSave();
+  renderCalendar();
+}
+
+// 連點兩下鎖定/解鎖當日：鎖定後自動排班不會更動該日
+function toggleDayLock(dateStr,e){
+  if(e) e.stopPropagation();
+  if(!state.lockedDays) state.lockedDays=new Set();
+  if(state.lockedDays.has(dateStr)){
+    state.lockedDays.delete(dateStr);
+    showToast(`🔓 ${dateStr} 已解除鎖定`);
+  } else {
+    state.lockedDays.add(dateStr);
+    showToast(`🔒 ${dateStr} 已鎖定，自動排班不會更動`);
   }
   autoSave();
   renderCalendar();
@@ -3102,6 +3150,7 @@ function clearSchedule(){
   for(const d of monthDates(state.year,state.month)){
     const sp=getDaySplit(d);
     state.schedule[d]={split:sp,主白:null,早班:null,小夜:null,大夜:null};
+    if(state.lockedDays) state.lockedDays.delete(d); // 清空同時解除當月日鎖
   }
   autoSave();
   renderCalendar();
@@ -3158,6 +3207,7 @@ function applyCloudData(data){
   if(data.schedule) state.schedule=data.schedule;
   state.preRequests=data.preRequests||{};
   state.holidays=new Set(data.holidays||[]);
+  state.lockedDays=new Set(data.lockedDays||[]);
   // 不套用 data.year/month：檢視月份是本機視圖狀態，不隨其他裝置跳動
   state.defaultSplit=clampSplit(data.defaultSplit||20);
   state.avoidPairs=data.avoidPairs||[];
@@ -3173,7 +3223,7 @@ function applyCloudData(data){
   if(statsPane&&statsPane.classList.contains('active')) renderStats();
   try{ localStorage.setItem(LS_KEY,JSON.stringify({
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
-    holidays:[...state.holidays],year:state.year,month:state.month,
+    holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
     defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths]
   }));}catch(e){}
@@ -3183,7 +3233,7 @@ function cloudSave(){
   if(!_fbRef) return;
   const data={
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
-    holidays:[...state.holidays],year:state.year,month:state.month,
+    holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
     defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],
     idCnt:_idCnt,lockedMonths:[..._lockedMonths],_ts:Date.now(),_client:_clientId
   };
@@ -3240,7 +3290,7 @@ function migrateData(d){
 function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
-      holidays:[...state.holidays],year:state.year,month:state.month,
+      holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
       defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
       lockedMonths:[..._lockedMonths]};
     localStorage.setItem(LS_KEY,JSON.stringify(data));
@@ -3259,6 +3309,7 @@ function autoLoad(){
     if(d.schedule) state.schedule=d.schedule;
     state.preRequests=d.preRequests||{};
     state.holidays=new Set(d.holidays||[]);
+    state.lockedDays=new Set(d.lockedDays||[]);
     if(d.year!=null) state.year=d.year;
     if(d.month!=null) state.month=d.month;
     state.defaultSplit=clampSplit(d.defaultSplit||20);
@@ -3271,7 +3322,7 @@ function autoLoad(){
 
 function saveData(){
   const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
-    holidays:[...state.holidays],year:state.year,month:state.month,
+    holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
     defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -3291,6 +3342,7 @@ function loadData(){
         state.doctors=d.doctors; state.schedule=d.schedule;
         state.preRequests=d.preRequests||{};
         state.holidays=new Set(d.holidays||[]);
+        state.lockedDays=new Set(d.lockedDays||[]);
         if(d.year!=null) state.year=d.year;
         if(d.month!=null) state.month=d.month;
         state.defaultSplit=clampSplit(d.defaultSplit||20);
