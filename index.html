@@ -46,7 +46,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
 .cal-day.holiday{background:#fde8e8;}
 .cal-day.day-locked{border:2px solid #d4a017;box-shadow:0 0 0 2px rgba(212,160,23,.25);}
 .cal-day.day-locked:hover{border-color:#b8860b;}
-.badge-daylock{font-size:9px;background:#d4a017;color:#fff;padding:1px 4px;border-radius:2px;cursor:pointer;font-weight:700;}
+.badge-daylock{font-size:9px;background:#d4a017;color:#fff;padding:1px 4px;border-radius:2px;font-weight:700;}
 .cal-day.empty{background:transparent;border:none;cursor:default;}
 .day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;}
 .day-num{font-size:12px;font-weight:700;}
@@ -517,11 +517,11 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 加班醫師」填入姓名與時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）。</div></div>
     <div class="man-step"><div class="man-sn">4</div><div class="man-sb">點「確認」儲存，系統自動存檔。</div></div>
     <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。</p>
-    <h4>🔒 鎖定單日（連點兩下）</h4>
-    <p>在月曆某天的<strong>日期數字上連點兩下</strong>，即可鎖定當日排班。鎖定的日子會顯示金色外框與「🔒鎖定」標記，之後按「⚡ 自動排班」時<strong>該日內容完全不會被更動</strong>（包含班別、切割點、加班）。適合已喬好的特定日子（例如某醫師指定當天的班）先鎖住，再讓系統排其餘日子。</p>
-    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">在日期數字上連點兩下 → 出現金框與「🔒鎖定」，該日被保護。</div></div>
-    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">再連點兩下數字、或點「🔒鎖定」標記 → 解除鎖定。</div></div>
-    <div class="man-note"><strong>💡 說明</strong> 單日鎖定只影響「自動排班」；仍可手動點該日修改。與工具列「結束自動排班」的整月鎖定是不同機制，可並用。清空本月時會一併解除當月的單日鎖定。</div>
+    <h4>🔒 鎖定單日</h4>
+    <p>點月曆某天開啟「當日排班」視窗，左上角有「🔓 鎖定此日」按鈕，點一下即鎖定當日排班，按鈕變為「🔒 已鎖定（點擊解鎖）」。按「✔ 確認」後生效，該日在月曆會顯示金色外框與「🔒鎖定」標記。之後按「⚡ 自動排班」時<strong>該日內容完全不會被更動</strong>（包含班別、切割點、加班）。適合已喬好的特定日子（例如某醫師指定當天的班）先鎖住，再讓系統排其餘日子。</p>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點該日 → 視窗左上角點「🔓 鎖定此日」→「✔ 確認」，該日出現金框與「🔒鎖定」。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">要解鎖：再點該日 → 點「🔒 已鎖定（點擊解鎖）」→「✔ 確認」。</div></div>
+    <div class="man-note"><strong>💡 說明</strong> 單日鎖定只影響「自動排班」；鎖定後仍可在視窗內手動修改該日。與工具列「結束自動排班」的整月鎖定是不同機制，可並用。清空本月時會一併解除當月的單日鎖定。</div>
   </div>
 
   <!-- 4 醫師設定 -->
@@ -1810,9 +1810,9 @@ function renderCalendar(){
     else if(!isWknd) badges+=`<span class="badge-sethol" onclick="toggleHol('${dateStr}',event)" title="設為假日">設假</span>`;
     else badges+=`<span style="font-size:9px;color:#c0392b">${dowNames[dow]}</span>`;
     if(split!==20) badges+=` <span class="badge-split">${split}:00切</span>`;
-    if(isDayLocked) badges+=` <span class="badge-daylock" onclick="toggleDayLock('${dateStr}',event)" title="點擊解除當日鎖定">🔒鎖定</span>`;
+    if(isDayLocked) badges+=` <span class="badge-daylock" title="當日已鎖定，自動排班不會更動（點日期格於視窗內解鎖）">🔒鎖定</span>`;
 
-    cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}" ondblclick="toggleDayLock('${dateStr}',event)" title="連點兩下可鎖定/解鎖當日排班" style="cursor:pointer">${day}</span><div class="day-badges">${badges}</div></div>`;
+    cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}">${day}</span><div class="day-badges">${badges}</div></div>`;
 
     const ds=state.schedule[dateStr]||{split:state.defaultSplit};
     const sp=ds.split||state.defaultSplit;
@@ -1882,7 +1882,8 @@ function openDayModal(dateStr){
     split:ds.split||state.defaultSplit,
     主白:ds['主白']||null, 早班:ds['早班']||null, 小夜:ds['小夜']||null, 大夜:ds['大夜']||null,
     customTimes:ds.customTimes?{...ds.customTimes}:{},
-    extras:(ds.extras||[]).map(e=>({...e}))
+    extras:(ds.extras||[]).map(e=>({...e})),
+    locked:!!(state.lockedDays&&state.lockedDays.has(dateStr))
   };
   const[y,mo,d]=dateStr.split('-').map(Number);
   const dow=['一','二','三','四','五','六','日'][getDOW(dateStr)];
@@ -1899,6 +1900,10 @@ function _renderDayDraft(){
   const extras=ds.extras;
 
   let html=`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+    <button onclick="_draftToggleLock()" style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:12px;font-weight:700;color:#fff;background:${ds.locked?'#d4a017':'#8a9199'}">${ds.locked?'🔒 已鎖定（點擊解鎖）':'🔓 鎖定此日'}</button>
+    <span style="font-size:11px;color:${ds.locked?'#b8860b':'#888'}">${ds.locked?'自動排班將不會更動此日排班':'鎖定後，按自動排班時此日不會被更動'}</span>
+  </div>
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px">
     <strong>當日切割點：</strong>
     <select onchange="_draftSplit(parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
@@ -1959,6 +1964,7 @@ function _renderDayDraft(){
 }
 
 // Draft mutation helpers — no immediate save, no rule enforcement
+function _draftToggleLock(){ _dayDraft.locked=!_dayDraft.locked; _renderDayDraft(); }
 function _draftSplit(val){ _dayDraft.split=val; _renderDayDraft(); }
 function _draftSlot(slot,docId){ _dayDraft[slot]=docId||null; }
 function _draftSlotTime(slot,val){
@@ -2014,6 +2020,9 @@ function confirmDayModal(){
   else delete ds.customTimes;
   if(_dayDraft.extras.length) ds.extras=_dayDraft.extras.map(e=>({...e}));
   else delete ds.extras;
+  if(!state.lockedDays) state.lockedDays=new Set();
+  if(_dayDraft.locked) state.lockedDays.add(_dayDraftDate);
+  else state.lockedDays.delete(_dayDraftDate);
   const savedDate=_dayDraftDate;
   _dayDraft=null; _dayDraftDate=null;
   autoSave();
@@ -2081,21 +2090,6 @@ function toggleHol(dateStr,e){
   } else {
     if(!confirm(`確定要將 ${dateStr} 設為假日嗎？`)) return;
     state.holidays.add(dateStr);
-  }
-  autoSave();
-  renderCalendar();
-}
-
-// 連點兩下鎖定/解鎖當日：鎖定後自動排班不會更動該日
-function toggleDayLock(dateStr,e){
-  if(e) e.stopPropagation();
-  if(!state.lockedDays) state.lockedDays=new Set();
-  if(state.lockedDays.has(dateStr)){
-    state.lockedDays.delete(dateStr);
-    showToast(`🔓 ${dateStr} 已解除鎖定`);
-  } else {
-    state.lockedDays.add(dateStr);
-    showToast(`🔒 ${dateStr} 已鎖定，自動排班不會更動`);
   }
   autoSave();
   renderCalendar();
