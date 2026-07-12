@@ -434,6 +434,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <a href="#man-clear">清空排班</a>
     <a href="#man-pdf">生成 PDF</a>
     <a href="#man-cloud">雲端同步</a>
+    <a href="#man-install">安裝到手機</a>
     <a href="#man-points">點值規則</a>
     <a href="#man-rules">排班規則</a>
   </div>
@@ -625,6 +626,32 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <h3>12. 雲端同步</h3>
     <p>支援 Firebase Realtime Database 即時同步，多台裝置共用同一份班表。點頂部「☁️ 雲端設定」貼上 Firebase URL 後連線，之後所有修改自動同步。</p>
     <div class="man-note"><strong>💡 離線模式</strong> 未連線時資料儲存於本機（localStorage），下次開啟時自動還原。</div>
+  </div>
+
+  <!-- 13 安裝到手機 -->
+  <div class="man-sec" id="man-install">
+    <h3>13. 安裝到手機（當 App 使用）</h3>
+    <p>本系統支援 PWA，可加入手機主畫面，開啟後為全螢幕、有專屬圖示，操作與一般 App 相同，並可離線開啟已載入的班表。<strong>不需上架、不需付費、不需另外下載安裝檔。</strong></p>
+
+    <h4>📱 iPhone（使用 Safari 瀏覽器）</h4>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">用 <strong>Safari</strong> 開啟網址 <code>https://leo005741010-byte.github.io/er-schedule/</code></div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">點畫面下方中央的「分享」鈕（方框加向上箭頭 <strong>⬆️</strong>）</div></div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">在選單中往下找，點「<strong>加入主畫面</strong>」→ 右上角「加入」</div></div>
+    <div class="man-step"><div class="man-sn">4</div><div class="man-sb">主畫面出現藍色急診班表圖示，點開即為全螢幕 App</div></div>
+    <div class="man-note warn"><strong>※ 注意</strong> iPhone 僅能用內建的 Safari 安裝，用 Chrome／LINE 內開啟不會出現「加入主畫面」。</div>
+
+    <h4>🤖 Android（使用 Chrome 瀏覽器）</h4>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">用 <strong>Chrome</strong> 開啟同一網址</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">通常會自動跳出「<strong>安裝應用程式</strong>」提示，點安裝即可</div></div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">若沒有跳出，點右上「<strong>⋮</strong>」→「安裝應用程式」或「加到主畫面」</div></div>
+
+    <h4>安裝後</h4>
+    <ul>
+      <li>桌面有專屬圖示，點開全螢幕、無網址列</li>
+      <li>可離線開啟查看已載入的班表（修改資料仍需連網同步）</li>
+      <li>系統改版時 App 內容會自動更新，一開啟即為最新版</li>
+    </ul>
+    <div class="man-note"><strong>💡 與行事曆匯出的差別</strong> 本項是把整個排班系統當 App 用；「📅 行事曆」是把個人班表匯入手機內建行事曆。兩者可並用。</div>
   </div>
 
   <!-- 附錄A 點值 -->
