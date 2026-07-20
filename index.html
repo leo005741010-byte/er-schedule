@@ -212,6 +212,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <button class="action-btn btn-blue" data-pwa-hide onclick="exportCSV()">📊 匯出CSV</button>
   <button class="action-btn" data-pwa-hide style="background:#6a1b9a;color:#fff" onclick="generatePDF()">🖨 生成PDF</button>
   <button class="action-btn" data-pwa-hide style="background:#1a5276;color:#fff" onclick="generateMedPDF()">🖨 PDF醫務</button>
+  <button class="action-btn" data-pwa-hide style="background:#b45309;color:#fff" onclick="generateOvertimePDF()">🧾 加班單</button>
   <button class="action-btn" data-pwa-hide style="background:#00897b;color:#fff" onclick="openICalModal()">📅 行事曆</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
   <button class="action-btn btn-purple" data-pwa-hide onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
@@ -4115,6 +4116,143 @@ function generateMedPDF(){
       <table><tbody>${contactRows}</tbody></table>
     </div>
   </div>
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+
+  const win=window.open('','_blank');
+  if(!win){showToast('⚠️ 請允許瀏覽器彈出視窗後再試','warn');return;}
+  win.document.write(html);
+  win.document.close();
+}
+
+// ============================================================
+// 加班單 PDF（天晟醫院 醫師加班申請表，每位主治醫師一張 A4）
+// ============================================================
+function generateOvertimePDF(){
+  const y=state.year, m=state.month;
+  const dates=monthDates(y,m);
+  const rocYear=y-1911;
+  // 申請日期：一律為下個月 1 日
+  const appDate=new Date(y, m+1, 1);
+  const appStr=`${appDate.getFullYear()-1911}年${appDate.getMonth()+1}月1日`;
+  const dowNames=['一','二','三','四','五','六','日'];
+  const fh=h=>`${String(h%24).padStart(2,'0')}:00`;
+  const slotSE=(slot,sp)=>{ const {s,e}=slotRange(slot,sp); return {st:fh(s),en:fh(e)}; };
+  const ctSE=ct=>{ const mm=(ct||'').match(/^(\d{1,2})-(\d{1,2})$/); return mm?{st:fh(parseInt(mm[1])),en:fh(parseInt(mm[2]))}:{st:'',en:''}; };
+
+  let pages='';
+  for(const doc of state.doctors){
+    const rows=[];
+    for(const d of dates){
+      const ds=state.schedule[d]||{};
+      const sp=ds.split||state.defaultSplit;
+      const hol=isHoliday(d);
+      const day=parseInt(d.slice(-2));
+      const dow=dowNames[getDOW(d)];
+      for(const slot of SLOTS){
+        if(ds[slot]!==doc.id) continue;
+        const ct=ds.customTimes&&ds.customTimes[slot];
+        const t=ct?ctSE(ct):slotSE(slot,sp);
+        rows.push({day,dow,hol,st:t.st,en:t.en});
+      }
+      for(const ex of (ds.extras||[])){
+        if(ex.docId!==doc.id||isSpecialKind(ex.kind)) continue; // 楊天/ICU 不列入加班單
+        const t=ctSE(ex.timeRange);
+        rows.push({day,dow,hol,st:t.st,en:t.en});
+      }
+    }
+    if(!rows.length) continue; // 該醫師本月無班則不印
+    rows.sort((a,b)=>a.day-b.day);
+
+    const MINROWS=18;
+    let body='', wd=0, hd=0;
+    const n=Math.max(MINROWS, rows.length);
+    for(let i=0;i<n;i++){
+      const r=rows[i];
+      if(r){
+        if(r.hol) hd++; else wd++;
+        body+=`<tr><td>${r.day}</td><td>${r.dow}</td><td>${r.hol?'✓':''}</td><td>${r.st}</td><td>${r.en}</td><td>${r.hol?'':'4'}</td><td></td><td>${r.hol?'4':''}</td><td></td><td class="lft">加班</td><td></td></tr>`;
+      } else {
+        body+=`<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+      }
+    }
+    const subtotal=`<tr class="sub"><td colspan="5">小計</td><td>${wd*4}</td><td></td><td>${hd*4}</td><td></td><td></td><td></td></tr>`;
+
+    pages+=`<div class="page">
+      <div class="title">天晟醫院　醫師加班申請表</div>
+      <div class="subhd"><span class="ym">${rocYear}年　${m+1}月</span><span class="appd">申請日期：${appStr}</span></div>
+      <table class="info"><tbody><tr>
+        <td class="lbl">科&nbsp;&nbsp;別</td><td>急診醫學科</td>
+        <td class="lbl">姓&nbsp;&nbsp;名</td><td>${doc.name}</td>
+        <td class="lbl">職&nbsp;&nbsp;稱</td><td>主治醫師</td>
+      </tr></tbody></table>
+      <table class="grid"><thead>
+        <tr>
+          <th rowspan="2">日期</th><th rowspan="2">星期</th><th rowspan="2">例假</th><th rowspan="2">起</th><th rowspan="2">迄</th>
+          <th colspan="2">平日時數</th><th colspan="2">假日時數</th>
+          <th rowspan="2">加班事由</th><th rowspan="2">備註</th>
+        </tr>
+        <tr><th>免稅</th><th>應稅</th><th>免稅</th><th>應稅</th></tr>
+      </thead><tbody>${body}${subtotal}</tbody></table>
+      <table class="sign"><tbody>
+        <tr><td class="sh">院長室</td><td class="sh">內/外科主管</td><td class="sh">申請人親簽</td></tr>
+        <tr><td class="sc"></td><td class="sc"></td><td class="sc"></td></tr>
+      </tbody></table>
+      <table class="foot"><tbody>
+        <tr>
+          <td class="notes">
+            <div class="nt">注意事項：</div>
+            <div>1.申請人→內/外科主管審核加班事由→人資室確認班表→院長室核准→會計室登錄計薪。</div>
+            <div>2.每月加班單請於次月五日前繳至會計室。</div>
+            <div>3.加班事由請核實填寫，若有佐證資料請併於加班單后。</div>
+          </td>
+          <td class="dept">人資室</td><td class="dept">會計室</td>
+        </tr>
+        <tr><td class="notes2"></td><td class="dc"></td><td class="dc"></td></tr>
+      </tbody></table>
+      <div class="fnote">中壢天晟醫院　C-P-5200-UC-001-01</div>
+    </div>`;
+  }
+
+  if(!pages){ showToast('本月無排班，無法產生加班單','warn'); return; }
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>加班單_${rocYear}年${m+1}月</title>
+  <style>
+  @page{size:A4 portrait;margin:10mm;}
+  *{box-sizing:border-box;}
+  body{font-family:'標楷體','DFKai-SB',serif;color:#000;margin:0;}
+  .page{page-break-after:always;padding:2mm;}
+  .page:last-child{page-break-after:auto;}
+  .title{text-align:center;font-size:22px;font-weight:bold;letter-spacing:2px;margin-bottom:4px;}
+  .subhd{display:flex;justify-content:center;align-items:baseline;gap:40px;margin-bottom:8px;}
+  .subhd .ym{font-size:17px;font-weight:bold;letter-spacing:3px;}
+  .subhd .appd{font-size:13px;}
+  table{border-collapse:collapse;width:100%;}
+  .info{margin-bottom:0;}
+  .info td{border:1px solid #000;padding:5px 6px;font-size:14px;}
+  .info .lbl{width:9%;text-align:center;font-weight:bold;letter-spacing:2px;background:#fafafa;}
+  .grid{table-layout:fixed;}
+  .grid th,.grid td{border:1px solid #000;text-align:center;font-size:12px;height:22px;padding:0 2px;}
+  .grid th{font-weight:bold;background:#f5f5f5;padding:3px 2px;}
+  .grid td.lft{text-align:center;}
+  .grid tr.sub td{font-weight:bold;height:24px;}
+  .grid tr.sub td[colspan]{text-align:center;letter-spacing:6px;}
+  /* 欄寬 */
+  .grid th:nth-child(1),.grid td:nth-child(1){width:6%;}
+  .grid th:nth-child(2),.grid td:nth-child(2){width:5%;}
+  .grid th:nth-child(3),.grid td:nth-child(3){width:5%;}
+  .sign{margin-top:0;}
+  .sign td{border:1px solid #000;border-top:none;text-align:center;font-size:14px;}
+  .sign .sh{font-weight:bold;padding:4px;letter-spacing:2px;background:#fafafa;width:33.33%;}
+  .sign .sc{height:48px;}
+  .foot{margin-top:0;}
+  .foot td{border:1px solid #000;border-top:none;vertical-align:top;}
+  .foot .notes{width:66%;padding:5px 7px;font-size:11.5px;line-height:1.6;}
+  .foot .notes .nt{font-weight:bold;margin-bottom:1px;}
+  .foot .dept{text-align:center;font-weight:bold;font-size:14px;padding:4px;letter-spacing:2px;background:#fafafa;width:17%;}
+  .foot .notes2{height:44px;}
+  .fnote{text-align:right;font-size:11px;margin-top:3px;}
+  </style></head><body>${pages}
   <script>window.onload=function(){window.print();}<\/script>
   </body></html>`;
 
