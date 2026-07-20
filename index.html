@@ -182,24 +182,25 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     </div>
   </div>
   <button class="nav-btn" onclick="changeMonth(1)">下月 &#9654;</button>
-  <button class="action-btn btn-green" onclick="autoSchedule()">⚡ 自動排班</button>
-  <button id="btn-finish-lock" class="action-btn" style="background:#c0392b;color:#fff" onclick="finishAutoSchedule()">🔓 結束自動排班</button>
-  <button id="btn-complete-month" class="action-btn" style="background:#2e7d32;color:#fff" onclick="completeMonth()">✅ 完成本月</button>
-  <button class="action-btn btn-orange" onclick="clearSchedule()">🗑 清空</button>
-  <button id="btn-undo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="undoLast()" disabled title="無可還原操作">↩ 還原</button>
-  <button id="btn-redo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="redoLast()" disabled title="無可重做操作">↪ 重做</button>
-  <button class="action-btn btn-blue" onclick="exportCSV()">📊 匯出CSV</button>
-  <button class="action-btn" style="background:#6a1b9a;color:#fff" onclick="generatePDF()">🖨 生成PDF</button>
-  <button class="action-btn" style="background:#1a5276;color:#fff" onclick="generateMedPDF()">🖨 PDF醫務</button>
-  <button class="action-btn" style="background:#00897b;color:#fff" onclick="openICalModal()">📅 行事曆</button>
+  <button class="action-btn btn-green" data-pwa-hide onclick="autoSchedule()">⚡ 自動排班</button>
+  <button id="btn-finish-lock" class="action-btn" data-pwa-hide style="background:#c0392b;color:#fff" onclick="finishAutoSchedule()">🔓 結束自動排班</button>
+  <button id="btn-complete-month" class="action-btn" data-pwa-hide style="background:#2e7d32;color:#fff" onclick="completeMonth()">✅ 完成本月</button>
+  <button class="action-btn btn-orange" data-pwa-hide onclick="clearSchedule()">🗑 清空</button>
+  <button id="btn-undo" class="action-btn" data-pwa-hide style="background:#5d4037;opacity:0.4" onclick="undoLast()" disabled title="無可還原操作">↩ 還原</button>
+  <button id="btn-redo" class="action-btn" data-pwa-hide style="background:#5d4037;opacity:0.4" onclick="redoLast()" disabled title="無可重做操作">↪ 重做</button>
+  <button class="action-btn btn-blue" data-pwa-hide onclick="exportCSV()">📊 匯出CSV</button>
+  <button class="action-btn" data-pwa-hide style="background:#6a1b9a;color:#fff" onclick="generatePDF()">🖨 生成PDF</button>
+  <button class="action-btn" data-pwa-hide style="background:#1a5276;color:#fff" onclick="generateMedPDF()">🖨 PDF醫務</button>
+  <button class="action-btn" data-pwa-hide style="background:#00897b;color:#fff" onclick="openICalModal()">📅 行事曆</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
-  <button class="action-btn btn-purple" onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
-  <span id="_cloud_status" style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
+  <button class="action-btn btn-purple" data-pwa-hide onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
+  <span id="_cloud_status" data-pwa-hide style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
+  <span id="_pwa-badge" style="display:none;font-size:11px;color:#a5d6a7;font-weight:700">📱 檢視模式</span>
 </div>
 
 <div id="tabs">
   <div class="tab active" onclick="switchTab('schedule')">📅 排班表</div>
-  <div class="tab" onclick="switchTab('doctors')">👨‍⚕️ 醫師設定</div>
+  <div class="tab" data-pwa-hide onclick="switchTab('doctors')">👨‍⚕️ 醫師設定</div>
   <div class="tab" onclick="switchTab('prereq')">📝 預假/預班</div>
   <div class="tab" onclick="switchTab('stats')">📈 統計報表</div>
   <div class="tab" onclick="switchTab('manual')">📖 操作說明</div>
@@ -220,7 +221,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
           &nbsp;
           <span class="slot-tag tag-大夜" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">大夜</span>20:00-08:00(12h)
         </span>
-        <div class="split-control">
+        <div class="split-control" data-pwa-hide>
           <label>預設切割點：</label>
           <select id="default-split" onchange="state.defaultSplit=parseInt(this.value)">
             <option value="16">16:00</option><option value="17">17:00</option>
@@ -802,6 +803,30 @@ function blockIfCompleted(){
   }
   return false;
 }
+// App（安裝成 PWA）檢視模式：只能看班表/統計，還可以預假，其他都不可用
+let _viewOnly = false;
+function isPWA(){
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: fullscreen)').matches
+    || window.navigator.standalone === true;
+}
+function applyPWARestrictions(){
+  if(!isPWA()) return;
+  _viewOnly = true;
+  document.querySelectorAll('[data-pwa-hide]').forEach(el=>{ el.style.display='none'; });
+  const badge=document.getElementById('_pwa-badge'); if(badge) badge.style.display='inline';
+  // 若目前在被隱藏的頁籤（醫師設定），切回排班表
+  const docTab=document.getElementById('tab-doctors');
+  if(docTab&&docTab.classList.contains('active')) switchTab('schedule');
+}
+// 檢視模式下擋掉編輯類動作
+function blockIfViewOnly(){
+  if(_viewOnly){
+    showToast('📱 App 為檢視模式，僅供查看班表/統計與預假；如需修改請用電腦瀏覽器開啟。','warn');
+    return true;
+  }
+  return false;
+}
 let _undoStack = [];
 let _redoStack = [];
 function pushUndo(){
@@ -851,6 +876,7 @@ function updateCompleteBtn(){
   b.style.outline=done?'3px solid #a5d6a7':'none';
 }
 function completeMonth(){
+  if(blockIfViewOnly()) return;
   const done=isCurrentMonthCompleted();
   const pwd=prompt(done
     ?`本月已完成（唯讀），請輸入密碼以取消完成 ${state.year}年${state.month+1}月：`
@@ -1452,6 +1478,7 @@ function bestSplitForPair(earlyId, lateId, date, sched){
 // AUTO-SCHEDULE
 // ============================================================
 function autoSchedule(){
+  if(blockIfViewOnly()) return;
   if(blockIfCompleted()) return;
   if(isCurrentMonthLocked()){
     const pwd=prompt(`本月班表已鎖定，請輸入密碼以解鎖並重新自動排班：`);
@@ -1946,6 +1973,7 @@ function renderCalendar(){
 let _dayDraft=null, _dayDraftDate=null;
 
 function openDayModal(dateStr){
+  if(blockIfViewOnly()) return;
   _dayDraftDate=dateStr;
   const ds=state.schedule[dateStr]||{};
   _dayDraft={
@@ -2173,6 +2201,7 @@ function checkConstraints(dateStr){
 // ============================================================
 function toggleHol(dateStr,e){
   e.stopPropagation();
+  if(blockIfViewOnly()) return;
   if(blockIfCompleted()) return;
   if(state.holidays.has(dateStr)){
     if(!confirm(`確定要取消 ${dateStr} 的自訂假日嗎？`)) return;
@@ -3244,6 +3273,7 @@ function switchTab(name){
   if(name==='personal') renderPersonalTab();
 }
 function finishAutoSchedule(){
+  if(blockIfViewOnly()) return;
   if(blockIfCompleted()) return;
   const locked=isCurrentMonthLocked();
   const pwd=prompt(locked
@@ -3264,6 +3294,7 @@ function finishAutoSchedule(){
 }
 
 function clearSchedule(){
+  if(blockIfViewOnly()) return;
   if(blockIfCompleted()) return;
   if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法清空','warn');return;}
   const pwd=prompt('請輸入密碼以清空本月排班：');
@@ -3895,11 +3926,11 @@ function generateMedPDF(){
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId) continue;
+      if(isSpecialKind(ex.kind)) continue; // 醫務PDF 不顯示 楊天/ICU
       const disp=extraDisplay(ex); if(!disp) continue;
       const mm=(ex.timeRange||'').match(/^(\d{1,2})-(\d{1,2})$/);
       const t=mm?`${String(mm[1]).padStart(2,'0')}-${String(mm[2]).padStart(2,'0')}`:ex.timeRange||'';
-      const pfx=disp.special?`[${disp.kindName}] `:'';
-      rows+=`<div class="dr"><span class="dn">${pfx}${disp.name}</span><span class="dt">(${t})</span></div>`;
+      rows+=`<div class="dr"><span class="dn">${disp.name}</span><span class="dt">(${t})</span></div>`;
     }
 
     cells+=`<div class="dc${wknd?' wknd':''}">
@@ -3992,7 +4023,8 @@ window.onload=()=>{
     if(splitEl) splitEl.value=state.defaultSplit;
     renderCalendar();
     updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
-    if(restored) showToast('已自動還原上次排班資料');
+    applyPWARestrictions(); // App(PWA)檢視模式：只留班表/統計/預假
+    if(restored&&!_viewOnly) showToast('已自動還原上次排班資料');
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
   }
