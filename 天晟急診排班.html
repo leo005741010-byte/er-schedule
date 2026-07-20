@@ -524,7 +524,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <h4>📌 當日備註</h4>
     <p>在「當日排班」視窗最下方有「📌 當日備註」欄，可填當日行政事務（例：晨會、器材檢查、教學活動）。填寫後月曆該日會顯示黃色備註列，滑鼠移上去可看完整內容。</p>
     <h4>🏥 楊天 / ICU（額外項目）</h4>
-    <p>在「當日排班」視窗的「額外醫師」下拉最底下有「特殊（不計點值/時數）」分組，可選 <strong>楊天</strong> 或 <strong>ICU</strong>。這兩項<strong>只能手動加入</strong>、<strong>不計入點值與總時數</strong>，會在統計報表下方以「📋 特殊項目統計」單獨列出班次數與時數。</p>
+    <p>在「當日排班」視窗的「額外醫師」區，點「＋ 新增醫師」後，最左「類型」欄可選 <strong>一般加班 / 楊天 / ICU</strong>，再從右邊「指派醫師」選<strong>哪位醫師</strong>上這個班。選「楊天／ICU」者<strong>只能手動加入、不計入點值與總時數</strong>，會在統計報表下方「📋 特殊項目統計」依醫師分別列出班次數與時數。</p>
     <h4>🔒 鎖定單日</h4>
     <p>點月曆某天開啟「當日排班」視窗，左上角有「🔓 鎖定此日」按鈕，點一下即鎖定當日排班，按鈕變為「🔒 已鎖定（點擊解鎖）」。按「✔ 確認」後生效，該日在月曆會顯示金色外框與「🔒鎖定」標記。之後按「⚡ 自動排班」時<strong>該日內容完全不會被更動</strong>（包含班別、切割點、加班）。適合已喬好的特定日子（例如某醫師指定當天的班）先鎖住，再讓系統排其餘日子。</p>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點該日 → 視窗左上角點「🔓 鎖定此日」→「✔ 確認」，該日出現金框與「🔒鎖定」。</div></div>
@@ -952,10 +952,16 @@ function getFirstThirdThursdays(y,m){
 // ============================================================
 const SLOTS = ['主白','早班','小夜','大夜'];
 const SPLIT_OPTS = [16,17,18,20]; // 可選切割點（取消 19:00）
-// 特殊額外項目：手動加入、不計點值/總時數，另外統計
-const SPECIAL_EXTRAS = [{id:'__yangtian',name:'楊天'},{id:'__icu',name:'ICU'}];
-function isSpecialExtraId(id){ return SPECIAL_EXTRAS.some(s=>s.id===id); }
-function specialExtraName(id){ const s=SPECIAL_EXTRAS.find(x=>x.id===id); return s?s.name:null; }
+// 額外醫師的類型：一般加班 vs 特殊(楊天/ICU)。特殊類型仍要選醫師，但不計點值/總時數，另外統計。
+const EXTRA_KINDS = [
+  {v:'',name:'一般加班',color:'#78909c'},
+  {v:'yangtian',name:'楊天',color:'#546e7a'},
+  {v:'icu',name:'ICU',color:'#00838f'},
+];
+function kindInfo(v){ return EXTRA_KINDS.find(k=>k.v===(v||''))||EXTRA_KINDS[0]; }
+function isSpecialKind(v){ return v==='yangtian'||v==='icu'; }
+// 僅特殊類型（楊天/ICU）供統計用
+const SPECIAL_KINDS = EXTRA_KINDS.filter(k=>k.v);
 
 function slotRange(slot, split){
   switch(slot){
@@ -1277,7 +1283,7 @@ function calcDocHours(docId, sched){
         h+=ct?customTimeHours(ct):slotHours(sl,sp);
       }
     }
-    for(const ex of (ds.extras||[])) if(ex.docId===docId) h+=customTimeHours(ex.timeRange||'');
+    for(const ex of (ds.extras||[])) if(ex.docId===docId&&!isSpecialKind(ex.kind)) h+=customTimeHours(ex.timeRange||'');
   }
   return h;
 }
@@ -1298,7 +1304,7 @@ function calcDocPoints(docId, sched){
         pts+=ct?calcCustomPoints(ct,d):calcSlotPoints(sl,sp,d);
       }
     }
-    for(const ex of (ds.extras||[])) if(ex.docId===docId) pts+=calcCustomPoints(ex.timeRange||'',d);
+    for(const ex of (ds.extras||[])) if(ex.docId===docId&&!isSpecialKind(ex.kind)) pts+=calcCustomPoints(ex.timeRange||'',d);
   }
   return pts;
 }
@@ -1900,7 +1906,7 @@ function renderCalendar(){
 
     for(const ex of (ds.extras||[])){
       if(!ex.docId) continue;
-      const disp=extraDisplay(ex.docId);
+      const disp=extraDisplay(ex);
       if(!disp) continue;
       const exRow=document.createElement('div');
       exRow.className='shift-row';
@@ -1908,8 +1914,8 @@ function renderCalendar(){
       const isHighEx=_filterDocId&&ex.docId===_filterDocId;
       const dimSt=isDimmedEx?'opacity:0.12;':'';
       const hlSt=isHighEx?`box-shadow:0 0 0 2px ${disp.color};`:'';
-      const tagLabel=disp.special?'選':'加';
-      exRow.innerHTML=`<span class="slot-tag" style="background:${disp.special?'#546e7a':'#78909c'};color:#fff;font-size:9px;padding:1px 4px">${tagLabel}</span><span class="shift-doc" style="background:${disp.color}18;border:1px solid ${disp.color}60;color:${disp.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${disp.name}</span><span class="doc-time">${ex.timeRange||'?'}</span></span>`;
+      const tagBg=disp.special?disp.kindColor:'#78909c';
+      exRow.innerHTML=`<span class="slot-tag" style="background:${tagBg};color:#fff;font-size:9px;padding:1px 4px">${disp.tag}</span><span class="shift-doc" style="background:${disp.color}18;border:1px solid ${disp.color}60;color:${disp.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${disp.name}</span><span class="doc-time">${ex.timeRange||'?'}</span></span>`;
       cell.appendChild(exRow);
     }
 
@@ -2003,22 +2009,24 @@ function _renderDayDraft(){
       <button onclick="_draftAddExtra()" style="font-size:11px;padding:2px 10px;border:1px solid #4caf50;background:#e8f5e9;color:#2e7d32;border-radius:3px;cursor:pointer">＋ 新增醫師</button>
     </div>`;
   if(extras.length){
-    html+=`<table class="day-slot-table"><thead><tr><th>時間 (HH-HH)</th><th>時數</th><th>點值</th><th>指派醫師</th><th></th></tr></thead><tbody>`;
+    html+=`<table class="day-slot-table"><thead><tr><th>類型</th><th>時間 (HH-HH)</th><th>時數</th><th>點值</th><th>指派醫師</th><th></th></tr></thead><tbody>`;
     for(const ex of extras){
-      const exIsSpecial=isSpecialExtraId(ex.docId);
+      const exIsSpecial=isSpecialKind(ex.kind);
       const exH=customTimeHours(ex.timeRange);
       const exPts=ex.timeRange?calcCustomPoints(ex.timeRange,dateStr):0;
+      const kindOpts=EXTRA_KINDS.map(k=>`<option value="${k.v}"${(ex.kind||'')===k.v?' selected':''}>${k.name}</option>`).join('');
       const exOpts=`<option value=""${!ex.docId?' selected':''}>-- 選醫師 --</option>`+
-        state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===ex.docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('')+
-        `<optgroup label="特殊（不計點值/時數）">`+SPECIAL_EXTRAS.map(s=>`<option value="${s.id}"${s.id===ex.docId?' selected':''}>${s.name}</option>`).join('')+`</optgroup>`;
+        state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===ex.docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
       html+=`<tr>
+        <td><select id="ek-${ex.id}" style="padding:3px 5px;font-size:12px;border:1px solid ${exIsSpecial?'#00838f':'#ddd'};border-radius:3px;color:${exIsSpecial?'#00838f':'#555'};font-weight:${exIsSpecial?'700':'400'}" onchange="_draftExtraKind('${ex.id}',this.value)">${kindOpts}</select></td>
         <td><input id="eti-${ex.id}" type="text" value="${ex.timeRange||''}" placeholder="08-16" style="width:68px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px" onblur="_draftExtraTime('${ex.id}',this.value)"></td>
         <td id="exhrs-${ex.id}">${exH?exH+'h':'-'}</td><td id="expts-${ex.id}">${exIsSpecial?'—':(ex.timeRange?exPts:'-')}</td>
         <td><select id="eds-${ex.id}" style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftExtraDoc('${ex.id}',this.value)">${exOpts}</select></td>
         <td><button onclick="_draftRemoveExtra('${ex.id}')" style="background:#ffebee;border:1px solid #ef9a9a;color:#c62828;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:12px">✕</button></td>
       </tr>`;
     }
-    html+=`</tbody></table>`;
+    html+=`</tbody></table>
+    <div style="font-size:10px;color:#999;margin-top:3px">※ 類型選「楊天／ICU」者不計入點值與總時數，另於統計報表單獨列出。</div>`;
   } else {
     html+=`<div style="color:#999;font-size:11px;padding:4px 0">無額外醫師</div>`;
   }
@@ -2054,9 +2062,10 @@ function _draftSlotTime(slot,val){
   if(h) h.textContent=hrs+'h'; if(p) p.textContent=pts;
   if(i){i.style.borderColor=ct?'#e65100':'#ddd';i.style.color=ct?'#e65100':'#555';}
 }
-function _draftAddExtra(){ _dayDraft.extras.push({id:'ex_'+Date.now(),docId:'',timeRange:''}); _renderDayDraft(); }
+function _draftAddExtra(){ _dayDraft.extras.push({id:'ex_'+Date.now(),docId:'',timeRange:'',kind:''}); _renderDayDraft(); }
 function _draftRemoveExtra(id){ _dayDraft.extras=_dayDraft.extras.filter(e=>e.id!==id); _renderDayDraft(); }
-function _draftExtraDoc(id,docId){ const ex=_dayDraft.extras.find(e=>e.id===id); if(ex) ex.docId=docId; _renderDayDraft(); }
+function _draftExtraDoc(id,docId){ const ex=_dayDraft.extras.find(e=>e.id===id); if(ex) ex.docId=docId; }
+function _draftExtraKind(id,kind){ const ex=_dayDraft.extras.find(e=>e.id===id); if(ex) ex.kind=kind; _renderDayDraft(); }
 function _draftExtraTime(id,val){
   // 不重繪整個 modal
   val=(val||'').trim();
@@ -2065,7 +2074,7 @@ function _draftExtraTime(id,val){
   const exH=customTimeHours(val); const exPts=val?calcCustomPoints(val,_dayDraftDate):0;
   const h=document.getElementById('exhrs-'+id); const p=document.getElementById('expts-'+id);
   if(h) h.textContent=exH?exH+'h':'-';
-  if(p) p.textContent=isSpecialExtraId(ex.docId)?'—':(val?exPts:'-');
+  if(p) p.textContent=isSpecialKind(ex.kind)?'—':(val?exPts:'-');
 }
 
 function confirmDayModal(){
@@ -2086,6 +2095,7 @@ function confirmDayModal(){
   _dayDraft.extras.forEach(ex=>{
     const inp=document.getElementById('eti-'+ex.id); if(inp) ex.timeRange=inp.value.trim();
     const sel=document.getElementById('eds-'+ex.id); if(sel) ex.docId=sel.value||'';
+    const ks=document.getElementById('ek-'+ex.id); if(ks) ex.kind=ks.value||'';
   });
   const noteEl=document.getElementById('day-note'); if(noteEl) _dayDraft.note=noteEl.value;
   pushUndo();
@@ -2706,6 +2716,7 @@ function renderStats(){
     // Extra doctors
     for(const ex of (ds.extras||[])){
       if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
+      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計點值與總時數
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
@@ -2812,20 +2823,27 @@ function renderStats(){
 // 特殊額外項目（楊天/ICU）獨立統計
 function renderSpecialTally(dates){
   const el=document.getElementById('stats-special'); if(!el) return;
+  // tally[kind] = { total:{cnt,hrs}, byDoc:{docId:{cnt,hrs}} }
   const tally={};
-  for(const s of SPECIAL_EXTRAS) tally[s.id]={cnt:0,hrs:0};
+  for(const s of SPECIAL_KINDS) tally[s.v]={cnt:0,hrs:0,byDoc:{}};
   for(const d of dates){
     const ds=state.schedule[d]||{};
     for(const ex of (ds.extras||[])){
-      if(!isSpecialExtraId(ex.docId)) continue;
-      tally[ex.docId].cnt++;
-      tally[ex.docId].hrs+=customTimeHours(ex.timeRange||'');
+      if(!isSpecialKind(ex.kind)||!ex.docId) continue;
+      const t=tally[ex.kind]; const h=customTimeHours(ex.timeRange||'');
+      t.cnt++; t.hrs+=h;
+      if(!t.byDoc[ex.docId]) t.byDoc[ex.docId]={cnt:0,hrs:0};
+      t.byDoc[ex.docId].cnt++; t.byDoc[ex.docId].hrs+=h;
     }
   }
-  const anyData=SPECIAL_EXTRAS.some(s=>tally[s.id].cnt>0);
+  const anyData=SPECIAL_KINDS.some(s=>tally[s.v].cnt>0);
   if(!anyData){ el.innerHTML=''; return; }
-  const cells=SPECIAL_EXTRAS.map(s=>`<span style="display:inline-block;margin-right:16px"><strong style="color:#546e7a">${s.name}</strong>：${tally[s.id].cnt} 班 / ${tally[s.id].hrs} 小時</span>`).join('');
-  el.innerHTML=`<div class="alert" style="background:#eceff1;border:1px solid #b0bec5;color:#37474f;padding:8px 12px;border-radius:6px;font-size:13px"><strong>📋 特殊項目統計（不計點值/總時數）：</strong><br>${cells}</div>`;
+  const blocks=SPECIAL_KINDS.filter(s=>tally[s.v].cnt>0).map(s=>{
+    const t=tally[s.v];
+    const perDoc=Object.entries(t.byDoc).map(([id,v])=>`${getDocName(id)} ${v.cnt}班/${v.hrs}h`).join('、');
+    return `<div style="margin-top:4px"><strong style="color:${s.color}">${s.name}</strong>（共 ${t.cnt} 班 / ${t.hrs} 小時）：${perDoc}</div>`;
+  }).join('');
+  el.innerHTML=`<div class="alert" style="background:#eceff1;border:1px solid #b0bec5;color:#37474f;padding:8px 12px;border-radius:6px;font-size:13px"><strong>📋 特殊項目統計（楊天／ICU，不計點值/總時數）：</strong>${blocks}</div>`;
 }
 
 // ============================================================
@@ -3144,14 +3162,14 @@ function pvRenderPRList(){
 // ============================================================
 // HELPERS
 // ============================================================
-function getDocName(id){const d=state.doctors.find(x=>x.id===id);if(d)return d.name;const s=specialExtraName(id);return s||'未知';}
-// 額外項目顯示資訊（含特殊項目 楊天/ICU）
-function extraDisplay(id){
-  const doc=state.doctors.find(x=>x.id===id);
-  if(doc) return {name:doc.name,color:doc.color,special:false};
-  const sn=specialExtraName(id);
-  if(sn) return {name:sn,color:'#546e7a',special:true};
-  return null;
+function getDocName(id){const d=state.doctors.find(x=>x.id===id);return d?d.name:'未知';}
+// 額外醫師顯示資訊：真實醫師 + 類型(一般/楊天/ICU)
+function extraDisplay(ex){
+  const doc=state.doctors.find(x=>x.id===ex.docId);
+  if(!doc) return null;
+  const ki=kindInfo(ex.kind);
+  const special=isSpecialKind(ex.kind);
+  return {name:doc.name, color:doc.color, special, kindName:ki.name, kindColor:ki.color, tag:special?ki.name:'加'};
 }
 
 function showToast(msg,type='ok'){
@@ -3386,6 +3404,15 @@ function migrateData(d){
       if('晚班' in ds){ ds['小夜']=ds['晚班']; delete ds['晚班']; }
     }
   }
+  // 舊版把 楊天/ICU 存成假 docId，改為 kind + 空醫師
+  if(d.schedule){
+    for(const ds of Object.values(d.schedule)){
+      if(ds.extras) for(const ex of ds.extras){
+        if(ex.docId==='__yangtian'){ ex.kind='yangtian'; ex.docId=''; }
+        else if(ex.docId==='__icu'){ ex.kind='icu'; ex.docId=''; }
+      }
+    }
+  }
   if(d.preRequests){
     for(const prs of Object.values(d.preRequests)){
       for(const pr of prs){ if(pr.type==='WORK_晚班') pr.type='WORK_小夜'; }
@@ -3508,6 +3535,7 @@ function exportDoctorHoursCSV(){
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
+      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計點值與總時數
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
@@ -3666,9 +3694,9 @@ function generatePDF(){
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId) continue;
-      const disp=extraDisplay(ex.docId); if(!disp) continue;
+      const disp=extraDisplay(ex); if(!disp) continue;
       slotRows+=`<div style="display:flex;align-items:center;gap:2px;margin-bottom:2px;">
-        <span style="width:13px;height:13px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;border-radius:2px;flex-shrink:0;background:${disp.special?'#546e7a':'#78909c'};color:#fff;">${disp.special?'選':'加'}</span>
+        <span style="width:auto;min-width:13px;height:13px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;border-radius:2px;flex-shrink:0;padding:0 2px;background:${disp.special?disp.kindColor:'#78909c'};color:#fff;">${disp.tag}</span>
         <span style="flex:1;font-size:9px;padding:1px 3px;border-radius:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:${disp.color}22;border:1px solid ${disp.color}66;color:${disp.color};font-weight:700">${disp.name} <span style="font-size:8px;opacity:0.8">${ex.timeRange||''}</span></span>
       </div>`;
     }
@@ -3705,6 +3733,7 @@ function generatePDF(){
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
+      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計點值與總時數
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
@@ -3866,10 +3895,11 @@ function generateMedPDF(){
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId) continue;
-      const disp=extraDisplay(ex.docId); if(!disp) continue;
+      const disp=extraDisplay(ex); if(!disp) continue;
       const mm=(ex.timeRange||'').match(/^(\d{1,2})-(\d{1,2})$/);
       const t=mm?`${String(mm[1]).padStart(2,'0')}-${String(mm[2]).padStart(2,'0')}`:ex.timeRange||'';
-      rows+=`<div class="dr"><span class="dn">${disp.name}</span><span class="dt">(${t})</span></div>`;
+      const pfx=disp.special?`[${disp.kindName}] `:'';
+      rows+=`<div class="dr"><span class="dn">${pfx}${disp.name}</span><span class="dt">(${t})</span></div>`;
     }
 
     cells+=`<div class="dc${wknd?' wknd':''}">
