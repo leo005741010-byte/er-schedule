@@ -20,7 +20,18 @@ if('serviceWorker' in navigator){
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;background:#f0f2f5;color:#333;font-size:14px;}
-#header{background:#1a4a7a;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+#header{background:#1a4a7a;color:#fff;padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+/* 手機看板：底部月份切換列（避開動態島/瀏海，拇指好按） */
+#ms-monthbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:900;background:#1a4a7a;color:#fff;
+  padding:8px 12px;padding-bottom:calc(8px + env(safe-area-inset-bottom));
+  box-shadow:0 -2px 14px rgba(0,0,0,.28);align-items:center;justify-content:space-between;gap:10px;}
+#ms-monthbar button{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);color:#fff;
+  font-size:16px;font-weight:700;padding:12px 18px;border-radius:10px;cursor:pointer;min-width:92px;
+  -webkit-tap-highlight-color:transparent;}
+#ms-monthbar button:active{background:rgba(255,255,255,.36);}
+#ms-monthbar .mb-label{font-size:18px;font-weight:800;letter-spacing:1px;white-space:nowrap;}
+body.board-mode #ms-monthbar{display:flex;}
+body.board-mode #mobile-schedule{padding-bottom:100px;}
 #header h1{font-size:17px;font-weight:700;flex:1;min-width:120px;}
 .nav-btn{background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:13px;}
 .nav-btn:hover{background:rgba(255,255,255,0.35);}
@@ -786,6 +797,13 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       <button class="btn-secondary" onclick="closeModal('ical-modal')">關閉</button>
     </div>
   </div>
+</div>
+
+<!-- ======= 看板模式底部月份切換列 ======= -->
+<div id="ms-monthbar">
+  <button onclick="changeMonth(-1)">&#9664; 上月</button>
+  <span class="mb-label" id="ms-month-label"></span>
+  <button onclick="changeMonth(1)">下月 &#9654;</button>
 </div>
 
 <script>
@@ -2030,6 +2048,17 @@ function _syncScheduleViewMode(){
     grid.style.display='grid';
     mob.style.display='none';
   }
+  _updateMonthBar();
+}
+
+// 底部月份切換列：僅在看板檢視 + 停留在排班表頁時顯示
+function _updateMonthBar(){
+  const bar=document.getElementById('ms-monthbar'); if(!bar) return;
+  const pane=document.getElementById('tab-schedule');
+  const show=_useMobileSchedule() && !!pane && pane.classList.contains('active');
+  document.body.classList.toggle('board-mode', show);
+  const lbl=document.getElementById('ms-month-label');
+  if(lbl) lbl.textContent=`${state.year}年${state.month+1}月`;
 }
 
 function _ctToTime(ct){ const m=(ct||'').match(/^(\d{1,2})-(\d{1,2})$/); return m?`${String(m[1]).padStart(2,'0')}:00-${String(m[2]).padStart(2,'0')}:00`:''; }
@@ -3391,6 +3420,7 @@ function switchTab(name){
   if(name==='prereq') renderPRTab();
   if(name==='stats'){_statsYear=state.year;_statsMonth=state.month;renderStats();}
   if(name==='personal') renderPersonalTab();
+  _updateMonthBar();
 }
 function finishAutoSchedule(){
   if(blockIfViewOnly()) return;
