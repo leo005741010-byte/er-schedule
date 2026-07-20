@@ -202,6 +202,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     </div>
   </div>
   <button class="nav-btn" onclick="changeMonth(1)">下月 &#9654;</button>
+  <button id="btn-view-toggle" class="action-btn" style="background:#455a64;color:#fff" onclick="toggleViewMode()">📱 看板模式</button>
   <button class="action-btn btn-green" data-pwa-hide onclick="autoSchedule()">⚡ 自動排班</button>
   <button id="btn-finish-lock" class="action-btn" data-pwa-hide style="background:#c0392b;color:#fff" onclick="finishAutoSchedule()">🔓 結束自動排班</button>
   <button id="btn-complete-month" class="action-btn" data-pwa-hide style="background:#2e7d32;color:#fff" onclick="completeMonth()">✅ 完成本月</button>
@@ -675,6 +676,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <div class="man-sec" id="man-install">
     <h3>13. 安裝到手機（當 App 使用）</h3>
     <p>本系統支援 PWA，可加入手機主畫面，開啟後為全螢幕、有專屬圖示，操作與一般 App 相同，並可離線開啟已載入的班表。<strong>不需上架、不需付費、不需另外下載安裝檔。</strong></p>
+    <div class="man-note"><strong>💡 電腦也能切看板模式</strong> 不論 Mac 或 Windows，按工具列的「📱 看板模式」即可切換成手機看板檢視（只看班表/統計、可預假）；再按「🖥 完整版」切回編輯。此設定會記住，重開仍維持。安裝成 App 者預設就是看板模式。</div>
 
     <h4>📱 iPhone（使用 Safari 瀏覽器）</h4>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">用 <strong>Safari</strong> 開啟網址 <code>https://leo005741010-byte.github.io/er-schedule/</code></div></div>
@@ -824,27 +826,43 @@ function blockIfCompleted(){
   }
   return false;
 }
-// App（安裝成 PWA）檢視模式：只能看班表/統計，還可以預假，其他都不可用
+// 檢視模式（看板模式）：只能看班表/統計，還可以預假，其他都不可用
+// 觸發來源：安裝成 PWA 自動進入，或任何電腦手動按「看板模式」切換
 let _viewOnly = false;
+let _manualView = null; // null=自動依裝置；true/false=使用者手動指定
+const VIEW_MODE_KEY='tienSheng_viewMode';
 function isPWA(){
   return window.matchMedia('(display-mode: standalone)').matches
     || window.matchMedia('(display-mode: fullscreen)').matches
     || window.navigator.standalone === true;
 }
-function applyPWARestrictions(){
-  if(!isPWA()) return;
-  _viewOnly = true;
-  document.querySelectorAll('[data-pwa-hide]').forEach(el=>{ el.style.display='none'; });
-  const badge=document.getElementById('_pwa-badge'); if(badge) badge.style.display='inline';
-  // 若目前在被隱藏的頁籤（醫師設定），切回排班表
-  const docTab=document.getElementById('tab-doctors');
-  if(docTab&&docTab.classList.contains('active')) switchTab('schedule');
-  _syncScheduleViewMode(); // 切換為手機直式看板
+function computeViewOnly(){ return _manualView!==null ? _manualView : isPWA(); }
+function applyViewMode(){
+  _viewOnly = computeViewOnly();
+  document.querySelectorAll('[data-pwa-hide]').forEach(el=>{ el.style.display = _viewOnly?'none':''; });
+  const badge=document.getElementById('_pwa-badge'); if(badge) badge.style.display=_viewOnly?'inline':'none';
+  const tbtn=document.getElementById('btn-view-toggle');
+  if(tbtn){ tbtn.textContent=_viewOnly?'🖥 完整版':'📱 看板模式'; tbtn.style.background=_viewOnly?'#00695c':'#455a64'; }
+  if(_viewOnly){
+    const docTab=document.getElementById('tab-doctors');
+    if(docTab&&docTab.classList.contains('active')) switchTab('schedule');
+  }
+  _syncScheduleViewMode();
+}
+function toggleViewMode(){
+  _manualView = !_viewOnly; // 切換目前生效狀態
+  try{ localStorage.setItem(VIEW_MODE_KEY, _manualView?'1':'0'); }catch(e){}
+  applyViewMode();
+  showToast(_viewOnly?'📱 已切換為看板檢視模式':'🖥 已切換為完整編輯版');
+}
+function initViewMode(){
+  try{ const v=localStorage.getItem(VIEW_MODE_KEY); if(v==='1') _manualView=true; else if(v==='0') _manualView=false; }catch(e){}
+  applyViewMode();
 }
 // 檢視模式下擋掉編輯類動作
 function blockIfViewOnly(){
   if(_viewOnly){
-    showToast('📱 App 為檢視模式，僅供查看班表/統計與預假；如需修改請用電腦瀏覽器開啟。','warn');
+    showToast('📱 目前為看板檢視模式，僅供查看班表/統計與預假。如需編輯請按右上「🖥 完整版」。','warn');
     return true;
   }
   return false;
@@ -4119,7 +4137,7 @@ window.onload=()=>{
     if(splitEl) splitEl.value=state.defaultSplit;
     renderCalendar();
     updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
-    applyPWARestrictions(); // App(PWA)檢視模式：只留班表/統計/預假
+    initViewMode(); // 依裝置/使用者設定套用看板檢視模式
     if(restored&&!_viewOnly) showToast('已自動還原上次排班資料');
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
