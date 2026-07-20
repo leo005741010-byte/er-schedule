@@ -1,5 +1,5 @@
-// 天晟急診排班系統 Service Worker
-const CACHE='er-sched-v1';
+// 天晟急診班表 Service Worker
+const CACHE='er-sched-v2';
 const CORE=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.addEventListener('install', e=>{
