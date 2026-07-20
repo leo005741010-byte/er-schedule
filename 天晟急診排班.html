@@ -851,12 +851,6 @@ function applyViewMode(){
   _syncScheduleViewMode();
 }
 function toggleViewMode(){
-  if(_viewOnly){
-    // 看板 → 完整版：需管理密碼，避免 App 使用者自行解鎖編輯
-    const pwd=prompt('切換至完整編輯版需要管理密碼：');
-    if(pwd===null) return;
-    if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
-  }
   _manualView = !_viewOnly; // 切換目前生效狀態
   try{ localStorage.setItem(VIEW_MODE_KEY, _manualView?'1':'0'); }catch(e){}
   applyViewMode();
