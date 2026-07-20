@@ -851,6 +851,13 @@ function applyViewMode(){
   _syncScheduleViewMode();
 }
 function toggleViewMode(){
+  // 只有「安裝成 App(PWA)」時，從看板切回完整編輯版才需要密碼；
+  // 電腦瀏覽器(Mac/Windows)切換一律免密碼。
+  if(_viewOnly && isPWA()){
+    const pwd=prompt('切換至完整編輯版需要管理密碼：');
+    if(pwd===null) return;
+    if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
+  }
   _manualView = !_viewOnly; // 切換目前生效狀態
   try{ localStorage.setItem(VIEW_MODE_KEY, _manualView?'1':'0'); }catch(e){}
   applyViewMode();
