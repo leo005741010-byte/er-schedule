@@ -55,6 +55,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
 .badge-hol{font-size:9px;background:#c0392b;color:#fff;padding:1px 4px;border-radius:2px;cursor:pointer;}
 .badge-sethol{font-size:9px;background:#eee;color:#666;padding:1px 4px;border-radius:2px;cursor:pointer;display:none;}
 .cal-day:hover .badge-sethol{display:inline;}
+.day-note-row{margin-top:2px;font-size:10px;color:#5d4037;background:#fff8e1;border:1px solid #ffe082;border-radius:3px;padding:1px 4px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 .badge-split{font-size:9px;background:#3498db;color:#fff;padding:1px 4px;border-radius:2px;cursor:pointer;}
 .shift-row{display:flex;align-items:center;gap:3px;margin-bottom:3px;min-height:20px;}
 .slot-tag{width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;border-radius:2px;flex-shrink:0;}
@@ -183,6 +184,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
   <button class="nav-btn" onclick="changeMonth(1)">下月 &#9654;</button>
   <button class="action-btn btn-green" onclick="autoSchedule()">⚡ 自動排班</button>
   <button id="btn-finish-lock" class="action-btn" style="background:#c0392b;color:#fff" onclick="finishAutoSchedule()">🔓 結束自動排班</button>
+  <button id="btn-complete-month" class="action-btn" style="background:#2e7d32;color:#fff" onclick="completeMonth()">✅ 完成本月</button>
   <button class="action-btn btn-orange" onclick="clearSchedule()">🗑 清空</button>
   <button id="btn-undo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="undoLast()" disabled title="無可還原操作">↩ 還原</button>
   <button id="btn-redo" class="action-btn" style="background:#5d4037;opacity:0.4" onclick="redoLast()" disabled title="無可重做操作">↪ 重做</button>
@@ -222,7 +224,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
           <label>預設切割點：</label>
           <select id="default-split" onchange="state.defaultSplit=parseInt(this.value)">
             <option value="16">16:00</option><option value="17">17:00</option>
-            <option value="18">18:00</option><option value="19">19:00</option>
+            <option value="18">18:00</option>
             <option value="20" selected>20:00</option>
           </select>
           <span style="font-size:10px;color:#888">(自動排班初始值)</span>
@@ -382,6 +384,7 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
         <tbody id="stats-tbody"></tbody>
       </table>
     </div>
+    <div id="stats-special" style="margin-top:10px;"></div>
     <div id="stats-violations" style="margin-top:10px;"></div>
   </div>
 
@@ -466,7 +469,8 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
       <tbody>
         <tr><td>◀ 上月 / 下月 ▶</td><td>切換查看月份</td></tr>
         <tr><td>⚡ 自動排班</td><td>演算法自動填滿本月班表（已鎖定時需密碼）</td></tr>
-        <tr><td>🔓 結束自動排班<br>🔒 已鎖定（點擊解鎖）</td><td>鎖定/解鎖本月班表，需輸入管理密碼（請洽主管）</td></tr>
+        <tr><td>🔓 結束自動排班<br>🔒 已鎖定（點擊解鎖）</td><td>鎖定/解鎖本月，僅擋「自動排班/清空」，仍可手動改；需管理密碼（請洽主管）</td></tr>
+        <tr><td>✅ 完成本月<br>✅ 已完成本月（點擊取消）</td><td>完成本月後<strong>整月唯讀，任何更動都無法進行</strong>；再點一次可取消。需管理密碼（請洽主管）</td></tr>
         <tr><td>🗑 清空</td><td>清除本月所有班別（需密碼）</td></tr>
         <tr><td>↩ 還原 / ↪ 重做</td><td>步驟式還原或重做操作</td></tr>
         <tr><td>📊 匯出 CSV</td><td>下載班表 CSV 檔案</td></tr>
@@ -514,9 +518,13 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <h4>手動修改排班</h4>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點擊月曆中任一日期格，開啟「當日排班」編輯視窗。</div></div>
     <div class="man-step"><div class="man-sn">2</div><div class="man-sb">在下拉選單中選擇各班別對應的醫師，或留空。</div></div>
-    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 加班醫師」填入姓名與時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）。</div></div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 新增醫師」填入時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）並選醫師。</div></div>
     <div class="man-step"><div class="man-sn">4</div><div class="man-sb">點「確認」儲存，系統自動存檔。</div></div>
-    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。</p>
+    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點只剩 16:00 / 17:00 / 18:00 / 20:00 可選（已取消 19:00）。</p>
+    <h4>📌 當日備註</h4>
+    <p>在「當日排班」視窗最下方有「📌 當日備註」欄，可填當日行政事務（例：晨會、器材檢查、教學活動）。填寫後月曆該日會顯示黃色備註列，滑鼠移上去可看完整內容。</p>
+    <h4>🏥 楊天 / ICU（額外項目）</h4>
+    <p>在「當日排班」視窗的「額外醫師」下拉最底下有「特殊（不計點值/時數）」分組，可選 <strong>楊天</strong> 或 <strong>ICU</strong>。這兩項<strong>只能手動加入</strong>、<strong>不計入點值與總時數</strong>，會在統計報表下方以「📋 特殊項目統計」單獨列出班次數與時數。</p>
     <h4>🔒 鎖定單日</h4>
     <p>點月曆某天開啟「當日排班」視窗，左上角有「🔓 鎖定此日」按鈕，點一下即鎖定當日排班，按鈕變為「🔒 已鎖定（點擊解鎖）」。按「✔ 確認」後生效，該日在月曆會顯示金色外框與「🔒鎖定」標記。之後按「⚡ 自動排班」時<strong>該日內容完全不會被更動</strong>（包含班別、切割點、加班）。適合已喬好的特定日子（例如某醫師指定當天的班）先鎖住，再讓系統排其餘日子。</p>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點該日 → 視窗左上角點「🔓 鎖定此日」→「✔ 確認」，該日出現金框與「🔒鎖定」。</div></div>
@@ -605,7 +613,12 @@ body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;backgro
     <div class="man-step"><div class="man-sn">2</div><div class="man-sb">按鈕變為深紅色「🔒 已鎖定（點擊解鎖）」表示鎖定成功。</div></div>
     <h4>解鎖</h4>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點「🔒 已鎖定（點擊解鎖）」→ 輸入管理密碼（請洽主管）。</div></div>
-    <div class="man-note warn"><strong>⚠ 注意</strong> 鎖定後仍可手動修改個別日期，但「自動排班」與「清空」會被阻擋。</div>
+    <div class="man-note warn"><strong>⚠ 注意</strong> 「結束自動排班」的鎖定後仍可手動修改個別日期，只擋「自動排班」與「清空」。</div>
+    <h4>✅ 完成本月（整月唯讀）</h4>
+    <p>當整份班表都確定、不再需要任何調整時，點工具列「✅ 完成本月」並輸入管理密碼（請洽主管）。完成後<strong>整月唯讀，任何更動都無法進行</strong>：自動排班、清空、還原/重做、手動改當日、設假日全部被擋下。按鈕會變為「✅ 已完成本月（點擊取消）」。</p>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">確認班表無誤 → 點「✅ 完成本月」→ 輸入管理密碼。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">要再修改：點「✅ 已完成本月（點擊取消）」→ 輸入管理密碼，即可解除唯讀。</div></div>
+    <div class="man-note"><strong>💡 差別</strong> 「結束自動排班」只擋自動排班/清空、仍可手動改；「完成本月」是最終定案，<strong>完全唯讀</strong>。兩者狀態都會存本機與雲端，重整後維持。</div>
   </div>
 
   <!-- 10 清空 -->
@@ -777,8 +790,18 @@ let state = {
 };
 let _idCnt = 10;
 let _filterDocId = null;
-const _lockedMonths = new Set(); // "YYYY-M" keys，per-month 鎖
+const _lockedMonths = new Set(); // "YYYY-M" keys，per-month 鎖（結束自動排班：僅擋自動排班/清空，仍可手動改）
 function isCurrentMonthLocked(){ return _lockedMonths.has(`${state.year}-${state.month}`); }
+const _completedMonths = new Set(); // "YYYY-M" keys，完成本月：整月唯讀，任何更動都擋
+function isCurrentMonthCompleted(){ return _completedMonths.has(`${state.year}-${state.month}`); }
+// 完成後擋下任何改動；回傳 true 表示已被擋
+function blockIfCompleted(){
+  if(isCurrentMonthCompleted()){
+    showToast('✅ 本月已完成，班表已鎖定唯讀。如需修改請先按「完成本月」取消。','warn');
+    return true;
+  }
+  return false;
+}
 let _undoStack = [];
 let _redoStack = [];
 function pushUndo(){
@@ -788,6 +811,7 @@ function pushUndo(){
   updateUndoBtn(); updateRedoBtn();
 }
 function undoLast(){
+  if(blockIfCompleted()) return;
   if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法還原','warn');return;}
   if(!_undoStack.length){showToast('沒有可還原的操作','warn');return;}
   if(!confirm('確定還原到上一個狀態？')) return;
@@ -799,6 +823,7 @@ function undoLast(){
   showToast('✅ 已還原','ok'); updateUndoBtn(); updateRedoBtn();
 }
 function redoLast(){
+  if(blockIfCompleted()) return;
   if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法重做','warn');return;}
   if(!_redoStack.length){showToast('沒有可重做的操作','warn');return;}
   if(!confirm('確定重做？')) return;
@@ -816,6 +841,27 @@ function updateLockBtn(){
   b.textContent=locked?'🔒 已鎖定（點擊解鎖）':'🔓 結束自動排班';
   b.style.background=locked?'#7f1d1d':'#c0392b';
   b.style.outline=locked?'3px solid #fca5a5':'none';
+}
+function updateCompleteBtn(){
+  const b=document.getElementById('btn-complete-month');
+  if(!b) return;
+  const done=isCurrentMonthCompleted();
+  b.textContent=done?'✅ 已完成本月（點擊取消）':'✅ 完成本月';
+  b.style.background=done?'#1b5e20':'#2e7d32';
+  b.style.outline=done?'3px solid #a5d6a7':'none';
+}
+function completeMonth(){
+  const done=isCurrentMonthCompleted();
+  const pwd=prompt(done
+    ?`本月已完成（唯讀），請輸入密碼以取消完成 ${state.year}年${state.month+1}月：`
+    :`請輸入密碼以完成 ${state.year}年${state.month+1}月（完成後班表將唯讀，無法再改動）：`);
+  if(pwd===null) return;
+  if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
+  const key=`${state.year}-${state.month}`;
+  if(done){ _completedMonths.delete(key); showToast(`🔓 ${state.year}年${state.month+1}月 已取消完成，可再編輯`,'ok'); }
+  else { _completedMonths.add(key); showToast(`✅ ${state.year}年${state.month+1}月 已完成，班表唯讀`,'ok'); }
+  updateCompleteBtn();
+  autoSave();
 }
 function updateUndoBtn(){
   const b=document.getElementById('btn-undo');
@@ -905,6 +951,11 @@ function getFirstThirdThursdays(y,m){
 // SLOT / SHIFT HELPERS
 // ============================================================
 const SLOTS = ['主白','早班','小夜','大夜'];
+const SPLIT_OPTS = [16,17,18,20]; // 可選切割點（取消 19:00）
+// 特殊額外項目：手動加入、不計點值/總時數，另外統計
+const SPECIAL_EXTRAS = [{id:'__yangtian',name:'楊天'},{id:'__icu',name:'ICU'}];
+function isSpecialExtraId(id){ return SPECIAL_EXTRAS.some(s=>s.id===id); }
+function specialExtraName(id){ const s=SPECIAL_EXTRAS.find(x=>x.id===id); return s?s.name:null; }
 
 function slotRange(slot, split){
   switch(slot){
@@ -1368,7 +1419,7 @@ function bestSplitForPair(earlyId, lateId, date, sched){
   // (already handled by canWork absolute prohibition — not split-dependent)
 
   let bestSp = state.defaultSplit, bestSc = -Infinity;
-  for(let sp=16; sp<=20; sp++){
+  for(const sp of SPLIT_OPTS){
     const earlyH = sp - 8;   // 早班 hours
     const lateH  = 26 - sp;  // 小夜 hours
     let sc = 0;
@@ -1395,12 +1446,13 @@ function bestSplitForPair(earlyId, lateId, date, sched){
 // AUTO-SCHEDULE
 // ============================================================
 function autoSchedule(){
+  if(blockIfCompleted()) return;
   if(isCurrentMonthLocked()){
     const pwd=prompt(`本月班表已鎖定，請輸入密碼以解鎖並重新自動排班：`);
     if(pwd===null) return;
     if(pwd!=='0320'){showToast('❌ 密碼錯誤','warn');return;}
     _lockedMonths.delete(`${state.year}-${state.month}`);
-    updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+    updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
     autoSave();
   }
   if(!window.__skipConfirm && !confirm('確定要自動排班？這將覆蓋本月班表。')) return;
@@ -1439,6 +1491,9 @@ function _generateOnce(y,m,dates){
       for(const sl of SLOTS) if(!(sl in newSched[d])) newSched[d][sl]=null;
     } else {
       newSched[d]={split:existing.split||state.defaultSplit, 主白:null, 早班:null, 小夜:null, 大夜:null};
+      // 保留手動加入的額外醫師/特殊項目(楊天/ICU)與當日備註，自動排班不清除
+      if(existing.extras&&existing.extras.length) newSched[d].extras=existing.extras.map(e=>({...e}));
+      if(existing.note) newSched[d].note=existing.note;
     }
   }
 
@@ -1845,15 +1900,16 @@ function renderCalendar(){
 
     for(const ex of (ds.extras||[])){
       if(!ex.docId) continue;
-      const doc=state.doctors.find(d=>d.id===ex.docId);
-      if(!doc) continue;
+      const disp=extraDisplay(ex.docId);
+      if(!disp) continue;
       const exRow=document.createElement('div');
       exRow.className='shift-row';
       const isDimmedEx=_filterDocId&&ex.docId!==_filterDocId;
       const isHighEx=_filterDocId&&ex.docId===_filterDocId;
       const dimSt=isDimmedEx?'opacity:0.12;':'';
-      const hlSt=isHighEx?`box-shadow:0 0 0 2px ${doc.color};`:'';
-      exRow.innerHTML=`<span class="slot-tag" style="background:#78909c;color:#fff;font-size:9px;padding:1px 4px">加</span><span class="shift-doc" style="background:${doc.color}18;border:1px solid ${doc.color}60;color:${doc.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${ex.timeRange||'?'}</span></span>`;
+      const hlSt=isHighEx?`box-shadow:0 0 0 2px ${disp.color};`:'';
+      const tagLabel=disp.special?'選':'加';
+      exRow.innerHTML=`<span class="slot-tag" style="background:${disp.special?'#546e7a':'#78909c'};color:#fff;font-size:9px;padding:1px 4px">${tagLabel}</span><span class="shift-doc" style="background:${disp.color}18;border:1px solid ${disp.color}60;color:${disp.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${disp.name}</span><span class="doc-time">${ex.timeRange||'?'}</span></span>`;
       cell.appendChild(exRow);
     }
 
@@ -1863,6 +1919,14 @@ function renderCalendar(){
       prow.className='pr-badge-row';
       prow.innerHTML=prs.map(pr=>`<span class="pr-badge">${getDocName(pr.docId)}:${prShortLabel(pr)}</span>`).join('');
       cell.appendChild(prow);
+    }
+
+    if(ds.note){
+      const nrow=document.createElement('div');
+      nrow.className='day-note-row';
+      nrow.title=ds.note;
+      nrow.textContent='📌 '+ds.note;
+      cell.appendChild(nrow);
     }
 
     cell.addEventListener('click',()=>openDayModal(dateStr));
@@ -1883,6 +1947,7 @@ function openDayModal(dateStr){
     主白:ds['主白']||null, 早班:ds['早班']||null, 小夜:ds['小夜']||null, 大夜:ds['大夜']||null,
     customTimes:ds.customTimes?{...ds.customTimes}:{},
     extras:(ds.extras||[]).map(e=>({...e})),
+    note:ds.note||'',
     locked:!!(state.lockedDays&&state.lockedDays.has(dateStr))
   };
   const[y,mo,d]=dateStr.split('-').map(Number);
@@ -1907,7 +1972,7 @@ function _renderDayDraft(){
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px">
     <strong>當日切割點：</strong>
     <select onchange="_draftSplit(parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
-      ${[16,17,18,19].map(h=>`<option value="${h}"${h===sp?' selected':''}>${h}:00</option>`).join('')}
+      ${SPLIT_OPTS.map(h=>`<option value="${h}"${h===sp?' selected':''}>${h}:00</option>`).join('')}
     </select>
     <span style="color:#888">早班結束 / 小夜開始</span>
   </div>
@@ -1940,13 +2005,15 @@ function _renderDayDraft(){
   if(extras.length){
     html+=`<table class="day-slot-table"><thead><tr><th>時間 (HH-HH)</th><th>時數</th><th>點值</th><th>指派醫師</th><th></th></tr></thead><tbody>`;
     for(const ex of extras){
+      const exIsSpecial=isSpecialExtraId(ex.docId);
       const exH=customTimeHours(ex.timeRange);
       const exPts=ex.timeRange?calcCustomPoints(ex.timeRange,dateStr):0;
       const exOpts=`<option value=""${!ex.docId?' selected':''}>-- 選醫師 --</option>`+
-        state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===ex.docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
+        state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===ex.docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('')+
+        `<optgroup label="特殊（不計點值/時數）">`+SPECIAL_EXTRAS.map(s=>`<option value="${s.id}"${s.id===ex.docId?' selected':''}>${s.name}</option>`).join('')+`</optgroup>`;
       html+=`<tr>
         <td><input id="eti-${ex.id}" type="text" value="${ex.timeRange||''}" placeholder="08-16" style="width:68px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px" onblur="_draftExtraTime('${ex.id}',this.value)"></td>
-        <td id="exhrs-${ex.id}">${exH?exH+'h':'-'}</td><td id="expts-${ex.id}">${ex.timeRange?exPts:'-'}</td>
+        <td id="exhrs-${ex.id}">${exH?exH+'h':'-'}</td><td id="expts-${ex.id}">${exIsSpecial?'—':(ex.timeRange?exPts:'-')}</td>
         <td><select id="eds-${ex.id}" style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftExtraDoc('${ex.id}',this.value)">${exOpts}</select></td>
         <td><button onclick="_draftRemoveExtra('${ex.id}')" style="background:#ffebee;border:1px solid #ef9a9a;color:#c62828;border-radius:3px;padding:1px 7px;cursor:pointer;font-size:12px">✕</button></td>
       </tr>`;
@@ -1957,6 +2024,12 @@ function _renderDayDraft(){
   }
   html+=`</div>`;
 
+  // 當日備註（行政事務）
+  html+=`<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee">
+    <div style="font-size:12px;font-weight:700;margin-bottom:4px">📌 當日備註 <span style="font-weight:400;color:#999">（行政事務，可留空）</span></div>
+    <textarea id="day-note" rows="2" style="width:100%;font-size:12px;padding:5px 7px;border:1px solid #ddd;border-radius:4px;resize:vertical;box-sizing:border-box" placeholder="例：當日晨會、器材檢查、教學活動…" oninput="_draftNote(this.value)">${(ds.note||'').replace(/</g,'&lt;')}</textarea>
+  </div>`;
+
   const prs=state.preRequests[dateStr]||[];
   if(prs.length) html+=`<div style="margin-top:6px"><strong style="font-size:12px">📝 預假/預班：</strong><br>${prs.map(pr=>`<span class="pr-badge">${getDocName(pr.docId)}: ${prLabel(pr)}${pr.note?' ('+pr.note+')':''}</span> `).join('')}</div>`;
 
@@ -1965,6 +2038,7 @@ function _renderDayDraft(){
 
 // Draft mutation helpers — no immediate save, no rule enforcement
 function _draftToggleLock(){ _dayDraft.locked=!_dayDraft.locked; _renderDayDraft(); }
+function _draftNote(val){ if(_dayDraft) _dayDraft.note=val; }
 function _draftSplit(val){ _dayDraft.split=val; _renderDayDraft(); }
 function _draftSlot(slot,docId){ _dayDraft[slot]=docId||null; }
 function _draftSlotTime(slot,val){
@@ -1982,7 +2056,7 @@ function _draftSlotTime(slot,val){
 }
 function _draftAddExtra(){ _dayDraft.extras.push({id:'ex_'+Date.now(),docId:'',timeRange:''}); _renderDayDraft(); }
 function _draftRemoveExtra(id){ _dayDraft.extras=_dayDraft.extras.filter(e=>e.id!==id); _renderDayDraft(); }
-function _draftExtraDoc(id,docId){ const ex=_dayDraft.extras.find(e=>e.id===id); if(ex) ex.docId=docId; }
+function _draftExtraDoc(id,docId){ const ex=_dayDraft.extras.find(e=>e.id===id); if(ex) ex.docId=docId; _renderDayDraft(); }
 function _draftExtraTime(id,val){
   // 不重繪整個 modal
   val=(val||'').trim();
@@ -1990,11 +2064,13 @@ function _draftExtraTime(id,val){
   ex.timeRange=val;
   const exH=customTimeHours(val); const exPts=val?calcCustomPoints(val,_dayDraftDate):0;
   const h=document.getElementById('exhrs-'+id); const p=document.getElementById('expts-'+id);
-  if(h) h.textContent=exH?exH+'h':'-'; if(p) p.textContent=val?exPts:'-';
+  if(h) h.textContent=exH?exH+'h':'-';
+  if(p) p.textContent=isSpecialExtraId(ex.docId)?'—':(val?exPts:'-');
 }
 
 function confirmDayModal(){
   if(!_dayDraftDate||!_dayDraft) return;
+  if(isCurrentMonthCompleted()){showToast('✅ 本月已完成，班表唯讀，無法儲存變更','warn');closeModal('day-modal');_dayDraft=null;_dayDraftDate=null;return;}
   // 防禦性補讀 DOM（處理 blur 尚未觸發的輸入框）
   for(const slot of SLOTS){
     const inp=document.getElementById('ti-'+slot);
@@ -2011,6 +2087,7 @@ function confirmDayModal(){
     const inp=document.getElementById('eti-'+ex.id); if(inp) ex.timeRange=inp.value.trim();
     const sel=document.getElementById('eds-'+ex.id); if(sel) ex.docId=sel.value||'';
   });
+  const noteEl=document.getElementById('day-note'); if(noteEl) _dayDraft.note=noteEl.value;
   pushUndo();
   if(!state.schedule[_dayDraftDate]) state.schedule[_dayDraftDate]={};
   const ds=state.schedule[_dayDraftDate];
@@ -2020,6 +2097,8 @@ function confirmDayModal(){
   else delete ds.customTimes;
   if(_dayDraft.extras.length) ds.extras=_dayDraft.extras.map(e=>({...e}));
   else delete ds.extras;
+  if(_dayDraft.note&&_dayDraft.note.trim()) ds.note=_dayDraft.note.trim();
+  else delete ds.note;
   if(!state.lockedDays) state.lockedDays=new Set();
   if(_dayDraft.locked) state.lockedDays.add(_dayDraftDate);
   else state.lockedDays.delete(_dayDraftDate);
@@ -2084,6 +2163,7 @@ function checkConstraints(dateStr){
 // ============================================================
 function toggleHol(dateStr,e){
   e.stopPropagation();
+  if(blockIfCompleted()) return;
   if(state.holidays.has(dateStr)){
     if(!confirm(`確定要取消 ${dateStr} 的自訂假日嗎？`)) return;
     state.holidays.delete(dateStr);
@@ -2724,6 +2804,28 @@ function renderStats(){
   document.getElementById('stats-violations').innerHTML=viols.length
     ?`<div class="alert alert-warn"><strong>違規事項：</strong><br>${viols.map(v=>`• ${v}`).join('<br>')}</div>`
     :`<div class="alert alert-ok">✅ 所有限制條件均符合</div>`;
+
+  // 特殊項目（楊天/ICU）另外統計：班次數與時數，不計入點值/總時數
+  renderSpecialTally(dates);
+}
+
+// 特殊額外項目（楊天/ICU）獨立統計
+function renderSpecialTally(dates){
+  const el=document.getElementById('stats-special'); if(!el) return;
+  const tally={};
+  for(const s of SPECIAL_EXTRAS) tally[s.id]={cnt:0,hrs:0};
+  for(const d of dates){
+    const ds=state.schedule[d]||{};
+    for(const ex of (ds.extras||[])){
+      if(!isSpecialExtraId(ex.docId)) continue;
+      tally[ex.docId].cnt++;
+      tally[ex.docId].hrs+=customTimeHours(ex.timeRange||'');
+    }
+  }
+  const anyData=SPECIAL_EXTRAS.some(s=>tally[s.id].cnt>0);
+  if(!anyData){ el.innerHTML=''; return; }
+  const cells=SPECIAL_EXTRAS.map(s=>`<span style="display:inline-block;margin-right:16px"><strong style="color:#546e7a">${s.name}</strong>：${tally[s.id].cnt} 班 / ${tally[s.id].hrs} 小時</span>`).join('');
+  el.innerHTML=`<div class="alert" style="background:#eceff1;border:1px solid #b0bec5;color:#37474f;padding:8px 12px;border-radius:6px;font-size:13px"><strong>📋 特殊項目統計（不計點值/總時數）：</strong><br>${cells}</div>`;
 }
 
 // ============================================================
@@ -3042,7 +3144,15 @@ function pvRenderPRList(){
 // ============================================================
 // HELPERS
 // ============================================================
-function getDocName(id){const d=state.doctors.find(x=>x.id===id);return d?d.name:'未知';}
+function getDocName(id){const d=state.doctors.find(x=>x.id===id);if(d)return d.name;const s=specialExtraName(id);return s||'未知';}
+// 額外項目顯示資訊（含特殊項目 楊天/ICU）
+function extraDisplay(id){
+  const doc=state.doctors.find(x=>x.id===id);
+  if(doc) return {name:doc.name,color:doc.color,special:false};
+  const sn=specialExtraName(id);
+  if(sn) return {name:sn,color:'#546e7a',special:true};
+  return null;
+}
 
 function showToast(msg,type='ok'){
   let t=document.getElementById('_toast');
@@ -3062,7 +3172,7 @@ function changeMonth(delta){
   if(state.month>11){state.month=0;state.year++;}
   persistViewMonth(); // 檢視月份只存本機，不推雲端（避免多裝置互搶畫面）
   renderCalendar();
-  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+  updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
 }
 
 // 只把目前檢視的年月寫入 localStorage，不觸發雲端同步
@@ -3103,7 +3213,7 @@ function _gotoMonth(y,m){
   state.year=y; state.month=m;
   document.getElementById('month-picker').style.display='none';
   persistViewMonth(); renderCalendar();
-  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+  updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
 }
 function switchTab(name){
   const names=['schedule','doctors','prereq','stats','manual','personal'];
@@ -3116,6 +3226,7 @@ function switchTab(name){
   if(name==='personal') renderPersonalTab();
 }
 function finishAutoSchedule(){
+  if(blockIfCompleted()) return;
   const locked=isCurrentMonthLocked();
   const pwd=prompt(locked
     ?`本月已鎖定，請輸入密碼以解鎖 ${state.year}年${state.month+1}月：`
@@ -3130,11 +3241,12 @@ function finishAutoSchedule(){
     _lockedMonths.add(key);
     showToast(`🔒 ${state.year}年${state.month+1}月 已鎖定`,'ok');
   }
-  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+  updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
   autoSave();
 }
 
 function clearSchedule(){
+  if(blockIfCompleted()) return;
   if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法清空','warn');return;}
   const pwd=prompt('請輸入密碼以清空本月排班：');
   if(pwd===null) return;
@@ -3207,19 +3319,20 @@ function applyCloudData(data){
   state.avoidPairs=data.avoidPairs||[];
   if(data.idCnt) _idCnt=data.idCnt;
   _lockedMonths.clear(); (data.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
+  _completedMonths.clear(); (data.completedMonths||[]).forEach(k=>_completedMonths.add(k));
   const sl=document.getElementById('default-split');
   if(sl) sl.value=state.defaultSplit;
   renderCalendar();
   renderDoctorTable();
   renderPRList();
-  updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+  updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
   const statsPane=document.getElementById('tab-stats');
   if(statsPane&&statsPane.classList.contains('active')) renderStats();
   try{ localStorage.setItem(LS_KEY,JSON.stringify({
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
     defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
-    lockedMonths:[..._lockedMonths]
+    lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]
   }));}catch(e){}
 }
 
@@ -3229,7 +3342,7 @@ function cloudSave(){
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
     defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],
-    idCnt:_idCnt,lockedMonths:[..._lockedMonths],_ts:Date.now(),_client:_clientId
+    idCnt:_idCnt,lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths],_ts:Date.now(),_client:_clientId
   };
   _fbRef.set(data)
     .catch(e=>{ showToast('☁️ 雲端儲存失敗: '+e.message,'warn'); });
@@ -3286,7 +3399,7 @@ function autoSave(){
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
       holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
       defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
-      lockedMonths:[..._lockedMonths]};
+      lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
     localStorage.setItem(LS_KEY,JSON.stringify(data));
     const ind=document.getElementById('_autosave_ind');
     if(ind){ind.style.opacity='1';clearTimeout(ind._t);ind._t=setTimeout(()=>ind.style.opacity='0',1500);}
@@ -3310,6 +3423,7 @@ function autoLoad(){
     state.avoidPairs=d.avoidPairs||[];
     if(d.idCnt) _idCnt=d.idCnt;
     _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
+    _completedMonths.clear(); (d.completedMonths||[]).forEach(k=>_completedMonths.add(k));
     return true;
   }catch(e){return false;}
 }
@@ -3552,10 +3666,10 @@ function generatePDF(){
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId) continue;
-      const doc=state.doctors.find(x=>x.id===ex.docId); if(!doc) continue;
+      const disp=extraDisplay(ex.docId); if(!disp) continue;
       slotRows+=`<div style="display:flex;align-items:center;gap:2px;margin-bottom:2px;">
-        <span style="width:13px;height:13px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;border-radius:2px;flex-shrink:0;background:#78909c;color:#fff;">加</span>
-        <span style="flex:1;font-size:9px;padding:1px 3px;border-radius:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:${doc.color}22;border:1px solid ${doc.color}66;color:${doc.color};font-weight:700">${doc.name} <span style="font-size:8px;opacity:0.8">${ex.timeRange||''}</span></span>
+        <span style="width:13px;height:13px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;border-radius:2px;flex-shrink:0;background:${disp.special?'#546e7a':'#78909c'};color:#fff;">${disp.special?'選':'加'}</span>
+        <span style="flex:1;font-size:9px;padding:1px 3px;border-radius:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:${disp.color}22;border:1px solid ${disp.color}66;color:${disp.color};font-weight:700">${disp.name} <span style="font-size:8px;opacity:0.8">${ex.timeRange||''}</span></span>
       </div>`;
     }
     calCells+=`<div style="background:${bg};border:1px solid #ddd;border-radius:3px;padding:3px;min-height:88px;">
@@ -3752,10 +3866,10 @@ function generateMedPDF(){
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId) continue;
-      const doc=state.doctors.find(x=>x.id===ex.docId); if(!doc) continue;
+      const disp=extraDisplay(ex.docId); if(!disp) continue;
       const mm=(ex.timeRange||'').match(/^(\d{1,2})-(\d{1,2})$/);
       const t=mm?`${String(mm[1]).padStart(2,'0')}-${String(mm[2]).padStart(2,'0')}`:ex.timeRange||'';
-      rows+=`<div class="dr"><span class="dn">${doc.name}</span><span class="dt">(${t})</span></div>`;
+      rows+=`<div class="dr"><span class="dn">${disp.name}</span><span class="dt">(${t})</span></div>`;
     }
 
     cells+=`<div class="dc${wknd?' wknd':''}">
@@ -3847,7 +3961,7 @@ window.onload=()=>{
     const splitEl=document.getElementById('default-split');
     if(splitEl) splitEl.value=state.defaultSplit;
     renderCalendar();
-    updateLockBtn(); updateUndoBtn(); updateRedoBtn();
+    updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
     if(restored) showToast('已自動還原上次排班資料');
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
