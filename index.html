@@ -184,6 +184,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 #stats-table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);min-width:900px;font-size:11px;}
 #stats-table th{background:#1a4a7a;color:#fff;padding:6px 8px;text-align:center;white-space:nowrap;}
 #stats-table th.sub-hd{background:#2980b9;}
+.rate-tag{display:inline-block;font-size:10px;font-weight:800;background:rgba(0,0,0,.14);border-radius:4px;padding:0 4px;margin-left:2px;}
 #stats-table td{padding:5px 8px;border-bottom:1px solid #eee;text-align:center;}
 #stats-table tr:hover td{background:#f5f9ff;}
 .alert{padding:7px 12px;border-radius:4px;margin-bottom:7px;font-size:12px;}
@@ -425,16 +426,21 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
             <th rowspan="2">最長連班</th>
           </tr>
           <tr>
-            <th class="sub-hd" style="background:#bbdefb;color:#0d47a1">平日H</th>
-            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H</th>
-            <th class="sub-hd" style="background:#b2dfdb;color:#004d40">平日H</th>
-            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H</th>
-            <th class="sub-hd" style="background:#ce93d8;color:#4a148c">平日H</th>
-            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H</th>
+            <th class="sub-hd" style="background:#bbdefb;color:#0d47a1">平日H <span class="rate-tag">×1</span></th>
+            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H <span class="rate-tag">×1.2</span></th>
+            <th class="sub-hd" style="background:#b2dfdb;color:#004d40">平日H <span class="rate-tag">×1.2</span></th>
+            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H <span class="rate-tag">×1.4</span></th>
+            <th class="sub-hd" style="background:#ce93d8;color:#4a148c">平日H <span class="rate-tag">×1.6</span></th>
+            <th class="sub-hd" style="background:#ffe0b2;color:#bf360c">假日H <span class="rate-tag">×1.8</span></th>
           </tr>
         </thead>
         <tbody id="stats-tbody"></tbody>
       </table>
+    </div>
+    <div style="margin-top:8px;background:#f8fafc;border:1px solid #e3e8ef;border-radius:6px;padding:8px 12px;font-size:12px;color:#445">
+      <strong style="color:#1a4a7a">點值說明（每小時）：</strong>
+      08-16 平日 <b>1</b> ／ 假日 <b>1.2</b>　｜　16-02 平日 <b>1.2</b> ／ 假日 <b>1.4</b>　｜　02-08 平日 <b>1.6</b> ／ 假日 <b>1.8</b>
+      <div style="margin-top:4px;color:#777;font-size:11px">※ 08-16、16-02 以班次當日是否假日認定；<b>02-08 只要「當日」或「隔天」為假日就算假日</b>（含自訂假日）。例：週五 20-08 ＝ 1.2×6 ＋ 1.8×6 ＝ 18。</div>
     </div>
     <div id="stats-special" style="margin-top:10px;"></div>
     <div id="stats-violations" style="margin-top:10px;"></div>
@@ -733,10 +739,15 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
       <tbody>
         <tr><td>08:00 – 16:00</td><td>1.0</td><td>1.2</td></tr>
         <tr><td>16:00 – 02:00</td><td>1.2</td><td>1.4</td></tr>
-        <tr><td>02:00 – 08:00</td><td>1.6</td><td>2.0</td></tr>
+        <tr><td>02:00 – 08:00</td><td>1.6</td><td><strong>1.8</strong></td></tr>
       </tbody>
     </table>
-    <div class="man-note"><strong>💡 假日判斷</strong> 以班表上的指定日期為準（非每小時判斷）。例如週日 20:00 的大夜班雖上到週一 08:00，整班仍以假日計算。</div>
+    <h4>假日判斷</h4>
+    <ul>
+      <li><strong>08-16、16-02</strong>：以班表上的指定日期是否假日為準。例如週日 20:00 的大夜班，其 20:00–02:00 部分以假日計算。</li>
+      <li><strong>02-08</strong>：只要<strong>班次當日</strong>或<strong>隔天</strong>其中一天是假日，即以假日計算（<strong>自訂假日同樣適用</strong>）。</li>
+    </ul>
+    <div class="man-note"><strong>💡 範例</strong> 週五 20-08 的大夜班：20:00–02:00 共 6 小時屬平日（1.2），02:00–08:00 落在週六（假日）共 6 小時屬假日（1.8），合計 1.2×6 ＋ 1.8×6 ＝ <strong>18 點</strong>。</div>
   </div>
 
   <!-- 附錄B 排班規則 -->
@@ -1096,16 +1107,25 @@ function slotTimeStr(slot, split){
 
 function slotHours(slot, split){ return slotRange(slot,split).h; }
 
+// ===== 點值費率（每小時）與時段假日判定 =====
+const RATE={w816:1.0,h816:1.2,w1602:1.2,h1602:1.4,w028:1.6,h028:1.8};
+function _hourZone(ah){ return (ah>=8&&ah<16)?'816':((ah>=2&&ah<8)?'028':'1602'); }
+// 08-16 / 16-02：依「班次所在日期」判假日
+// 02-08　　　：班次當日為假日，或該時段實際落在的日期(跨夜=隔天)為假日，即算假日
+function _zoneIsHol(zone,h,holToday,holNext){
+  if(zone==='028') return holToday || (h>=24 && holNext);
+  return holToday;
+}
+function _hourRate(h,holToday,holNext){
+  const z=_hourZone(h%24);
+  return RATE[(_zoneIsHol(z,h,holToday,holNext)?'h':'w')+z];
+}
+
 function calcSlotPoints(slot, split, startDate){
   const {s,e}=slotRange(slot,split);
-  const isHol=isHoliday(startDate); // 以班次所在日期決定假/平日，不依實際小時跨日
+  const holToday=isHoliday(startDate), holNext=isHoliday(addDays(startDate,1));
   let pts=0;
-  for(let h=s;h<e;h++){
-    const ah=h%24;
-    if(ah>=2&&ah<8)       pts+=isHol?2.0:1.6;
-    else if(ah>=8&&ah<16) pts+=isHol?1.2:1.0;
-    else                   pts+=isHol?1.4:1.2;
-  }
+  for(let h=s;h<e;h++) pts+=_hourRate(h,holToday,holNext);
   return Math.round(pts*10)/10;
 }
 
@@ -1359,14 +1379,9 @@ function calcCustomPoints(timeRange,dateStr){
   if(!m) return 0;
   let s=parseInt(m[1]),e=parseInt(m[2]);
   if(e<=s) e+=24;
-  const isHol=isHoliday(dateStr); // 以班次所在日期決定假/平日
+  const holToday=isHoliday(dateStr), holNext=isHoliday(addDays(dateStr,1));
   let pts=0;
-  for(let h=s;h<e;h++){
-    const ah=h%24;
-    if(ah>=2&&ah<8) pts+=isHol?2.0:1.6;
-    else if(ah>=8&&ah<16) pts+=isHol?1.2:1.0;
-    else pts+=isHol?1.4:1.2;
-  }
+  for(let h=s;h<e;h++) pts+=_hourRate(h,holToday,holNext);
   return Math.round(pts*10)/10;
 }
 function slotTimeEdit(slot,split,customTimes){
@@ -2850,12 +2865,12 @@ function prShortLabel(pr){
 // STATISTICS
 // ============================================================
 // 將班次拆解為各時段(08-16/16-02/02-08)的平日/假日時數
-function _addZone(stat, startH, endH, isHol){
-  for(let i=startH;i<endH;i++){
-    const ah=i%24;
-    if(ah>=8&&ah<16)      isHol?stat.h816++:stat.w816++;
-    else if(ah>=2&&ah<8)  isHol?stat.h028++:stat.w028++;
-    else                   isHol?stat.h1602++:stat.w1602++;
+// 時數分類與點值採同一套假日判定（02-08 含「假日前一天」）
+function _addZone(stat, startH, endH, dateStr){
+  const holToday=isHoliday(dateStr), holNext=isHoliday(addDays(dateStr,1));
+  for(let h=startH;h<endH;h++){
+    const z=_hourZone(h%24);
+    stat[(_zoneIsHol(z,h,holToday,holNext)?'h':'w')+z]++;
   }
 }
 
@@ -2880,11 +2895,11 @@ function renderStats(){
       if(ct){
         const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
         let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
-        _addZone(s,sh,eh,hol);
+        _addZone(s,sh,eh,dateStr);
         s.pts+=calcCustomPoints(ct,dateStr);
       } else {
         const{s:sh,e:eh}=slotRange(slot,sp);
-        _addZone(s,sh,eh,hol);
+        _addZone(s,sh,eh,dateStr);
         s.pts+=calcSlotPoints(slot,sp,dateStr);
       }
       // 轉班: 大夜→白班 或 白班→大夜
@@ -2901,7 +2916,7 @@ function renderStats(){
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
-      _addZone(s,sh,eh,isHoliday(dateStr));
+      _addZone(s,sh,eh,dateStr);
       s.pts+=calcCustomPoints(ex.timeRange,dateStr);
       s.cnt++;
     }
@@ -3713,10 +3728,10 @@ function exportDoctorHoursCSV(){
       if(ct){
         const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
         let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
-        _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ct,dateStr);
+        _addZone(s,sh,eh,dateStr); s.pts+=calcCustomPoints(ct,dateStr);
       } else {
         const{s:sh,e:eh}=slotRange(slot,sp);
-        _addZone(s,sh,eh,hol); s.pts+=calcSlotPoints(slot,sp,dateStr);
+        _addZone(s,sh,eh,dateStr); s.pts+=calcSlotPoints(slot,sp,dateStr);
       }
     }
     for(const ex of (ds.extras||[])){
@@ -3725,7 +3740,7 @@ function exportDoctorHoursCSV(){
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
-      _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
+      _addZone(s,sh,eh,dateStr); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
     }
   }
   const rows=[['醫師','白班(8-16)','小夜(16-02)','大夜(02-08)','總時數','點值','班次數']];
@@ -3909,10 +3924,10 @@ function generatePDF(){
       if(ct2){
         const mm=ct2.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
         let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
-        _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ct2,dateStr);
+        _addZone(s,sh,eh,dateStr); s.pts+=calcCustomPoints(ct2,dateStr);
       } else {
         const{s:sh,e:eh}=slotRange(slot,sp);
-        _addZone(s,sh,eh,hol); s.pts+=calcSlotPoints(slot,sp,dateStr);
+        _addZone(s,sh,eh,dateStr); s.pts+=calcSlotPoints(slot,sp,dateStr);
       }
       if(s.lastSlot&&((s.lastSlot==='大夜'&&(slot==='主白'||slot==='早班'))||((s.lastSlot==='主白'||s.lastSlot==='早班')&&slot==='大夜'))) s.shifts++;
       s.lastSlot=slot;
@@ -3923,7 +3938,7 @@ function generatePDF(){
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
-      _addZone(s,sh,eh,hol); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
+      _addZone(s,sh,eh,dateStr); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
     }
   }
   for(const doc of state.doctors){
