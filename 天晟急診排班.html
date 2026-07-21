@@ -672,10 +672,9 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
     <div class="man-note danger"><strong>⚠ 重要</strong> 自動排班會覆蓋本月現有班表，操作前請確認。</div>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">確認假日設定、預假預班、醫師偏好已設定完畢。</div></div>
     <div class="man-step"><div class="man-sn">2</div><div class="man-sb">點「⚡ 自動排班」。若已鎖定，輸入管理密碼（請洽主管）解鎖。</div></div>
-    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">確認覆蓋提示，系統自動排班 3 次並取品質最佳的一次填入班表。</div></div>
-    <div class="man-step"><div class="man-sn">4</div><div class="man-sb">排班表上方會顯示「⭐ 排班品質評分」橫幅（0–100 分），包含空缺數、時數/點值公平度、轉班次數、連班超標等指標。</div></div>
-    <div class="man-step"><div class="man-sn">5</div><div class="man-sb">至統計報表確認結果，如有需要可手動微調個別日期。</div></div>
-    <div class="man-note"><strong>💡 提示</strong> 自動排班後可用「↩ 還原」回到排班前的狀態。分數不理想時可再按一次自動排班重抽。</div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">確認覆蓋提示，系統自動排班 10 次並取最佳的一次填入班表。</div></div>
+    <div class="man-step"><div class="man-sn">4</div><div class="man-sb">至統計報表確認結果，如有需要可手動微調個別日期。</div></div>
+    <div class="man-note"><strong>💡 提示</strong> 自動排班後可用「↩ 還原」回到排班前的狀態。結果不理想時可再按一次自動排班重抽。</div>
   </div>
 
   <!-- 9 鎖定 -->
@@ -1604,11 +1603,10 @@ function autoSchedule(){
   autoSave();
   renderCalendar();
   switchTab('schedule');
-  showQualityBanner(bestEval,RUNS);
   const empty=countEmpty(best);
   showToast(empty>0
-    ?`排班完成（品質 ${bestEval.score}/100），但有 ${empty} 個空缺，請手動補填。`
-    :`✅ 自動排班完成！品質評分 ${bestEval.score}/100`,empty>0?'warn':'ok');
+    ?`排班完成，但有 ${empty} 個空缺，請手動補填。`
+    :'✅ 自動排班完成！',empty>0?'warn':'ok');
 }
 
 function _generateOnce(y,m,dates){
@@ -1917,27 +1915,6 @@ function evaluateSchedule(sched,dates){
   score-=under135*0.4;
   score=Math.max(0,Math.round(score));
   return {score,empty,hSd:Math.round(hSd*10)/10,pSd:Math.round(pSd*10)/10,turnTotal,consecViol};
-}
-
-function showQualityBanner(ev,runs){
-  let el=document.getElementById('quality-banner');
-  if(!el){
-    el=document.createElement('div');
-    el.id='quality-banner';
-    const pane=document.getElementById('tab-schedule');
-    pane.insertBefore(el,pane.firstChild);
-  }
-  const color=ev.score>=85?'#27ae60':(ev.score>=70?'#e67e22':'#c0392b');
-  el.innerHTML=`<div style="background:#fff;border-left:5px solid ${color};border-radius:6px;padding:8px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px">
-    <strong style="font-size:15px;color:${color}">⭐ 排班品質 ${ev.score}/100</strong>
-    <span style="color:#666">（自動從 ${runs} 次排班中取最佳）</span>
-    <span>空缺 <strong>${ev.empty}</strong></span>
-    <span>時數差距 σ=<strong>${ev.hSd}h</strong></span>
-    <span>點值差距 σ=<strong>${ev.pSd}</strong></span>
-    <span>總轉班 <strong>${ev.turnTotal}</strong> 次</span>
-    <span>連班超標 <strong>${ev.consecViol}</strong> 天</span>
-    <button onclick="this.closest('#quality-banner').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#999;font-size:14px">✕</button>
-  </div>`;
 }
 
 function shuffle(arr){
