@@ -34,6 +34,14 @@ body.board-mode #ms-monthbar{display:flex;}
 body.board-mode #mobile-schedule{padding-bottom:100px;}
 /* 看板檢視時隱藏頂部月份切換與班別圖例（改用底部月份列） */
 body.mobile-view [data-board-hide]{display:none !important;}
+/* 看板檢視：標題列壓成單行置中，釋出下方空間 */
+body.mobile-view #header{position:relative;flex-wrap:nowrap;justify-content:center;gap:0;
+  padding:7px 10px;padding-top:calc(7px + env(safe-area-inset-top));}
+body.mobile-view #header h1{flex:none;font-size:16px;white-space:nowrap;line-height:1.25;}
+body.mobile-view #header #_autosave_ind,
+body.mobile-view #header #_pwa-badge{display:none !important;}
+body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7px;
+  font-size:11px;padding:4px 8px;}
 /* 底部月份選擇（點月份標籤開啟） */
 #ms-mp{display:none;position:fixed;left:0;right:0;bottom:0;z-index:940;background:#fff;
   border-radius:16px 16px 0 0;box-shadow:0 -6px 26px rgba(0,0,0,.3);padding:14px 14px 0 14px;
@@ -121,7 +129,7 @@ body.mobile-view [data-board-hide]{display:none !important;}
 .ms-extra .ms-slot{background:#eceff1;color:#546e7a;}
 .ms-note{margin-top:6px;font-size:12px;color:#7a5b12;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:5px 8px;line-height:1.4;}
 .ms-none{color:#c4cdd8;font-size:13px;text-align:center;padding:8px 0;}
-.ms-monthhint{text-align:center;color:#8a94a6;font-size:12px;margin-bottom:10px;}
+.ms-monthhint{text-align:center;color:#1a4a7a;font-size:15px;font-weight:800;letter-spacing:1px;margin-bottom:10px;}
 .shift-row{display:flex;align-items:center;gap:3px;margin-bottom:3px;min-height:20px;}
 .slot-tag{width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;border-radius:2px;flex-shrink:0;}
 .tag-主白{background:#fff8e1;color:#e65100;border:1px solid #ffcc02;}
@@ -2150,7 +2158,7 @@ function renderMobileSchedule(){
   const todayStr=fmtDate(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
   const filt=_filterDocId;
   const filtName=filt?getDocName(filt):null;
-  let html=filt?`<div class="ms-monthhint">僅顯示 <strong>${filtName}</strong> 的班（點上方「全部」看完整班表）</div>`:'';
+  let html=filt?`<div class="ms-monthhint">${filtName} 的班表</div>`:'';
   let shown=0;
   // 只顯示時間+醫師（不放班別名稱），以左側色條區分班別
   const cell=(slot,timeStr,doc)=>{
