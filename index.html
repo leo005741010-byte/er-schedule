@@ -818,7 +818,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-noday"><label for="pref-noday">不排白班 (不排主白/早班，僅排小夜/大夜)</label></div>
     <div class="check-row" id="wknight-row" style="display:none"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">周一到周四不夜班 (20-08大夜嚴格鎖定，僅周五六日可排) ─ 僅陳孝綱適用</label></div>
-    <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">上班集中 (排班盡量連上一段、連休一段)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">大夜班集中 (大夜盡量連上，避免上1休1上1)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-morningReport"><label for="pref-morningReport">晨會報告 (第1、3週四08:00，需排主白/早班或週三大夜)</label></div>
     <div class="modal-actions">
@@ -1492,7 +1492,9 @@ function scoreDoc(docId, date, slot, sched){
   // 主要拉力：朝「個人目標時數」(平均 + htPref×10) 收斂，權重最強
   const effectiveHtPref0=(doc.prefs.htPref||0)*availScale;
   const targetH0=avg+effectiveHtPref0*10;
-  score+=(targetH0-myH)*3.0;
+  score+=(targetH0-myH)*4.5;
+  // 深度不足加壓：缺超過10h後每小時再+3，確保能突破他人固定偏好加分
+  if(myH<targetH0-10) score+=(targetH0-10-myH)*3;
   // 點值均衡降為次要（僅微調，不得蓋過時數偏好）
   const myPts=calcDocPoints(docId,sched);
   const avgPts=avgPoints(sched);
@@ -1502,12 +1504,17 @@ function scoreDoc(docId, date, slot, sched){
   const last=getLastAssigned(docId,date,sched);
   if(last&&last.slot===slot) score+=5;
   else if(last) score-=3;
-  // 上班集中: bonus if worked yesterday, mild penalty if gap (to cluster shifts)
-  if(doc.prefs.cluster){
-    const yd=addDays(date,-1);
-    const workedYd=SLOTS.some(s=>(sched[yd]||{})[s]===docId);
-    if(workedYd) score+=80;
-    else score-=20;
+  // 大夜班集中 + 全員禁止大夜「上1休1上1」交替
+  if(slot==='大夜'){
+    const nAt=off=>{const ds2=sched[addDays(date,off)];return !!(ds2&&ds2['大夜']===docId);};
+    const ydN=nAt(-1), d2N=nAt(-2), tmN=nAt(1), t2N=nAt(2);
+    // 任何人：排這格會形成「大夜-休-大夜」交替 → 重罰（需蓋過大夜+2偏好等加分）
+    if(!ydN&&!tmN&&(d2N||t2N)) score-=400;
+    // 勾選大夜集中者：與相鄰大夜相連給高分，孤立大夜輕罰
+    if(doc.prefs.cluster){
+      if(ydN||tmN) score+=90;
+      else score-=15;
+    }
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
@@ -1986,11 +1993,22 @@ function evaluateSchedule(sched,dates){
     if(rec.consecMax>maxC) consecViol+=rec.consecMax-maxC;
     if(rec.h<135&&offDays<=10) under135+=135-rec.h; // 預假多者不重罰
   }
+  // 大夜「上1休1上1」交替：任一醫師 大夜(d)、休(d+1)、大夜(d+2) 記一次
+  let altNight=0;
+  for(const doc of full){
+    for(let i=0;i<dates.length-2;i++){
+      const n0=(sched[dates[i]]||{})['大夜']===doc.id;
+      const n1=(sched[dates[i+1]]||{})['大夜']===doc.id;
+      const n2=(sched[dates[i+2]]||{})['大夜']===doc.id;
+      if(n0&&!n1&&n2) altNight++;
+    }
+  }
   const hSd=full.length?tgtDev/full.length:0; // 平均偏離個人目標
   let score=100;
   score-=empty*8;
   score-=hSd*2.0;
   score-=pSd*0.4;
+  score-=altNight*50;
   score-=turnExcess*40;
   score-=turnTotal*1.5;
   score-=consecViol*8;
@@ -2512,7 +2530,7 @@ function renderDoctorTable(){
       <td>${levelStr(p.hol)}</td>
       <td>${levelStr(p.htPref)} <span style="font-size:10px;color:#999">${p.htPref?((p.htPref>0?'+':'-')+Math.abs(p.htPref*10)+'h'):''}</span></td>
       <td>${p.maxConsec}天</td>
-      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'不平夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'不平夜':'',p.cluster?'夜集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
         <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
         <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
@@ -3356,7 +3374,7 @@ function initPersonalView(encoded){
         <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">特殊選項</div>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-long" ${pvState.prefs.long?'checked':''}> 偏好長班(&gt;10h)</label>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-wkNight" ${pvState.prefs.wkNight?'checked':''}> 週末夜班</label>
-        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-cluster" ${pvState.prefs.cluster?'checked':''}> 上班集中</label>
+        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-cluster" ${pvState.prefs.cluster?'checked':''}> 大夜班集中</label>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-medMeeting" ${pvState.prefs.medMeeting?'checked':''}> 醫務會議</label>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-morningReport" ${pvState.prefs.morningReport?'checked':''}> 晨會報告</label>
       </div>
