@@ -1439,9 +1439,22 @@ function avgPoints(sched){
   return full.reduce((s,d)=>s+calcDocPoints(d.id,sched),0)/full.length;
 }
 
+// 取得 firstDate 之前（即上個月以前）該醫師最後上的班別，作為跨月轉班的起點
+function lastSlotBefore(docId, firstDate){
+  let bestD=null, bestSlot=null;
+  for(const [d,ds] of Object.entries(state.schedule)){
+    if(d>=firstDate) continue;
+    for(const sl of SLOTS){
+      if(ds[sl]===docId && (!bestD || d>bestD)){ bestD=d; bestSlot=sl; }
+    }
+  }
+  return bestSlot;
+}
+
 function countTurnovers(docId, sched){
-  let count=0, lastSlot=null;
-  for(const d of Object.keys(sched).sort()){
+  const keys=Object.keys(sched).sort();
+  let count=0, lastSlot=keys.length?lastSlotBefore(docId,keys[0]):null; // 含上月月底的班
+  for(const d of keys){
     const ds=sched[d]||{};
     for(const sl of SLOTS){
       if(ds[sl]===docId){
@@ -1498,10 +1511,10 @@ function scoreDoc(docId, date, slot, sched){
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
-  // 超過個人目標時數即提早重罰（時數偏好優先）
+  // 超過個人目標即連續重罰：每超1小時-30（超越任何偏好加分，超越越多越排不到）
   const targetH=targetH0;
-  if(myH+addH>targetH+10) score-=120;
-  if(myH+addH>targetH+20) score-=200;
+  const overH=myH+addH-(targetH+10);
+  if(overH>0) score-=overH*30;
   if(myH<targetH-10) score+=10;
   // 135h minimum: iron rule — always pull regardless of OFF days
   if(myH<135) score+=(135-myH)*10;
@@ -1885,7 +1898,7 @@ function evaluateSchedule(sched,dates){
   let empty=0;
   for(const d of dates){const ds=sched[d]||{};for(const sl of SLOTS)if(!ds[sl])empty++;}
   const perDoc={};
-  for(const doc of full) perDoc[doc.id]={h:0,p:0,turn:0,lastSlot:null,consec:0,consecMax:0};
+  for(const doc of full) perDoc[doc.id]={h:0,p:0,turn:0,lastSlot:lastSlotBefore(doc.id,dates[0]),consec:0,consecMax:0};
   for(const d of dates){
     const ds=sched[d]||{};
     const sp=ds.split||state.defaultSplit;
@@ -2909,7 +2922,7 @@ function renderStats(){
   const dates=monthDates(_statsYear,_statsMonth);
   const st={};
   for(const doc of state.doctors){
-    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:null,consecMax:0};
+    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:lastSlotBefore(doc.id,dates[0]),consecMax:0};
   }
 
   for(const dateStr of dates){
@@ -3955,7 +3968,7 @@ function generatePDF(){
 
   // --- 統計報表（複製 renderStats 計算邏輯）---
   const st={};
-  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:null,consecMax:0};
+  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:lastSlotBefore(doc.id,dates[0]),consecMax:0};
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
     const sp=ds.split||state.defaultSplit;
