@@ -621,7 +621,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
         <tr><td>時數偏好</td><td>-2 至 +2，微調個人目標總時數</td></tr>
         <tr><td>連班上限</td><td>連續上班天數最大值，超過觸發違規警告</td></tr>
         <tr><td>不排白班</td><td>勾選後僅排小夜或大夜</td></tr>
-        <tr><td>醫務會議</td><td>系統確認每月至少有一個週四主白/早班</td></tr>
+        <tr><td>醫務會議</td><td><strong>強制</strong>每月至少排一個週四主白/早班供簽到（僅在整月週四皆預假/鎖定時例外，統計會警告）</td></tr>
         <tr><td>晨會報告</td><td>系統確認報告週四當天有主白/早班，或前天有大夜</td></tr>
       </tbody>
     </table>
@@ -1829,6 +1829,54 @@ function _generateOnce(y,m,dates){
     if(ds1['小夜']===did){
       const sp=ds1.split||state.defaultSplit;
       if(sp<20) ds1.split=20; // force minimum 20 for 12h rest
+    }
+  }
+
+  // ===== 醫務會議強制簽到（鐵律，最後執行避免被其他階段拆掉）=====
+  // 每位勾選醫務會議者，本月至少一個週四主白/早班。
+  // 仍尊重：預假、鎖定日、休息絕對禁止(canWorkForce)。
+  {
+    const thursdays=dates.filter(d=>getDOW(d)===3);
+    const dayCoverCnt=id=>thursdays.filter(d=>newSched[d]['主白']===id||newSched[d]['早班']===id).length;
+    for(const doc of state.doctors.filter(x=>x.type==='full'&&x.prefs.medMeeting)){
+      if(dayCoverCnt(doc.id)>0) continue;
+      const usableThus=thursdays.filter(thu=>{
+        if(LK.has(thu)) return false;
+        const prs=(state.preRequests[thu]||[]).filter(r=>r.docId===doc.id);
+        if(prs.some(pr=>['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type))) return false;
+        return !SLOTS.some(s=>newSched[thu][s]===doc.id); // 當日已有其他班則跳過
+      });
+      let done=false;
+      // 第一階段：塞空格
+      for(const thu of usableThus){
+        for(const slot of ['主白','早班']){
+          if(newSched[thu][slot]) continue;
+          if(canWorkForce(doc.id,thu,slot,fullSched)){ newSched[thu][slot]=doc.id; done=true; break; }
+        }
+        if(done) break;
+      }
+      // 第二階段：擠掉別人（先挑不會害對方掉到135以下者；真沒有再放寬）
+      for(const strict of [true,false]){
+        if(done) break;
+        for(const thu of usableThus){
+          if(done) break;
+          for(const slot of ['主白','早班']){
+            const occ=newSched[thu][slot];
+            if(!occ) continue;
+            const occDoc=state.doctors.find(x=>x.id===occ);
+            // 不搶別人的唯一醫務會議格
+            if(occDoc&&occDoc.prefs.medMeeting&&dayCoverCnt(occ)<=1) continue;
+            if(strict){
+              const sp=newSched[thu].split||state.defaultSplit;
+              if(calcDocHours(occ,newSched)-slotHours(slot,sp)<135) continue;
+            }
+            newSched[thu][slot]=doc.id;
+            if(canWorkForce(doc.id,thu,slot,fullSched)){ done=true; break; }
+            newSched[thu][slot]=occ; // 還原
+          }
+        }
+      }
+      // 全部週四都被預假/鎖定/休息規則擋住 → 只能放棄，統計報表會顯示警告
     }
   }
 
