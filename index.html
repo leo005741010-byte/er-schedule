@@ -1475,11 +1475,15 @@ function scoreDoc(docId, date, slot, sched){
   const offDays=countDocOffDays(docId);
   // 相對值縮放：預假多的醫師可上班天數少，拉力與偏好目標同步縮小
   const availScale=Math.max(0.25, 1-offDays/30);
-  score+=(avg-myH)*1.2*availScale;
-  // Point equalization: strong pull toward ±20 target
+  // ===== 時數偏好說了算 =====
+  // 主要拉力：朝「個人目標時數」(平均 + htPref×10) 收斂，權重最強
+  const effectiveHtPref0=(doc.prefs.htPref||0)*availScale;
+  const targetH0=avg+effectiveHtPref0*10;
+  score+=(targetH0-myH)*3.0;
+  // 點值均衡降為次要（僅微調，不得蓋過時數偏好）
   const myPts=calcDocPoints(docId,sched);
   const avgPts=avgPoints(sched);
-  score+=(avgPts-myPts)*3.0;
+  score+=(avgPts-myPts)*0.8;
   score+=(doc.prefs[slotPrefKey(slot)]||0)*36;
   if(isHoliday(date)) score+=(doc.prefs.hol||0)*5;
   const last=getLastAssigned(docId,date,sched);
@@ -1494,11 +1498,10 @@ function scoreDoc(docId, date, slot, sched){
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
-  // 時數偏好相對值：+2>+1 相對排序，預假多時偏好自動放寬不強求
-  const effectiveHtPref=(doc.prefs.htPref||0)*availScale;
-  const targetH=avg+effectiveHtPref*10;
-  if(myH+addH>targetH+20) score-=80;
-  if(myH+addH>targetH+40) score-=100;
+  // 超過個人目標時數即提早重罰（時數偏好優先）
+  const targetH=targetH0;
+  if(myH+addH>targetH+10) score-=120;
+  if(myH+addH>targetH+20) score-=200;
   if(myH<targetH-10) score+=10;
   // 135h minimum: iron rule — always pull regardless of OFF days
   if(myH<135) score+=(135-myH)*10;
@@ -1561,12 +1564,9 @@ function bestSplitForPair(earlyId, lateId, date, sched){
     if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 40;
     // Hours fairness: choose split to give more hours to under-target doctor
     const avg = avgHours(sched);
-    if(earlyId){ const mh=calcDocHours(earlyId,sched); sc += (avg-mh) * earlyH * 0.35; }
-    if(lateId) { const mh=calcDocHours(lateId,sched);  sc += (avg-mh) * lateH  * 0.35; }
-    // Point fairness for split selection
-    const avgH2=avgHours(sched);
-    if(earlyId){const mh2=calcDocHours(earlyId,sched);const th=avgH2+(earlyDoc?.prefs.htPref||0)*10;if(mh2+earlyH>th+20)sc-=30;}
-    if(lateId) {const mh2=calcDocHours(lateId,sched); const th=avgH2+(lateDoc?.prefs.htPref||0)*10; if(mh2+lateH>th+20) sc-=30;}
+    // 時數偏好說了算：切割點也朝個人目標(平均+htPref×10)分配
+    if(earlyId){ const mh=calcDocHours(earlyId,sched); const tg=avg+(earlyDoc?.prefs.htPref||0)*10; sc += (tg-mh) * earlyH * 0.35; if(mh+earlyH>tg+10) sc-=60; }
+    if(lateId) { const mh=calcDocHours(lateId,sched);  const tg=avg+(lateDoc?.prefs.htPref||0)*10;  sc += (tg-mh) * lateH  * 0.35; if(mh+lateH>tg+10)  sc-=60; }
     if(sc>bestSc){ bestSc=sc; bestSp=sp; }
   }
   return bestSp;
@@ -1893,21 +1893,28 @@ function evaluateSchedule(sched,dates){
   const sd=a=>{if(a.length<2)return 0;const mu=a.reduce((x,y)=>x+y,0)/a.length;return Math.sqrt(a.reduce((s,v)=>s+(v-mu)*(v-mu),0)/a.length);};
   const hrs=full.map(doc=>perDoc[doc.id].h);
   const pts=full.map(doc=>perDoc[doc.id].p);
-  const hSd=sd(hrs), pSd=sd(pts);
+  const hAvg=hrs.length?hrs.reduce((a,b)=>a+b,0)/hrs.length:0;
+  const pSd=sd(pts);
+  // 時數偏好說了算：以「偏離個人目標(平均+htPref×10)」評分，而非拉平所有人
+  let tgtDev=0;
   let turnTotal=0, turnExcess=0, consecViol=0, under135=0;
   for(const doc of full){
     const rec=perDoc[doc.id];
+    const offDays=countDocOffDays(doc.id,y,m);
+    const availScale=Math.max(0.25,1-offDays/30);
+    const tgt=hAvg+(doc.prefs.htPref||0)*availScale*10;
+    tgtDev+=Math.abs(rec.h-tgt);
     turnTotal+=rec.turn;
     if(rec.turn>=3) turnExcess+=rec.turn-2;
     const maxC=doc.prefs.maxConsec||6;
     if(rec.consecMax>maxC) consecViol+=rec.consecMax-maxC;
-    const offDays=countDocOffDays(doc.id,y,m);
     if(rec.h<135&&offDays<=10) under135+=135-rec.h; // 預假多者不重罰
   }
+  const hSd=full.length?tgtDev/full.length:0; // 平均偏離個人目標
   let score=100;
   score-=empty*8;
-  score-=hSd*1.5;
-  score-=pSd*0.8;
+  score-=hSd*2.0;
+  score-=pSd*0.4;
   score-=turnExcess*10;
   score-=turnTotal*1.5;
   score-=consecViol*8;
