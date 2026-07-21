@@ -167,6 +167,15 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 .pref-slider{display:flex;align-items:center;gap:5px;flex:1;}
 .pref-slider input[type=range]{flex:1;}
 .pref-value{min-width:36px;text-align:center;font-size:11px;background:#eee;padding:2px 5px;border-radius:3px;}
+/* 偏好選擇：+2 +1 0 -1 -2 分段按鈕 */
+.pref-seg{display:inline-flex;gap:4px;flex:1;}
+.pref-seg button{flex:1;min-width:38px;padding:5px 0;font-size:12px;font-weight:700;color:#5b6675;
+  background:#f4f6f9;border:1px solid #dde3ea;border-radius:6px;cursor:pointer;transition:all .12s;}
+.pref-seg button:hover{background:#e8eef5;}
+.pref-seg button.on{background:#1a4a7a;border-color:#1a4a7a;color:#fff;box-shadow:0 1px 3px rgba(26,74,122,.3);}
+.pref-seg button.on.neg{background:#c0392b;border-color:#c0392b;}
+.pref-seg button.on.zero{background:#6b7785;border-color:#6b7785;}
+.pref-hint{font-size:10px;color:#9aa4b2;margin-left:6px;white-space:nowrap;}
 .check-row{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:5px;}
 .modal-actions{margin-top:12px;display:flex;justify-content:flex-end;gap:8px;}
 .btn-primary{background:#1a4a7a;color:#fff;border:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:13px;}
@@ -789,13 +798,13 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
       </select>
     </div>
     <div class="form-row"><label>顏色</label><input type="color" id="doc-color" style="width:55px;height:28px;padding:2px;"></div>
-    <h3>班別偏好 (-2 少 → 0 普通 → +2 多)</h3>
-    <div class="form-row"><label>白班偏好 (08上班)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-白班" min="-2" max="2" step="1" value="0" oninput="updPV('白班',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-白班">0</span></div></div>
-    <div class="form-row"><label>小夜偏好 (迄02:00)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-小夜" min="-2" max="2" step="1" value="0" oninput="updPV('小夜',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-小夜">0</span></div></div>
-    <div class="form-row"><label>大夜偏好 (20-08)</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-大夜" min="-2" max="2" step="1" value="0" oninput="updPV('大夜',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-大夜">0</span></div></div>
-    <div class="form-row"><label>假日偏好</label><div class="pref-slider"><span style="font-size:10px">少</span><input type="range" id="pref-hol" min="-2" max="2" step="1" value="0" oninput="updPV('hol',this.value)"><span style="font-size:10px">多</span><span class="pref-value" id="pv-hol">0</span></div></div>
+    <h3>班別偏好</h3>
+    <div class="form-row"><label>白班偏好 (08上班)</label><div class="pref-seg" id="seg-白班"></div></div>
+    <div class="form-row"><label>小夜偏好 (迄02:00)</label><div class="pref-seg" id="seg-小夜"></div></div>
+    <div class="form-row"><label>大夜偏好 (20-08)</label><div class="pref-seg" id="seg-大夜"></div></div>
+    <div class="form-row"><label>假日偏好</label><div class="pref-seg" id="seg-hol"></div></div>
     <h3>點值與連班</h3>
-    <div class="form-row"><label>時數偏好</label><div class="pref-slider"><span style="font-size:10px">少(-20h)</span><input type="range" id="pref-htPref" min="-2" max="2" step="1" value="0" oninput="updPV('htPref',this.value)"><span style="font-size:10px">多(+20h)</span><span class="pref-value" id="pv-htPref">0</span></div></div>
+    <div class="form-row"><label>時數偏好</label><div class="pref-seg" id="seg-htPref"></div><span class="pref-hint">＋1＝+15h／＋2＝+30h</span></div>
     <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
@@ -1949,7 +1958,7 @@ function renderCalendar(){
 
   document.getElementById('doc-legend').innerHTML=
     `<span class="legend-item" onclick="toggleDocFilter(null)" style="cursor:pointer;padding:2px 7px;border-radius:10px;border:1px solid ${!_filterDocId?'#1a4a7a':'#ccc'};background:${!_filterDocId?'#e8f0fb':'transparent'};color:${!_filterDocId?'#1a4a7a':'#999'};font-weight:${!_filterDocId?'700':'400'}">全部</span>`+
-    state.doctors.map(d=>{
+    docsOrdered().map(d=>{
       const sel=(_filterDocId===d.id);
       return `<span class="legend-item" onclick="toggleDocFilter('${d.id}')" style="cursor:pointer;padding:2px 7px;border-radius:10px;border:1px solid ${sel?d.color:'transparent'};background:${sel?d.color+'28':'transparent'};font-weight:${sel?'700':'400'}"><span class="color-dot" style="background:${d.color}"></span>${d.name}${d.type==='part'?'(兼)':''}</span>`;
     }).join('');
@@ -2241,7 +2250,7 @@ function _renderDayDraft(){
     const pts=ct?calcCustomPoints(ct,dateStr):calcSlotPoints(slot,sp,dateStr);
     const docId=ds[slot];
     const opts=`<option value=""${!docId?' selected':''}>-- 空缺 --</option>`+
-      state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
+      docsOrdered().map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
     const tagClass={'主白':'tag-主白','早班':'tag-早班','小夜':'tag-小夜','大夜':'tag-大夜'}[slot];
     html+=`<tr>
       <td><span class="slot-tag ${tagClass}" style="padding:2px 6px">${slot}</span></td>
@@ -2265,7 +2274,7 @@ function _renderDayDraft(){
       const exPts=ex.timeRange?calcCustomPoints(ex.timeRange,dateStr):0;
       const kindOpts=EXTRA_KINDS.map(k=>`<option value="${k.v}"${(ex.kind||'')===k.v?' selected':''}>${k.name}</option>`).join('');
       const exOpts=`<option value=""${!ex.docId?' selected':''}>-- 選醫師 --</option>`+
-        state.doctors.map(doc=>`<option value="${doc.id}"${doc.id===ex.docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
+        docsOrdered().map(doc=>`<option value="${doc.id}"${doc.id===ex.docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
       html+=`<tr>
         <td><select id="ek-${ex.id}" style="padding:3px 5px;font-size:12px;border:1px solid ${exIsSpecial?'#00838f':'#ddd'};border-radius:3px;color:${exIsSpecial?'#00838f':'#555'};font-weight:${exIsSpecial?'700':'400'}" onchange="_draftExtraKind('${ex.id}',this.value)">${kindOpts}</select></td>
         <td><input id="eti-${ex.id}" type="text" value="${ex.timeRange||''}" placeholder="08-16" style="width:68px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px" onblur="_draftExtraTime('${ex.id}',this.value)"></td>
@@ -2439,7 +2448,7 @@ function toggleHol(dateStr,e){
 // DOCTOR MANAGEMENT
 // ============================================================
 function renderDoctorTable(){
-  document.getElementById('doctor-tbody').innerHTML=state.doctors.map(doc=>{
+  document.getElementById('doctor-tbody').innerHTML=docsOrdered().map(doc=>{
     const p=doc.prefs;
     return `<tr>
       <td><span class="color-dot" style="background:${doc.color}"></span></td>
@@ -2472,13 +2481,7 @@ function openDocModal(docId){
     document.getElementById('doc-type').value=doc.type;
     document.getElementById('doc-color').value=doc.color;
     const p=doc.prefs;
-    ['白班','小夜','大夜','hol'].forEach(k=>{
-      const el=document.getElementById('pref-'+k);
-      const pv=document.getElementById('pv-'+k);
-      if(el){el.value=p[k]||0;if(pv)pv.textContent=p[k]||0;}
-    });
-    const ppEl=document.getElementById('pref-htPref');const ppPv=document.getElementById('pv-htPref');
-    if(ppEl){ppEl.value=p.htPref||0;if(ppPv)ppPv.textContent=p.htPref||0;}
+    ['白班','小夜','大夜','hol','htPref'].forEach(k=>_renderPrefSeg(k,p[k]||0));
     document.getElementById('pref-consec').value=p.maxConsec;
     document.getElementById('pref-long').checked=p.long;
     document.getElementById('pref-noday').checked=!!p.noDay;
@@ -2492,9 +2495,7 @@ function openDocModal(docId){
     document.getElementById('doc-name').value='';
     document.getElementById('doc-type').value='full';
     document.getElementById('doc-color').value='#2196F3';
-    ['白班','小夜','大夜','hol'].forEach(k=>{const el=document.getElementById('pref-'+k);const pv=document.getElementById('pv-'+k);if(el){el.value=0;if(pv)pv.textContent=0;}});
-    const ppEl2=document.getElementById('pref-htPref');const ppPv2=document.getElementById('pv-htPref');
-    if(ppEl2){ppEl2.value=0;if(ppPv2)ppPv2.textContent=0;}
+    ['白班','小夜','大夜','hol','htPref'].forEach(k=>_renderPrefSeg(k,0));
     document.getElementById('pref-consec').value=6;
     document.getElementById('pref-long').checked=false;
     document.getElementById('pref-noday').checked=false;
@@ -2507,15 +2508,28 @@ function openDocModal(docId){
   document.getElementById('doctor-modal').classList.add('show');
 }
 
-function updPV(key,val){document.getElementById('pv-'+key).textContent=val;}
+// 偏好分段選擇：＋2 ＋1 0 －1 －2
+const _prefVals={};
+function _renderPrefSeg(key,val){
+  _prefVals[key]=val|0;
+  const el=document.getElementById('seg-'+key); if(!el) return;
+  el.innerHTML=[2,1,0,-1,-2].map(v=>{
+    const on=(_prefVals[key]===v);
+    const cls='on'+(v<0?' neg':(v===0?' zero':''));
+    const lbl=v>0?('＋'+v):(v<0?('－'+Math.abs(v)):'0');
+    return `<button type="button" class="${on?cls:''}" onclick="_setPrefSeg('${key}',${v})">${lbl}</button>`;
+  }).join('');
+}
+function _setPrefSeg(key,val){ _renderPrefSeg(key,val); }
+function _getPrefSeg(key){ return _prefVals[key]|0; }
 
 function saveDoc(){
   const id=document.getElementById('doc-id').value;
   const name=document.getElementById('doc-name').value.trim();
   if(!name){showToast('請輸入姓名','warn');return;}
   const prefs=defPrefs();
-  ['白班','小夜','大夜','hol'].forEach(k=>{const el=document.getElementById('pref-'+k);if(el)prefs[k]=parseInt(el.value);});
-  prefs.htPref=parseInt(document.getElementById('pref-htPref').value)||0;
+  ['白班','小夜','大夜','hol'].forEach(k=>{prefs[k]=_getPrefSeg(k);});
+  prefs.htPref=_getPrefSeg('htPref');
   prefs.maxConsec=parseInt(document.getElementById('pref-consec').value);
   prefs.long=document.getElementById('pref-long').checked;
   prefs.noDay=document.getElementById('pref-noday').checked;
@@ -2671,7 +2685,7 @@ function renderPRTab(){
   if(list){
     const itemStyle='padding:7px 12px;cursor:pointer;font-size:12px;white-space:nowrap;';
     list.innerHTML=`<div onclick="_selectPRDoc('','── 請先選擇醫師 ──')" style="${itemStyle}color:#999" onmouseover="this.style.background='#f0f4f8'" onmouseout="this.style.background=''">── 請先選擇醫師 ──</div>`+
-      state.doctors.map(d=>`<div onclick="_selectPRDoc('${d.id}','${d.name}')" style="${itemStyle}" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background=''">${d.name}</div>`).join('');
+      docsOrdered().map(d=>`<div onclick="_selectPRDoc('${d.id}','${d.name}')" style="${itemStyle}" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background=''">${d.name}${d.type==='part'?'(兼)':''}</div>`).join('');
   }
   // 重置選擇
   document.getElementById('pr-doc').value='';
@@ -2934,7 +2948,7 @@ function renderStats(){
 
   const WD='background:#dbeafe', HD='background:#fef9c3';
   let totW816=0,totH816=0,totW1602=0,totH1602=0,totW028=0,totH028=0,totPts=0;
-  const rows=state.doctors.map(doc=>{
+  const rows=docsOrdered().map(doc=>{
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     totW816+=s.w816; totH816+=s.h816; totW1602+=s.w1602; totH1602+=s.h1602;
@@ -3359,6 +3373,10 @@ function pvRenderPRList(){
 // HELPERS
 // ============================================================
 function getDocName(id){const d=state.doctors.find(x=>x.id===id);return d?d.name:'未知';}
+// 顯示排序：兼任醫師一律排在最後（不更動實際資料順序）
+function docsOrdered(){
+  return [...state.doctors].sort((a,b)=>((a.type==='part')?1:0)-((b.type==='part')?1:0));
+}
 // 額外醫師顯示資訊：真實醫師 + 類型(一般/楊天/ICU)
 function extraDisplay(ex){
   const doc=state.doctors.find(x=>x.id===ex.docId);
@@ -3744,7 +3762,7 @@ function exportDoctorHoursCSV(){
     }
   }
   const rows=[['醫師','白班(8-16)','小夜(16-02)','大夜(02-08)','總時數','點值','班次數']];
-  for(const doc of state.doctors){
+  for(const doc of docsOrdered()){
     const s=st[doc.id];
     const wDay=s.w816+s.h816, wEve=s.w1602+s.h1602, wNight=s.w028+s.h028;
     const totalH=wDay+wEve+wNight;
@@ -3764,7 +3782,7 @@ function openICalModal(){
   document.getElementById('ical-month-label').textContent=`${state.year}年${state.month+1}月`;
   const dates=monthDates(state.year,state.month);
   const wrap=document.getElementById('ical-doc-list');
-  wrap.innerHTML=state.doctors.map(doc=>{
+  wrap.innerHTML=docsOrdered().map(doc=>{
     let cnt=0;
     for(const d of dates){
       const ds=state.schedule[d]||{};
@@ -3949,7 +3967,7 @@ function generatePDF(){
       if(worked){cur++;s.consecMax=Math.max(s.consecMax,cur);}else cur=0;
     }
   }
-  const statsRows=state.doctors.map(doc=>{
+  const statsRows=docsOrdered().map(doc=>{
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     return `<tr>
@@ -4196,7 +4214,7 @@ function generateOvertimePDF(){
   const ctSE=ct=>{ const mm=(ct||'').match(/^(\d{1,2})-(\d{1,2})$/); return mm?{st:fh(parseInt(mm[1])),en:fh(parseInt(mm[2]))}:{st:'',en:''}; };
 
   let pages='';
-  for(const doc of state.doctors){
+  for(const doc of docsOrdered()){
     const rows=[];
     for(const d of dates){
       const ds=state.schedule[d]||{};
