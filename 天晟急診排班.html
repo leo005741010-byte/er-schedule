@@ -136,7 +136,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 .tag-早班{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
 .tag-小夜{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;}
 .tag-大夜{background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;}
-.shift-doc{flex:1;padding:2px 5px;border-radius:0 4px 4px 0;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;min-width:0;gap:2px;}
+.shift-doc{flex:1;padding:2px 5px;border-radius:4px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;min-width:0;gap:2px;}
 .ex-chip{display:inline-block;font-size:8px;font-weight:700;color:#fff;padding:0 4px;border-radius:3px;margin-right:3px;vertical-align:middle;line-height:1.5;}
 .shift-doc .doc-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;}
 .shift-doc .doc-time{font-size:9px;opacity:0.85;flex-shrink:0;white-space:nowrap;}
@@ -1981,8 +1981,6 @@ function renderCalendar(){
 
     const ds=state.schedule[dateStr]||{split:state.defaultSplit};
     const sp=ds.split||state.defaultSplit;
-    // 班別以左側色條區分，不再顯示 主/早/晚/大 標記
-    const SLOT_HUE={'主白':'#e65100','早班':'#2e7d32','小夜':'#1565c0','大夜':'#6a1b9a'};
     for(const slot of SLOTS){
       const docId=ds[slot];
       const doc=docId?state.doctors.find(d=>d.id===docId):null;
@@ -1990,16 +1988,15 @@ function renderCalendar(){
       const timeStr=_ct?(_ctToTime(_ct)||slotTimeStr(slot,sp)):slotTimeStr(slot,sp);
       const row=document.createElement('div');
       row.className='shift-row';
-      const bar=SLOT_HUE[slot];
       const isDimmed=_filterDocId&&docId!==_filterDocId;
       const isHighlighted=_filterDocId&&docId===_filterDocId;
       if(doc){
         const dimStyle=isDimmed?'opacity:0.12;':'';
         const hlStyle=isHighlighted?`box-shadow:0 0 0 2px ${doc.color};`:'';
-        row.innerHTML=`<span class="shift-doc" style="border-left:4px solid ${bar};background:${doc.color}18;border-top:1px solid ${doc.color}45;border-right:1px solid ${doc.color}45;border-bottom:1px solid ${doc.color}45;color:${doc.color};${dimStyle}${hlStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${timeStr}</span></span>`;
+        row.innerHTML=`<span class="shift-doc" style="background:${doc.color}18;border:1px solid ${doc.color}60;color:${doc.color};${dimStyle}${hlStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${timeStr}</span></span>`;
       } else {
         const dimStyle=isDimmed?'opacity:0.12;':'';
-        row.innerHTML=`<span class="shift-doc empty-slot" style="border-left:4px solid ${bar}55;${dimStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">空</span><span class="doc-time">${timeStr}</span></span>`;
+        row.innerHTML=`<span class="shift-doc empty-slot" style="${dimStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">空</span><span class="doc-time">${timeStr}</span></span>`;
       }
       cell.appendChild(row);
     }
@@ -2015,10 +2012,9 @@ function renderCalendar(){
       const dimSt=isDimmedEx?'opacity:0.12;':'';
       const hlSt=isHighEx?`box-shadow:0 0 0 2px ${disp.color};`:'';
       const exTime=_ctToTime(ex.timeRange)||ex.timeRange||'?';
-      // 一般加班用中性灰色條；楊天/ICU 用其類型色並保留標籤
-      const exBar=disp.special?disp.kindColor:'#78909c';
+      // 楊天/ICU 保留類型小標籤；虛線框代表額外醫師
       const kindChip=disp.special?`<span class="ex-chip" style="background:${disp.kindColor}">${disp.kindName}</span>`:'';
-      exRow.innerHTML=`<span class="shift-doc" style="border-left:4px dashed ${exBar};background:${disp.color}14;border-top:1px solid ${disp.color}40;border-right:1px solid ${disp.color}40;border-bottom:1px solid ${disp.color}40;color:${disp.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${kindChip}${disp.name}</span><span class="doc-time">${exTime}</span></span>`;
+      exRow.innerHTML=`<span class="shift-doc" style="background:${disp.color}14;border:1px dashed ${disp.color}70;color:${disp.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${kindChip}${disp.name}</span><span class="doc-time">${exTime}</span></span>`;
       cell.appendChild(exRow);
     }
 
