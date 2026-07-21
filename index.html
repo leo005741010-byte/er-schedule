@@ -804,7 +804,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
     <div class="form-row"><label>大夜偏好 (20-08)</label><div class="pref-seg" id="seg-大夜"></div></div>
     <div class="form-row"><label>假日偏好</label><div class="pref-seg" id="seg-hol"></div></div>
     <h3>點值與連班</h3>
-    <div class="form-row"><label>時數偏好</label><div class="pref-seg" id="seg-htPref"></div><span class="pref-hint">＋1＝+15h／＋2＝+30h</span></div>
+    <div class="form-row"><label>時數偏好</label><div class="pref-seg" id="seg-htPref"></div><span class="pref-hint">＋1＝+10h／＋2＝+20h</span></div>
     <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
@@ -1021,20 +1021,11 @@ function toggleDocFilter(docId){
 }
 let _prListYear = new Date().getFullYear();
 let _prListMonth = new Date().getMonth();
-function changePRListMonth(delta){
-  _prListMonth+=delta;
-  if(_prListMonth<0){_prListMonth=11;_prListYear--;}
-  if(_prListMonth>11){_prListMonth=0;_prListYear++;}
-  renderPRList();
-}
+// 以下月份切換一律走 setViewMonth，與排班表月份連動
+function changePRListMonth(delta){ setViewMonth(_prListYear, _prListMonth+delta); }
 let _statsYear = new Date().getFullYear();
 let _statsMonth = new Date().getMonth();
-function changeStatsMonth(delta){
-  _statsMonth+=delta;
-  if(_statsMonth<0){_statsMonth=11;_statsYear--;}
-  if(_statsMonth>11){_statsMonth=0;_statsYear++;}
-  renderStats();
-}
+function changeStatsMonth(delta){ setViewMonth(_statsYear, _statsMonth+delta); }
 
 function defPrefs(){
   return {'白班':0,'小夜':0,'大夜':0,hol:0,htPref:0,maxConsec:6,
@@ -1090,9 +1081,9 @@ const SLOTS = ['主白','早班','小夜','大夜'];
 const SPLIT_OPTS = [16,17,18,20]; // 可選切割點（取消 19:00）
 // 額外醫師的類型：一般加班 vs 特殊(楊天/ICU)。特殊類型仍要選醫師，但不計點值/總時數，另外統計。
 const EXTRA_KINDS = [
-  {v:'',name:'一般加班',color:'#78909c'},
-  {v:'yangtian',name:'楊天',color:'#546e7a'},
-  {v:'icu',name:'ICU',color:'#00838f'},
+  {v:'',name:'中天',color:'#78909c'},          // 計入點值/時數
+  {v:'yangtian',name:'楊天',color:'#546e7a'},  // 獨立統計，不計點值/時數
+  {v:'icu',name:'ICU',color:'#00838f'},        // 獨立統計，不計點值/時數
 ];
 function kindInfo(v){ return EXTRA_KINDS.find(k=>k.v===(v||''))||EXTRA_KINDS[0]; }
 function isSpecialKind(v){ return v==='yangtian'||v==='icu'; }
@@ -2120,10 +2111,8 @@ function _renderMsMonthPicker(){
   }).join('');
 }
 function _msPickMonth(y,m){
-  state.year=y; state.month=m;
   _closeMsMonthPicker();
-  persistViewMonth(); renderCalendar();
-  updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
+  setViewMonth(y,m);
 }
 
 function _ctToTime(ct){ const m=(ct||'').match(/^(\d{1,2})-(\d{1,2})$/); return m?`${String(m[1]).padStart(2,'0')}:00-${String(m[2]).padStart(2,'0')}:00`:''; }
@@ -2181,7 +2170,7 @@ function renderMobileSchedule(){
       if(!ex.docId) continue;
       if(filt&&ex.docId!==filt) continue;
       const disp=extraDisplay(ex); if(!disp) continue;
-      const label=disp.special?disp.kindName:'加班';
+      const label=disp.kindName;
       exHtml+=`<div class="ms-ex"><span class="k" style="background:${disp.special?disp.kindColor:'#78909c'}">${label}</span><span class="t">${ex.timeRange||''}</span><span class="n" style="color:${disp.color}">${disp.name}</span></div>`;
     }
     if(filt&&!bodyHtml&&!exHtml) continue; // 篩選模式：該醫師當天無班
@@ -2238,7 +2227,7 @@ function _renderDayDraft(){
     <select onchange="_draftSplit(parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
       ${SPLIT_OPTS.map(h=>`<option value="${h}"${h===sp?' selected':''}>${h}:00</option>`).join('')}
     </select>
-    <span style="color:#888">早班結束 / 小夜開始</span>
+    <span style="color:#888">白班與夜班的交接時間</span>
   </div>
   <table class="day-slot-table">
   <thead><tr><th>班別</th><th>時間 <span style="font-size:10px;color:#999">(HH-HH)</span></th><th>時數</th><th>點值</th><th>指派醫師</th></tr></thead><tbody>`;
@@ -2251,9 +2240,9 @@ function _renderDayDraft(){
     const docId=ds[slot];
     const opts=`<option value=""${!docId?' selected':''}>-- 空缺 --</option>`+
       docsOrdered().map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
-    const tagClass={'主白':'tag-主白','早班':'tag-早班','小夜':'tag-小夜','大夜':'tag-大夜'}[slot];
+    const barColor={'主白':'#e65100','早班':'#2e7d32','小夜':'#1565c0','大夜':'#6a1b9a'}[slot];
     html+=`<tr>
-      <td><span class="slot-tag ${tagClass}" style="padding:2px 6px">${slot}</span></td>
+      <td><span style="display:inline-block;width:22px;height:16px;border-radius:4px;background:${barColor}"></span></td>
       <td><input id="ti-${slot}" type="text" value="${editVal}" style="width:72px;font-size:11px;padding:2px 5px;border:1px solid ${ct?'#e65100':'#ddd'};border-radius:3px;color:${ct?'#e65100':'#555'}" title="格式 HH-HH，清空還原預設" onblur="_draftSlotTime('${slot}',this.value)"></td>
       <td id="hrs-${slot}">${hrs}h</td><td id="pts-${slot}">${pts}</td>
       <td><select id="ds-${slot}" style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftSlot('${slot}',this.value)">${opts}</select></td>
@@ -2454,11 +2443,11 @@ function renderDoctorTable(){
       <td><span class="color-dot" style="background:${doc.color}"></span></td>
       <td><strong>${doc.name}</strong></td>
       <td><span style="font-size:10px;padding:2px 5px;border-radius:8px;background:${doc.type==='full'?'#d4edda':'#fff3cd'}">${doc.type==='full'?'專任':'兼任'}</span></td>
-      <td>${p['白班']?levelStr(p['白班']):'-'}</td>
-      <td>${p['小夜']?levelStr(p['小夜']):'-'}</td>
-      <td>${p['大夜']?levelStr(p['大夜']):'-'}</td>
-      <td>${p.hol?levelStr(p.hol):'-'}</td>
-      <td>${p.htPref>0?'+'+p.htPref:p.htPref} (${(p.htPref*10>0?'+':'')+p.htPref*10}h)</td>
+      <td>${levelStr(p['白班'])}</td>
+      <td>${levelStr(p['小夜'])}</td>
+      <td>${levelStr(p['大夜'])}</td>
+      <td>${levelStr(p.hol)}</td>
+      <td>${levelStr(p.htPref)} <span style="font-size:10px;color:#999">${p.htPref?((p.htPref>0?'+':'-')+Math.abs(p.htPref*10)+'h'):''}</span></td>
       <td>${p.maxConsec}天</td>
       <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'不平夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
@@ -2468,8 +2457,12 @@ function renderDoctorTable(){
     </tr>`;
   }).join('');
 }
+// 偏好顯示：＋2 ＋1 0 －1 －2（正藍負紅）
 function levelStr(v){
-  return v===2?'多多':v===1?'多':v===-1?'少':v===-2?'少少':'普通';
+  v=v|0;
+  if(!v) return '<span style="color:#aaa">0</span>';
+  const txt=v>0?('＋'+v):('－'+Math.abs(v));
+  return `<span style="font-weight:700;color:${v>0?'#1a4a7a':'#c0392b'}">${txt}</span>`;
 }
 
 function openDocModal(docId){
@@ -2576,14 +2569,8 @@ function initPRCal(){
   renderPRCal();
 }
 
-function prCalPrev(){
-  if(prCal.month===0){prCal.month=11;prCal.year--;}else prCal.month--;
-  renderPRCal();
-}
-function prCalNext(){
-  if(prCal.month===11){prCal.month=0;prCal.year++;}else prCal.month++;
-  renderPRCal();
-}
+function prCalPrev(){ setViewMonth(prCal.year, prCal.month-1); }
+function prCalNext(){ setViewMonth(prCal.year, prCal.month+1); }
 
 let _prCalPickerYear=new Date().getFullYear();
 function togglePRCalPicker(e){
@@ -2609,9 +2596,8 @@ function _renderPRCalPicker(){
     }).join('');
 }
 function _gotoPRCalMonth(y,m){
-  prCal.year=y; prCal.month=m;
   document.getElementById('pr-cal-picker').style.display='none';
-  renderPRCal();
+  setViewMonth(y,m);
 }
 
 function renderPRCal(){
@@ -2720,9 +2706,8 @@ function _renderPRMonthPicker(){
     }).join('');
 }
 function _gotoPRMonth(y,m){
-  _prListYear=y; _prListMonth=m;
   document.getElementById('pr-month-picker').style.display='none';
-  renderPRList();
+  setViewMonth(y,m);
 }
 
 function renderPRList(){
@@ -3383,7 +3368,7 @@ function extraDisplay(ex){
   if(!doc) return null;
   const ki=kindInfo(ex.kind);
   const special=isSpecialKind(ex.kind);
-  return {name:doc.name, color:doc.color, special, kindName:ki.name, kindColor:ki.color, tag:special?ki.name:'加'};
+  return {name:doc.name, color:doc.color, special, kindName:ki.name, kindColor:ki.color, tag:ki.name};
 }
 
 function showToast(msg,type='ok'){
@@ -3398,14 +3383,25 @@ function showToast(msg,type='ok'){
   t._tid=setTimeout(()=>{t.style.opacity='0';},3000);
 }
 function closeModal(id){document.getElementById(id).classList.remove('show');renderCalendar();}
-function changeMonth(delta){
-  state.month+=delta;
-  if(state.month<0){state.month=11;state.year--;}
-  if(state.month>11){state.month=0;state.year++;}
+// 全站唯一的月份切換入口：排班表／統計報表／預假預班三處月份一律連動
+function setViewMonth(y,m){
+  if(m<0){m=11;y--;} if(m>11){m=0;y++;}
+  state.year=y; state.month=m;
+  _statsYear=y; _statsMonth=m;
+  _prListYear=y; _prListMonth=m;
+  if(typeof prCal==='object'){ prCal.year=y; prCal.month=m; }
   persistViewMonth(); // 檢視月份只存本機，不推雲端（避免多裝置互搶畫面）
   renderCalendar();
   updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
+  // 各分頁月份標籤即時更新（即使該分頁未顯示，避免切過去看到舊月份）
+  const setTxt=(id,t)=>{const el=document.getElementById(id); if(el) el.textContent=t;};
+  const label=`${y}年${m+1}月`;
+  setTxt('stats-month',label); setTxt('pr-cal-title',label); setTxt('pr-list-month-label',label);
+  const isActive=id=>{const el=document.getElementById(id);return el&&el.classList.contains('active');};
+  if(isActive('tab-stats')) renderStats();
+  if(isActive('tab-prereq')){ renderPRCal(); renderPRList(); }
 }
+function changeMonth(delta){ setViewMonth(state.year, state.month+delta); }
 
 // 只把目前檢視的年月寫入 localStorage，不觸發雲端同步
 function persistViewMonth(){
@@ -3442,10 +3438,8 @@ function _renderMonthPicker(){
     }).join('');
 }
 function _gotoMonth(y,m){
-  state.year=y; state.month=m;
   document.getElementById('month-picker').style.display='none';
-  persistViewMonth(); renderCalendar();
-  updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
+  setViewMonth(y,m);
 }
 function switchTab(name){
   const names=['schedule','doctors','prereq','stats','manual','personal'];
@@ -3453,7 +3447,7 @@ function switchTab(name){
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   if(name==='doctors'){renderDoctorTable();}
-  if(name==='prereq') renderPRTab();
+  if(name==='prereq'){_prListYear=state.year;_prListMonth=state.month;prCal.year=state.year;prCal.month=state.month;renderPRTab();}
   if(name==='stats'){_statsYear=state.year;_statsMonth=state.month;renderStats();}
   if(name==='personal') renderPersonalTab();
   _updateMonthBar();
@@ -3851,7 +3845,7 @@ function buildDoctorICS(docId){
       const m=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!m) continue;
       let sHour=parseInt(m[1]),eHour=parseInt(m[2]); if(eHour<=sHour) eHour+=24;
       const timeStr=`${String(sHour%24).padStart(2,'0')}:00-${String(eHour%24).padStart(2,'0')}:00`;
-      push(dateStr,'extra'+(exIdx++),sHour,eHour,`加班 ${timeStr}${hol?' (假日)':''}`);
+      push(dateStr,'extra'+(exIdx++),sHour,eHour,`${kindInfo(ex.kind).name} ${timeStr}${hol?' (假日)':''}`);
     }
   }
   lines.push('END:VCALENDAR');
