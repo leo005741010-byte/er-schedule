@@ -657,7 +657,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
         <tr><td>總時數</td><td>六個時段總和</td></tr>
         <tr><td>點值</td><td>依時段與假日加權計算的總點數</td></tr>
         <tr><td>班數</td><td>本月上班次數（含加班）</td></tr>
-        <tr><td>轉班次</td><td>大夜↔白班轉換次數（目標 &lt; 3 次）</td></tr>
+        <tr><td>轉班次</td><td>大夜↔白班轉換次數（目標 ≤ 3 次）</td></tr>
         <tr><td>最長連班</td><td>連續上班最多幾天</td></tr>
         <tr><td>📊 當月合計</td><td>所有醫師時數與點值加總</td></tr>
       </tbody>
@@ -1505,16 +1505,15 @@ function scoreDoc(docId, date, slot, sched){
   if(myH<targetH-10) score+=10;
   // 135h minimum: iron rule — always pull regardless of OFF days
   if(myH<135) score+=(135-myH)*10;
-  // 轉班懲罰: penalize 大夜↔白班 transitions, strongly discourage ≥3rd turnover
-  const isNewTurnover=!!last&&(
-    (slot==='大夜'&&(last.slot==='主白'||last.slot==='早班'))||
-    ((slot==='主白'||slot==='早班')&&last.slot==='大夜')
-  );
-  if(isNewTurnover){
-    const cur=countTurnovers(docId,sched);
-    if(cur>=2) score-=150;
-    else if(cur===1) score-=40;
-    else score-=10;
+  // 轉班懲罰：以「若排此班」後的整月實際轉班數計算（含前後雙向），目標≤3次
+  if(sched[date]&&!sched[date][slot]){
+    sched[date][slot]=docId;                       // 暫排
+    const tAfter=countTurnovers(docId,sched);
+    sched[date][slot]=null;                        // 還原
+    if(tAfter>=4)      score-=2000;                // 第4次以上：幾乎禁止
+    else if(tAfter===3) score-=250;
+    else if(tAfter===2) score-=60;
+    else if(tAfter===1) score-=15;
   }
   // 醫務會議: boost Thursday 主白/早班 if doctor still has no covered Thursday this month
   if(doc.prefs.medMeeting&&getDOW(date)===3&&(slot==='主白'||slot==='早班')){
@@ -1740,16 +1739,25 @@ function _generateOnce(y,m,dates){
         if(calcDocHours(doc.id,newSched)>=135) break;
         if(LK.has(d)) continue; // 鎖定日不動
         if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue; // already working this day
-        // Pass A: fill empty slot
+        // Pass A: fill empty slot（優先挑「排下去後轉班數最少」的格子）
         let filled=false;
+        const candA=[];
         for(const slot of SLOTS){
           if(newSched[d][slot]) continue;
           if(canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched)){
-            newSched[d][slot]=doc.id; anyProgress=true; filled=true; break;
+            newSched[d][slot]=doc.id;
+            const t=countTurnovers(doc.id,newSched);
+            newSched[d][slot]=null;
+            candA.push({slot,t});
           }
         }
+        if(candA.length){
+          candA.sort((a,b)=>a.t-b.t);
+          newSched[d][candA[0].slot]=doc.id; anyProgress=true; filled=true;
+        }
         if(filled) continue;
-        // Pass B: displace an over-135h occupant
+        // Pass B: displace an over-135h occupant（同樣優先挑轉班數最少的格子）
+        const candB=[];
         for(const slot of SLOTS){
           const occupant=newSched[d][slot];
           if(!occupant) continue;
@@ -1759,10 +1767,17 @@ function _generateOnce(y,m,dates){
           newSched[d][slot]=null;
           const ok=canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched);
           if(ok){
-            newSched[d][slot]=doc.id; anyProgress=true; filled=true; break;
+            newSched[d][slot]=doc.id;
+            const t=countTurnovers(doc.id,newSched);
+            newSched[d][slot]=occupant; // 先還原，稍後取最佳
+            candB.push({slot,occupant,t});
           } else {
             newSched[d][slot]=occupant; // restore
           }
+        }
+        if(candB.length){
+          candB.sort((a,b)=>a.t-b.t);
+          newSched[d][candB[0].slot]=doc.id; anyProgress=true; filled=true;
         }
       }
     }
@@ -1905,7 +1920,7 @@ function evaluateSchedule(sched,dates){
     const tgt=hAvg+(doc.prefs.htPref||0)*availScale*10;
     tgtDev+=Math.abs(rec.h-tgt);
     turnTotal+=rec.turn;
-    if(rec.turn>=3) turnExcess+=rec.turn-2;
+    if(rec.turn>3) turnExcess+=rec.turn-3; // 目標≤3次，超過部分重罰
     const maxC=doc.prefs.maxConsec||6;
     if(rec.consecMax>maxC) consecViol+=rec.consecMax-maxC;
     if(rec.h<135&&offDays<=10) under135+=135-rec.h; // 預假多者不重罰
@@ -1915,7 +1930,7 @@ function evaluateSchedule(sched,dates){
   score-=empty*8;
   score-=hSd*2.0;
   score-=pSd*0.4;
-  score-=turnExcess*10;
+  score-=turnExcess*40;
   score-=turnTotal*1.5;
   score-=consecViol*8;
   score-=under135*0.4;
@@ -2990,7 +3005,7 @@ function renderStats(){
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
-    if(s.shifts>=3) viols.push(`⚠ ${doc.name} 轉班次數${s.shifts}次（目標 < 3次）`);
+    if(s.shifts>3) viols.push(`⚠ ${doc.name} 轉班次數${s.shifts}次（目標 ≤ 3次）`);
     const offDays=countDocOffDays(doc.id,_statsYear,_statsMonth);
     if(totalH<135) viols.push(`⚠ ${doc.name} 時數不足135h（實際${totalH}h，預假${offDays}天）`);
     const avgHrs=fullDocs.reduce((acc,d2)=>{const z=st[d2.id];return acc+z.w816+z.h816+z.w1602+z.h1602+z.w028+z.h028;},0)/(fullDocs.length||1);
