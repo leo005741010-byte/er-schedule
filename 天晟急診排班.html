@@ -318,23 +318,6 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
       </thead>
       <tbody id="doctor-tbody"></tbody>
     </table>
-    <div style="margin-top:16px;background:#fff;border-radius:6px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
-      <h3 style="font-size:13px;margin-bottom:10px;color:#1a4a7a">🚫 避免同時上班設定</h3>
-      <p style="font-size:11px;color:#888;margin-bottom:10px">設定後，這兩位醫師在同一天不會同時出現在班表中。</p>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-        <select id="avoid-doc1" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px"></select>
-        <span style="font-weight:700;color:#666">不與</span>
-        <select id="avoid-doc2" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px"></select>
-        <span style="font-weight:700;color:#666">同時上班</span>
-        <button class="action-btn btn-red" onclick="addAvoidPair()" style="padding:5px 12px">新增</button>
-      </div>
-      <div id="avoid-pairs-list"></div>
-    </div>
-    <div style="margin-top:12px;background:#fff;border-radius:6px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.1)">
-      <h3 style="font-size:13px;margin-bottom:6px;color:#1a4a7a">🌙 不排大夜設定 (不上02-08，可排小夜至02:00)</h3>
-      <p style="font-size:11px;color:#888;margin-bottom:10px">勾選後排班演算法三層強制不指派大夜班（20-08）。</p>
-      <div id="nonight-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-    </div>
   </div>
 
   <!-- ======= 預假/預班 ======= -->
@@ -614,13 +597,10 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
         <tr><td>時數偏好</td><td>-2 至 +2，微調個人目標總時數</td></tr>
         <tr><td>連班上限</td><td>連續上班天數最大值，超過觸發違規警告</td></tr>
         <tr><td>不排白班</td><td>勾選後僅排小夜或大夜</td></tr>
-        <tr><td>不排大夜</td><td>勾選後演算法強制不指派大夜（20–08）</td></tr>
         <tr><td>醫務會議</td><td>系統確認每月至少有一個週四主白/早班</td></tr>
         <tr><td>晨會報告</td><td>系統確認報告週四當天有主白/早班，或前天有大夜</td></tr>
       </tbody>
     </table>
-    <h4>避免同時上班</h4>
-    <p>在醫師設定頁籤下方，可設定兩位醫師「不在同一天同時出現」，自動排班時強制套用。</p>
   </div>
 
   <!-- 5 預假預班 -->
@@ -1233,7 +1213,6 @@ function canWork(docId, date, slot, sched){
     if(![4,5,6].includes(dow)) return false; // 周一到周四絕對不排大夜(20-08)
   }
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
-  if(doc.prefs.noNight&&slot==='大夜') return false;
   // ===== ABSOLUTE PROHIBITIONS (both backward and forward) =====
   // 主白/早班 starts at 08:00 — must not have 大夜(ends 08:00) or 小夜(ends 02:00) yesterday
   if(slot==='主白'||slot==='早班'){
@@ -1264,12 +1243,6 @@ function canWork(docId, date, slot, sched){
   if(slot==='小夜'){
     const yd=addDays(date,-1); const yds=sched[yd]||{};
     if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||state.defaultSplit)<20) return false;
-  }
-  // Avoid same-day pairs
-  for(const pair of (state.avoidPairs||[])){
-    if(!pair.includes(docId)) continue;
-    const other=pair.find(x=>x!==docId);
-    if(SLOTS.some(s=>(sched[date]||{})[s]===other)) return false;
   }
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
   for(const pr of nextDayPRs){
@@ -1302,7 +1275,6 @@ function canWorkRelaxed(docId, date, slot, sched){
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
   if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
-  if(doc.prefs.noNight&&slot==='大夜') return false;
   // ===== ABSOLUTE PROHIBITIONS (same as canWork, never relaxed) =====
   if(slot==='主白'||slot==='早班'){
     const yd=addDays(date,-1);
@@ -1325,12 +1297,6 @@ function canWorkRelaxed(docId, date, slot, sched){
     const yd=addDays(date,-1); const yds=sched[yd]||{};
     if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||state.defaultSplit)<20) return false;
   }
-  // Avoid same-day pairs (enforced even in relaxed mode)
-  for(const pair of (state.avoidPairs||[])){
-    if(!pair.includes(docId)) continue;
-    const other=pair.find(x=>x!==docId);
-    if(SLOTS.some(s=>(sched[date]||{})[s]===other)) return false;
-  }
   return true;
 }
 
@@ -1348,7 +1314,6 @@ function canWorkForce(docId, date, slot, sched){
     if(pr.type==='OFF_NO_NIGHT'&&slot==='小夜') return false;
   }
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
-  if(doc.prefs.noNight&&slot==='大夜') return false;
   if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
   // 12h rest from last shift
   const last=getLastAssigned(docId,date,sched);
@@ -2471,7 +2436,7 @@ function renderDoctorTable(){
       <td>${p.hol?levelStr(p.hol):'-'}</td>
       <td>${p.htPref>0?'+'+p.htPref:p.htPref} (${(p.htPref*10>0?'+':'')+p.htPref*10}h)</td>
       <td>${p.maxConsec}天</td>
-      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.noNight?'不大夜':'',p.wkNight?'不平夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'不平夜':'',p.cluster?'集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
         <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
         <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
@@ -2567,60 +2532,6 @@ function delDoc(docId){
   renderDoctorTable(); renderCalendar();
 }
 
-function toggleNoNight(docId){
-  const doc=state.doctors.find(d=>d.id===docId); if(!doc) return;
-  doc.prefs.noNight=!doc.prefs.noNight;
-  autoSave(); renderNoNightPanel(); renderDoctorTable();
-}
-function renderNoNightPanel(){
-  const el=document.getElementById('nonight-list'); if(!el) return;
-  el.innerHTML=state.doctors.map(doc=>{
-    const on=!!doc.prefs.noNight;
-    return `<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid ${on?doc.color:'#ddd'};background:${on?doc.color+'22':'#f9f9f9'};cursor:pointer;font-size:12px">
-      <input type="checkbox" ${on?'checked':''} onchange="toggleNoNight('${doc.id}')">
-      <span class="color-dot" style="background:${doc.color}"></span>${doc.name}
-    </label>`;
-  }).join('');
-}
-function renderAvoidPairs(){
-  const sel1=document.getElementById('avoid-doc1');
-  const sel2=document.getElementById('avoid-doc2');
-  if(sel1&&sel2){
-    const opts=state.doctors.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
-    sel1.innerHTML=opts; sel2.innerHTML=opts;
-  }
-  const list=document.getElementById('avoid-pairs-list');
-  if(!list) return;
-  const pairs=state.avoidPairs||[];
-  if(!pairs.length){list.innerHTML='<span style="font-size:11px;color:#aaa">尚無設定</span>';return;}
-  list.innerHTML=pairs.map((p,i)=>{
-    const n1=state.doctors.find(d=>d.id===p[0])?.name||p[0];
-    const n2=state.doctors.find(d=>d.id===p[1])?.name||p[1];
-    return `<div style="display:inline-flex;align-items:center;gap:6px;background:#ffeef0;border:1px solid #ffcdd2;border-radius:4px;padding:3px 8px;margin:2px;font-size:12px">
-      <strong>${n1}</strong> ✗ <strong>${n2}</strong>
-      <button class="btn-sm btn-del" onclick="delAvoidPair(${i})" style="padding:1px 5px;font-size:10px">刪除</button>
-    </div>`;
-  }).join('');
-}
-
-function addAvoidPair(){
-  const d1=document.getElementById('avoid-doc1').value;
-  const d2=document.getElementById('avoid-doc2').value;
-  if(!d1||!d2||d1===d2){showToast('請選擇兩位不同的醫師','warn');return;}
-  if(!state.avoidPairs) state.avoidPairs=[];
-  const exists=state.avoidPairs.some(p=>(p[0]===d1&&p[1]===d2)||(p[0]===d2&&p[1]===d1));
-  if(exists){showToast('此配對已存在','warn');return;}
-  state.avoidPairs.push([d1,d2]);
-  renderAvoidPairs();
-  autoSave();
-  showToast('已新增避免同時上班配對');
-}
-
-function delAvoidPair(i){
-  state.avoidPairs.splice(i,1);
-  renderAvoidPairs();
-  autoSave();
-}
 
 // ============================================================
 // PRE-REQUESTS
@@ -3508,7 +3419,7 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  if(name==='doctors'){renderDoctorTable();renderAvoidPairs();renderNoNightPanel();}
+  if(name==='doctors'){renderDoctorTable();}
   if(name==='prereq') renderPRTab();
   if(name==='stats'){_statsYear=state.year;_statsMonth=state.month;renderStats();}
   if(name==='personal') renderPersonalTab();
