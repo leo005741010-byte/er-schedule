@@ -136,7 +136,8 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 .tag-早班{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
 .tag-小夜{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;}
 .tag-大夜{background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;}
-.shift-doc{flex:1;padding:2px 5px;border-radius:3px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;min-width:0;gap:2px;}
+.shift-doc{flex:1;padding:2px 5px;border-radius:0 4px 4px 0;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;min-width:0;gap:2px;}
+.ex-chip{display:inline-block;font-size:8px;font-weight:700;color:#fff;padding:0 4px;border-radius:3px;margin-right:3px;vertical-align:middle;line-height:1.5;}
 .shift-doc .doc-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;}
 .shift-doc .doc-time{font-size:9px;opacity:0.85;flex-shrink:0;white-space:nowrap;}
 .shift-doc.empty-slot{color:#bbb;font-style:italic;background:#f9f9f9;border:1px dashed #ddd;}
@@ -287,15 +288,6 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
   <div id="tab-schedule" class="tab-pane active">
     <div id="cal-header">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span style="font-size:11px" data-board-hide>
-          <span class="slot-tag tag-主白" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">主白</span>08:00-20:00(12h)
-          &nbsp;
-          <span class="slot-tag tag-早班" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">早班</span>08:00-切割點
-          &nbsp;
-          <span class="slot-tag tag-小夜" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">小夜</span>切割點-02:00
-          &nbsp;
-          <span class="slot-tag tag-大夜" style="display:inline-flex;width:auto;padding:1px 5px;margin-right:2px">大夜</span>20:00-08:00(12h)
-        </span>
         <div class="split-control" data-pwa-hide>
           <label>預設切割點：</label>
           <select id="default-split" onchange="state.defaultSplit=parseInt(this.value)">
@@ -2022,29 +2014,25 @@ function renderCalendar(){
 
     const ds=state.schedule[dateStr]||{split:state.defaultSplit};
     const sp=ds.split||state.defaultSplit;
-    const slotInfo=[
-      {slot:'主白',tagClass:'tag-主白',tagLabel:'主'},
-      {slot:'早班',tagClass:'tag-早班',tagLabel:'早'},
-      {slot:'小夜',tagClass:'tag-小夜',tagLabel:'晚'},
-      {slot:'大夜',tagClass:'tag-大夜',tagLabel:'大'},
-    ];
-    for(const si of slotInfo){
-      const docId=ds[si.slot];
+    // 班別以左側色條區分，不再顯示 主/早/晚/大 標記
+    const SLOT_HUE={'主白':'#e65100','早班':'#2e7d32','小夜':'#1565c0','大夜':'#6a1b9a'};
+    for(const slot of SLOTS){
+      const docId=ds[slot];
       const doc=docId?state.doctors.find(d=>d.id===docId):null;
-      const _ct=ds.customTimes&&ds.customTimes[si.slot];
-      const timeStr=_ct?(()=>{const m=_ct.match(/^(\d{1,2})-(\d{1,2})$/);return m?`${String(m[1]).padStart(2,'0')}:00-${String(m[2]).padStart(2,'0')}:00`:slotTimeStr(si.slot,sp);})():slotTimeStr(si.slot,sp);
+      const _ct=ds.customTimes&&ds.customTimes[slot];
+      const timeStr=_ct?(_ctToTime(_ct)||slotTimeStr(slot,sp)):slotTimeStr(slot,sp);
       const row=document.createElement('div');
       row.className='shift-row';
-      const tag=`<span class="slot-tag ${si.tagClass}">${si.tagLabel}</span>`;
+      const bar=SLOT_HUE[slot];
       const isDimmed=_filterDocId&&docId!==_filterDocId;
       const isHighlighted=_filterDocId&&docId===_filterDocId;
       if(doc){
         const dimStyle=isDimmed?'opacity:0.12;':'';
         const hlStyle=isHighlighted?`box-shadow:0 0 0 2px ${doc.color};`:'';
-        row.innerHTML=`${tag}<span class="shift-doc" style="background:${doc.color}18;border:1px solid ${doc.color}60;color:${doc.color};${dimStyle}${hlStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${timeStr}</span></span>`;
+        row.innerHTML=`<span class="shift-doc" style="border-left:4px solid ${bar};background:${doc.color}18;border-top:1px solid ${doc.color}45;border-right:1px solid ${doc.color}45;border-bottom:1px solid ${doc.color}45;color:${doc.color};${dimStyle}${hlStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${doc.name}</span><span class="doc-time">${timeStr}</span></span>`;
       } else {
         const dimStyle=isDimmed?'opacity:0.12;':'';
-        row.innerHTML=`${tag}<span class="shift-doc empty-slot" style="${dimStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">空 ${timeStr}</span></span>`;
+        row.innerHTML=`<span class="shift-doc empty-slot" style="border-left:4px solid ${bar}55;${dimStyle}" onclick="openDayModal('${dateStr}')"><span class="doc-name">空</span><span class="doc-time">${timeStr}</span></span>`;
       }
       cell.appendChild(row);
     }
@@ -2059,8 +2047,11 @@ function renderCalendar(){
       const isHighEx=_filterDocId&&ex.docId===_filterDocId;
       const dimSt=isDimmedEx?'opacity:0.12;':'';
       const hlSt=isHighEx?`box-shadow:0 0 0 2px ${disp.color};`:'';
-      const tagBg=disp.special?disp.kindColor:'#78909c';
-      exRow.innerHTML=`<span class="slot-tag" style="background:${tagBg};color:#fff;font-size:9px;padding:1px 4px">${disp.tag}</span><span class="shift-doc" style="background:${disp.color}18;border:1px solid ${disp.color}60;color:${disp.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${disp.name}</span><span class="doc-time">${ex.timeRange||'?'}</span></span>`;
+      const exTime=_ctToTime(ex.timeRange)||ex.timeRange||'?';
+      // 一般加班用中性灰色條；楊天/ICU 用其類型色並保留標籤
+      const exBar=disp.special?disp.kindColor:'#78909c';
+      const kindChip=disp.special?`<span class="ex-chip" style="background:${disp.kindColor}">${disp.kindName}</span>`:'';
+      exRow.innerHTML=`<span class="shift-doc" style="border-left:4px dashed ${exBar};background:${disp.color}14;border-top:1px solid ${disp.color}40;border-right:1px solid ${disp.color}40;border-bottom:1px solid ${disp.color}40;color:${disp.color};${dimSt}${hlSt}" onclick="openDayModal('${dateStr}')"><span class="doc-name">${kindChip}${disp.name}</span><span class="doc-time">${exTime}</span></span>`;
       cell.appendChild(exRow);
     }
 
