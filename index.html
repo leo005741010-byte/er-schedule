@@ -1095,6 +1095,7 @@ function getFirstThirdThursdays(y,m){
 // ============================================================
 const SLOTS = ['主白','早班','小夜','大夜'];
 const SPLIT_OPTS = [16,17,18,20]; // 可選切割點（取消 19:00）
+const RANDOM_JITTER = 35; // 自動排班隨機擾動幅度：讓每次按都產生不同版本
 // 額外醫師的類型：一般加班 vs 特殊(楊天/ICU)。特殊類型仍要選醫師，但不計點值/總時數，另外統計。
 const EXTRA_KINDS = [
   {v:'',name:'中天',color:'#78909c'},          // 計入點值/時數
@@ -1499,7 +1500,9 @@ function countDocOffDays(docId,y=state.year,m=state.month){
 function scoreDoc(docId, date, slot, sched){
   const doc=state.doctors.find(d=>d.id===docId);
   const split=getDaySplit(date);
-  let score=Math.random()*2;
+  // 隨機擾動：足以在「分數相近」的候選人間洗牌，產生不同版本；
+  // 但遠小於硬規則罰分(轉班-2000/交替大夜-400/超時-30每小時)，不會破壞規則
+  let score=Math.random()*RANDOM_JITTER;
   const myH=calcDocHours(docId,sched);
   const avg=avgHours(sched);
   const offDays=countDocOffDays(docId);
