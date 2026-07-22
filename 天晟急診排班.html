@@ -142,8 +142,8 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 .shift-doc.empty-slot{color:#bbb;font-style:italic;background:#f9f9f9;border:1px dashed #ddd;}
 .shift-doc.empty-slot .doc-name{font-size:11px;}
 .shift-doc.empty-slot:hover{background:#e3f2fd;border-color:#90caf9;}
-.pr-badge-row{margin-top:2px;display:flex;flex-wrap:wrap;gap:1px;}
-.pr-badge{font-size:8px;background:#9b59b6;color:#fff;padding:1px 3px;border-radius:2px;}
+.pr-badge-row{margin-top:2px;display:flex;flex-wrap:wrap;gap:2px;}
+.pr-badge{font-size:10px;background:#9b59b6;color:#fff;padding:1px 4px;border-radius:3px;}
 /* ===== DOCTOR TABLE ===== */
 #doctor-table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);}
 #doctor-table th{background:#1a4a7a;color:#fff;padding:7px 8px;text-align:left;font-size:11px;}
@@ -2254,7 +2254,7 @@ function renderCalendar(){
     if(prs.length){
       const prow=document.createElement('div');
       prow.className='pr-badge-row';
-      prow.innerHTML=prs.map(pr=>`<span class="pr-badge">${getDocName(pr.docId)}:${prShortLabel(pr)}</span>`).join('');
+      prow.innerHTML=prs.map(pr=>`<span class="pr-badge">${getDocName(pr.docId)}:${prShortLabelAt(pr,dateStr)}</span>`).join('');
       cell.appendChild(prow);
     }
 
@@ -3102,6 +3102,15 @@ function prShortLabel(pr){
   if(pr.type==='WORK_CUSTOM') return `自(${pr.custom||'?'})`;
   const m={OFF:'假',OFF_NO_BIG:'假+',OFF_NO_NIGHT:'假++',WORK_主白:'主',WORK_早班:'早',WORK_小夜:'小',WORK_大夜:'大'};
   return m[pr.type]||'?';
+}
+// 連續預假只在第一天標 +／++（中段的「前一天」本來就休假，標記無意義）
+function prShortLabelAt(pr, dateStr){
+  if(pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT'){
+    const prevOff=(state.preRequests[addDays(dateStr,-1)]||[])
+      .some(r=>r.docId===pr.docId&&['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(r.type));
+    if(prevOff) return '假';
+  }
+  return prShortLabel(pr);
 }
 
 // ============================================================
