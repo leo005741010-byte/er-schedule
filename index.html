@@ -1538,10 +1538,11 @@ function scoreDoc(docId, date, slot, sched){
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
-  // 超過個人目標即連續重罰：每超1小時-30（超越任何偏好加分，超越越多越排不到）
+  // 超過個人目標即遞增扣分：先以12/h抵銷固定偏好加分(白班+2=72≈6h)，超過10h起再重罰
   const targetH=targetH0;
-  const overH=myH+addH-(targetH+10);
-  if(overH>0) score-=overH*30;
+  const devH=myH+addH-targetH;
+  if(devH>0)  score-=devH*12;
+  if(devH>10) score-=(devH-10)*30;
   if(myH<targetH-10) score+=10;
   // 135h minimum: iron rule — always pull regardless of OFF days
   if(myH<135) score+=(135-myH)*10;
@@ -2000,14 +2001,16 @@ function evaluateSchedule(sched,dates){
   const hAvg=hrs.length?hrs.reduce((a,b)=>a+b,0)/hrs.length:0;
   const pSd=sd(pts);
   // 時數偏好說了算：以「偏離個人目標(平均+htPref×10)」評分，而非拉平所有人
-  let tgtDev=0;
+  let tgtDev=0, hardDev=0;
   let turnTotal=0, turnExcess=0, consecViol=0, under135=0;
   for(const doc of full){
     const rec=perDoc[doc.id];
     const offDays=countDocOffDays(doc.id,y,m);
     const availScale=Math.max(0.25,1-offDays/30);
     const tgt=hAvg+(doc.prefs.htPref||0)*availScale*10;
-    tgtDev+=Math.abs(rec.h-tgt);
+    const dv=Math.abs(rec.h-tgt);
+    tgtDev+=dv;
+    if(dv>6) hardDev+=dv-6; // 個別醫師大幅偏離目標：不容平均稀釋，重罰
     turnTotal+=rec.turn;
     if(rec.turn>3) turnExcess+=rec.turn-3; // 目標≤3次，超過部分重罰
     const maxC=doc.prefs.maxConsec||6;
@@ -2028,6 +2031,7 @@ function evaluateSchedule(sched,dates){
   let score=100;
   score-=empty*8;
   score-=hSd*2.0;
+  score-=hardDev*6;
   score-=pSd*0.4;
   score-=altNight*50;
   score-=turnExcess*40;
