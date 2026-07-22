@@ -299,12 +299,18 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="split-control" data-pwa-hide>
           <label>預設切割點：</label>
-          <select id="default-split" onchange="state.defaultSplit=parseInt(this.value)">
+          <span style="font-size:11px;color:#555">平日</span>
+          <select id="default-split" onchange="state.defaultSplit=parseInt(this.value);autoSave();renderCalendar();">
             <option value="16">16:00</option><option value="17">17:00</option>
             <option value="18">18:00</option>
             <option value="20" selected>20:00</option>
           </select>
-          <span style="font-size:10px;color:#888">(自動排班初始值)</span>
+          <span style="font-size:11px;color:#c0392b">假日</span>
+          <select id="holiday-split" onchange="state.holidaySplit=parseInt(this.value);autoSave();renderCalendar();">
+            <option value="16">16:00</option><option value="17" selected>17:00</option>
+            <option value="18">18:00</option>
+            <option value="20">20:00</option>
+          </select>
         </div>
       </div>
       <div id="doc-legend"></div>
@@ -575,12 +581,13 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
       <thead><tr><th>班別</th><th>時間</th><th>時數</th></tr></thead>
       <tbody>
         <tr><td><span class="man-badge mb-主白">主白</span></td><td>08:00 – 20:00</td><td>12 小時（固定）</td></tr>
-        <tr><td><span class="man-badge mb-早班">早班</span></td><td>08:00 – 切割點</td><td>依切割點</td></tr>
-        <tr><td><span class="man-badge mb-小夜">小夜</span></td><td>切割點 – 02:00</td><td>依切割點</td></tr>
+        <tr><td><span class="man-badge mb-早班">早班</span></td><td>08:00 – 切割點<br><small>平日 08-20／假日 08-17</small></td><td>依切割點</td></tr>
+        <tr><td><span class="man-badge mb-小夜">小夜</span></td><td>切割點 – 02:00<br><small>平日 20-02／假日 17-02</small></td><td>依切割點</td></tr>
         <tr><td><span class="man-badge mb-大夜">大夜</span></td><td>20:00 – 08:00</td><td>12 小時（固定）</td></tr>
       </tbody>
     </table>
-    <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間，預設 20:00，可在排班表上方下拉選單選擇（16:00–20:00）。</div>
+    <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間。預設<strong>平日 20:00、假日 17:00</strong>（含週六日與自訂假日），可在排班表上方兩個下拉選單分別調整。單日可在「當日排班」視窗個別覆寫。
+    <br>※ 唯一例外：若某人前一天上大夜、隔天接小夜，為滿足 12 小時休息，該日切割點會自動改為 20:00。</div>
     <h4>月曆顏色說明</h4>
     <table class="man-tbl">
       <thead><tr><th>顏色</th><th>意義</th></tr></thead>
@@ -596,7 +603,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
     <div class="man-step"><div class="man-sn">2</div><div class="man-sb">在下拉選單中選擇各班別對應的醫師，或留空。</div></div>
     <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 新增醫師」填入時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）並選醫師。</div></div>
     <div class="man-step"><div class="man-sn">4</div><div class="man-sb">點「確認」儲存，系統自動存檔。</div></div>
-    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點只剩 16:00 / 17:00 / 18:00 / 20:00 可選（已取消 19:00）。</p>
+    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點可選 16:00 / 17:00 / 18:00 / 20:00（已取消 19:00）。</p>
     <h4>📌 當日備註</h4>
     <p>在「當日排班」視窗最下方有「📌 當日備註」欄，可填當日行政事務（例：晨會、器材檢查、教學活動）。填寫後月曆該日會顯示黃色備註列，滑鼠移上去可看完整內容。</p>
     <h4>🏥 楊天 / ICU（額外項目）</h4>
@@ -867,7 +874,8 @@ let state = {
   month: new Date().getMonth(),
   holidays: new Set(),
   lockedDays: new Set(), // 連點兩下鎖定的單日，自動排班不更動
-  defaultSplit: 20,
+  defaultSplit: 20,   // 平日切割點
+  holidaySplit: 17,   // 假日切割點
   schedule: {},
   preRequests: {},
   avoidPairs: [],
@@ -1155,8 +1163,17 @@ function zoneHours(slot, split, startDate){
 // Clamp split to allowed manual range (custom pre-requests may exceed this)
 function clampSplit(v){ return Math.min(20,Math.max(16,v||20)); }
 
+// 工具列兩個切割點下拉與 state 同步
+function _syncSplitSelects(){
+  const a=document.getElementById('default-split'); if(a) a.value=state.defaultSplit;
+  const b=document.getElementById('holiday-split'); if(b) b.value=state.holidaySplit;
+}
+// 預設切割點：平日 20:00、假日 17:00（可於工具列調整）
+function defaultSplitFor(dateStr){
+  return clampSplit(isHoliday(dateStr) ? (state.holidaySplit||17) : (state.defaultSplit||20));
+}
 function getDaySplit(dateStr){
-  return (state.schedule[dateStr]&&state.schedule[dateStr].split) || state.defaultSplit;
+  return (state.schedule[dateStr]&&state.schedule[dateStr].split) || defaultSplitFor(dateStr);
 }
 
 function getShiftEndTime(slot, split, startDate){
@@ -1199,7 +1216,7 @@ function getLastAssigned(docId, beforeDate, sched){
   let last=null;
   for(const d of dates){
     const ds=sched[d];
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(d);
     for(const sl of SLOTS){
       if(ds[sl]===docId) last={date:d,slot:sl,split:sp};
     }
@@ -1255,7 +1272,7 @@ function canWork(docId, date, slot, sched){
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
     // 大夜(D)→小夜(D+1): rest = nextSp-8. Need ≥12 → nextSp≥20.
-    if(tds['小夜']===docId&&clampSplit(tds.split||state.defaultSplit)<20) return false;
+    if(tds['小夜']===docId&&clampSplit(tds.split||defaultSplitFor(td))<20) return false;
     // N-OFF-D forward: 大夜→OFF→主白/早班 two days later
     const d2=addDays(date,2);
     const td1Worked=SLOTS.some(s=>tds[s]===docId);
@@ -1270,7 +1287,7 @@ function canWork(docId, date, slot, sched){
   // 大夜(D-1)→小夜(D): rest=sp-8. Need sp≥20 for ≥12h rest.
   if(slot==='小夜'){
     const yd=addDays(date,-1); const yds=sched[yd]||{};
-    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||state.defaultSplit)<20) return false;
+    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||defaultSplitFor(date))<20) return false;
   }
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
   for(const pr of nextDayPRs){
@@ -1313,7 +1330,7 @@ function canWorkRelaxed(docId, date, slot, sched){
     const td=addDays(date,1);
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
-    if(tds['小夜']===docId&&clampSplit(tds.split||state.defaultSplit)<20) return false;
+    if(tds['小夜']===docId&&clampSplit(tds.split||defaultSplitFor(td))<20) return false;
     const d2=addDays(date,2);
     const td1Worked=SLOTS.some(s=>tds[s]===docId);
     if(!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
@@ -1323,7 +1340,7 @@ function canWorkRelaxed(docId, date, slot, sched){
     const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
     const yd=addDays(date,-1); const yds=sched[yd]||{};
-    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||state.defaultSplit)<20) return false;
+    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||defaultSplitFor(date))<20) return false;
   }
   return true;
 }
@@ -1357,7 +1374,7 @@ function canWorkForce(docId, date, slot, sched){
   if(slot==='大夜'){
     const td=addDays(date,1); const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
-    if(tds['小夜']===docId&&clampSplit(tds.split||state.defaultSplit)<20) return false;
+    if(tds['小夜']===docId&&clampSplit(tds.split||defaultSplitFor(td))<20) return false;
     const d2=addDays(date,2);
     if(!SLOTS.some(s=>tds[s]===docId)&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
@@ -1365,7 +1382,7 @@ function canWorkForce(docId, date, slot, sched){
     const td=addDays(date,1); const tds=sched[td]||{};
     if(tds['主白']===docId||tds['早班']===docId) return false;
     const yd=addDays(date,-1); const yds=sched[yd]||{};
-    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||state.defaultSplit)<20) return false;
+    if(yds['大夜']===docId&&clampSplit((sched[date]||{}).split||defaultSplitFor(date))<20) return false;
   }
   return true;
 }
@@ -1400,7 +1417,7 @@ function slotTimeEdit(slot,split,customTimes){
 function calcDocHours(docId, sched){
   let h=0;
   for(const[d,ds]of Object.entries(sched)){
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(d);
     for(const sl of SLOTS){
       if(ds[sl]===docId){
         const ct=ds.customTimes&&ds.customTimes[sl];
@@ -1421,7 +1438,7 @@ function avgHours(sched){
 function calcDocPoints(docId, sched){
   let pts=0;
   for(const[d,ds]of Object.entries(sched)){
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(d);
     for(const sl of SLOTS){
       if(ds[sl]===docId){
         const ct=ds.customTimes&&ds.customTimes[sl];
@@ -1560,7 +1577,8 @@ function scoreDoc(docId, date, slot, sched){
 function bestSplitForPair(earlyId, lateId, date, sched){
   const earlyDoc = earlyId ? state.doctors.find(d=>d.id===earlyId) : null;
   const lateDoc  = lateId  ? state.doctors.find(d=>d.id===lateId)  : null;
-  if(!earlyDoc && !lateDoc) return state.defaultSplit;
+  const dayDefault = defaultSplitFor(date); // 平日20:00 / 假日17:00
+  if(!earlyDoc && !lateDoc) return dayDefault;
 
   // Pre-check: rest constraints that depend on split
   const prevDate = addDays(date, -1);
@@ -1570,14 +1588,14 @@ function bestSplitForPair(earlyId, lateId, date, sched){
   // 早班(D) starts at 08:00. If early doctor worked 小夜(D-1) ending 02:00 → rest=6h always blocked.
   // (already handled by canWork absolute prohibition — not split-dependent)
 
-  let bestSp = state.defaultSplit, bestSc = -Infinity;
+  let bestSp = dayDefault, bestSc = -Infinity;
   for(const sp of SPLIT_OPTS){
     const earlyH = sp - 8;   // 早班 hours
     const lateH  = 26 - sp;  // 小夜 hours
     let sc = 0;
     // REST CONSTRAINT: iron rule — block splits that violate 12h rest
     if(lateNeedsMinSp20 && sp < 20){ sc -= 99999; } // 大夜→小夜 with sp<20: rest=(sp-8)<12h
-    if(sp===20) sc += 10; // strong preference for 20:00 split
+    if(sp===dayDefault) sc += 200; // 當日預設切割點(平日20/假日17)為原則，僅休息硬規則可推翻
     // Long-shift preference
     if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 40;
     if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 40;
@@ -1636,10 +1654,10 @@ function _generateOnce(y,m,dates){
     if(state.lockedDays&&state.lockedDays.has(d)){
       // 當日已鎖定：整份保留原內容，自動排班不更動
       newSched[d]=JSON.parse(JSON.stringify(existing));
-      newSched[d].split=existing.split||state.defaultSplit;
+      newSched[d].split=existing.split||defaultSplitFor(d);
       for(const sl of SLOTS) if(!(sl in newSched[d])) newSched[d][sl]=null;
     } else {
-      newSched[d]={split:existing.split||state.defaultSplit, 主白:null, 早班:null, 小夜:null, 大夜:null};
+      newSched[d]={split:existing.split||defaultSplitFor(d), 主白:null, 早班:null, 小夜:null, 大夜:null};
       // 保留手動加入的額外醫師/特殊項目(楊天/ICU)與當日備註，自動排班不清除
       if(existing.extras&&existing.extras.length) newSched[d].extras=existing.extras.map(e=>({...e}));
       if(existing.note) newSched[d].note=existing.note;
@@ -1781,7 +1799,7 @@ function _generateOnce(y,m,dates){
         for(const slot of SLOTS){
           const occupant=newSched[d][slot];
           if(!occupant) continue;
-          const sp=newSched[d].split||state.defaultSplit;
+          const sp=newSched[d].split||defaultSplitFor(d);
           const occupantH=calcDocHours(occupant,newSched);
           if(occupantH-slotHours(slot,sp)<135) continue; // occupant would fall below 135h
           newSched[d][slot]=null;
@@ -1834,7 +1852,7 @@ function _generateOnce(y,m,dates){
     const d1=addDays(d,1); const ds1=newSched[d1]; if(!ds1||!ds1['小夜']) continue;
     if(LK.has(d1)) continue; // 鎖定日的切割點不改
     if(ds1['小夜']===did){
-      const sp=ds1.split||state.defaultSplit;
+      const sp=ds1.split||defaultSplitFor(d1);
       if(sp<20) ds1.split=20; // force minimum 20 for 12h rest
     }
   }
@@ -1874,7 +1892,7 @@ function _generateOnce(y,m,dates){
             // 不搶別人的唯一醫務會議格
             if(occDoc&&occDoc.prefs.medMeeting&&dayCoverCnt(occ)<=1) continue;
             if(strict){
-              const sp=newSched[thu].split||state.defaultSplit;
+              const sp=newSched[thu].split||defaultSplitFor(thu);
               if(calcDocHours(occ,newSched)-slotHours(slot,sp)<135) continue;
             }
             newSched[thu][slot]=doc.id;
@@ -1956,7 +1974,7 @@ function evaluateSchedule(sched,dates){
   for(const doc of full) perDoc[doc.id]={h:0,p:0,turn:0,lastSlot:lastSlotBefore(doc.id,dates[0]),consec:0,consecMax:0};
   for(const d of dates){
     const ds=sched[d]||{};
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(d);
     for(const doc of full){
       const rec=perDoc[doc.id];
       let worked=false;
@@ -2074,13 +2092,13 @@ function renderCalendar(){
     if(isManHol) badges+=`<span class="badge-hol" onclick="toggleHol('${dateStr}',event)" title="取消假日">假</span>`;
     else if(!isWknd) badges+=`<span class="badge-sethol" onclick="toggleHol('${dateStr}',event)" title="設為假日">設假</span>`;
     else badges+=`<span style="font-size:9px;color:#c0392b">${dowNames[dow]}</span>`;
-    if(split!==20) badges+=` <span class="badge-split">${split}:00切</span>`;
+    if(split!==defaultSplitFor(dateStr)) badges+=` <span class="badge-split">${split}:00切</span>`;
     if(isDayLocked) badges+=` <span class="badge-daylock" title="當日已鎖定，自動排班不會更動（點日期格於視窗內解鎖）">🔒鎖定</span>`;
 
     cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}">${day}</span><div class="day-badges">${badges}</div></div>`;
 
-    const ds=state.schedule[dateStr]||{split:state.defaultSplit};
-    const sp=ds.split||state.defaultSplit;
+    const ds=state.schedule[dateStr]||{};
+    const sp=ds.split||defaultSplitFor(dateStr);
     for(const slot of SLOTS){
       const docId=ds[slot];
       const doc=docId?state.doctors.find(d=>d.id===docId):null;
@@ -2218,7 +2236,7 @@ function renderMobileSchedule(){
   };
   for(const d of dates){
     const ds=state.schedule[d]||{};
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(d);
     const dow=getDOW(d); const hol=isHoliday(d);
     const day=parseInt(d.slice(-2));
     // 取各班別的時間與醫師
@@ -2277,7 +2295,7 @@ function openDayModal(dateStr){
   _dayDraftDate=dateStr;
   const ds=state.schedule[dateStr]||{};
   _dayDraft={
-    split:ds.split||state.defaultSplit,
+    split:ds.split||defaultSplitFor(dateStr),
     主白:ds['主白']||null, 早班:ds['早班']||null, 小夜:ds['小夜']||null, 大夜:ds['大夜']||null,
     customTimes:ds.customTimes?{...ds.customTimes}:{},
     extras:(ds.extras||[]).map(e=>({...e})),
@@ -2455,12 +2473,12 @@ function cancelDayModal(){
 function checkConstraints(dateStr){
   const issues=[];
   const ds=state.schedule[dateStr]||{};
-  const sp=ds.split||state.defaultSplit;
+  const sp=ds.split||defaultSplitFor(dateStr);
   for(const slot of SLOTS){
     const docId=ds[slot]; if(!docId) continue;
     const last=getLastAssigned(docId,dateStr,state.schedule);
     if(last){
-      const end=getShiftEndTime(last.slot,last.split||state.defaultSplit,last.date);
+      const end=getShiftEndTime(last.slot,last.split||defaultSplitFor(last.date),last.date);
       const startH=slotRange(slot,sp).s;
       const rest=hoursBetween(end.date,end.hour,dateStr,startH);
       if(rest<12) issues.push(`${getDocName(docId)} 休息不足12h (${rest}h)`);
@@ -2993,7 +3011,7 @@ function renderStats(){
 
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(dateStr);
     for(const slot of SLOTS){
       const docId=ds[slot]; if(!docId||!st[docId]) continue;
       const s=st[docId];
@@ -3657,12 +3675,12 @@ function applyCloudData(data){
   state.lockedDays=new Set(data.lockedDays||[]);
   // 不套用 data.year/month：檢視月份是本機視圖狀態，不隨其他裝置跳動
   state.defaultSplit=clampSplit(data.defaultSplit||20);
+  state.holidaySplit=clampSplit(data.holidaySplit||17);
   state.avoidPairs=data.avoidPairs||[];
   if(data.idCnt) _idCnt=data.idCnt;
   _lockedMonths.clear(); (data.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
   _completedMonths.clear(); (data.completedMonths||[]).forEach(k=>_completedMonths.add(k));
-  const sl=document.getElementById('default-split');
-  if(sl) sl.value=state.defaultSplit;
+  _syncSplitSelects();
   renderCalendar();
   renderDoctorTable();
   renderPRList();
@@ -3672,7 +3690,7 @@ function applyCloudData(data){
   try{ localStorage.setItem(LS_KEY,JSON.stringify({
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]
   }));}catch(e){}
 }
@@ -3682,7 +3700,7 @@ function cloudSave(){
   const data={
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],
     idCnt:_idCnt,lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths],_ts:Date.now(),_client:_clientId
   };
   _fbRef.set(data)
@@ -3748,7 +3766,7 @@ function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
       holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
-      defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
       lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
     localStorage.setItem(LS_KEY,JSON.stringify(data));
     const ind=document.getElementById('_autosave_ind');
@@ -3770,6 +3788,7 @@ function autoLoad(){
     if(d.year!=null) state.year=d.year;
     if(d.month!=null) state.month=d.month;
     state.defaultSplit=clampSplit(d.defaultSplit||20);
+    state.holidaySplit=clampSplit(d.holidaySplit||17);
     state.avoidPairs=d.avoidPairs||[];
     if(d.idCnt) _idCnt=d.idCnt;
     _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -3781,7 +3800,7 @@ function autoLoad(){
 function saveData(){
   const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt};
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -3804,9 +3823,10 @@ function loadData(){
         if(d.year!=null) state.year=d.year;
         if(d.month!=null) state.month=d.month;
         state.defaultSplit=clampSplit(d.defaultSplit||20);
+        state.holidaySplit=clampSplit(d.holidaySplit||17);
         state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
-        document.getElementById('default-split').value=state.defaultSplit;
+        _syncSplitSelects();
         autoSave();
         renderCalendar(); showToast('載入成功！');
       }catch(err){showToast('載入失敗: '+err.message,'warn');}
@@ -3820,7 +3840,7 @@ function exportCSV(){
   const DOW=['一','二','三','四','五','六','日'];
   const rows=[['日期','星期','假日','切割點','主白醫師','主白時間','早班醫師','早班時間','小夜醫師','小夜時間','大夜醫師','大夜時間']];
   for(const d of dates){
-    const ds=state.schedule[d]||{};const sp=ds.split||state.defaultSplit;
+    const ds=state.schedule[d]||{};const sp=ds.split||defaultSplitFor(d);
     rows.push([d,DOW[getDOW(d)],isHoliday(d)?'是':'',sp+':00',
       getDocName(ds['主白'])||'',slotTimeStr('主白',sp),
       getDocName(ds['早班'])||'',slotTimeStr('早班',sp),
@@ -3841,7 +3861,7 @@ function exportDoctorHoursCSV(){
   for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0};
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(dateStr);
     const hol=isHoliday(dateStr);
     for(const slot of SLOTS){
       const docId=ds[slot]; if(!docId||!st[docId]) continue;
@@ -3934,7 +3954,7 @@ function buildDoctorICS(docId){
   };
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(dateStr);
     const hol=isHoliday(dateStr);
     for(const slot of SLOTS){
       if(ds[slot]!==docId) continue;
@@ -3995,7 +4015,7 @@ function generatePDF(){
   let calCells=Array(firstDow).fill('<div></div>').join('');
   for(const d of dates){
     const ds=state.schedule[d]||{};
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(d);
     const dow=getDOW(d); const hol=isHoliday(d);
     const day=parseInt(d.slice(-2));
     const bg=hol?'#fde8e8':dow>=5?'#fff0f0':'#fff';
@@ -4037,7 +4057,7 @@ function generatePDF(){
   for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:lastSlotBefore(doc.id,dates[0]),consecMax:0};
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(dateStr);
     const hol=isHoliday(dateStr);
     for(const slot of SLOTS){
       const docId=ds[slot]; if(!docId||!st[docId]) continue;
@@ -4203,7 +4223,7 @@ function generateMedPDF(){
 
   for(const d of dates){
     const ds=state.schedule[d]||{};
-    const sp=ds.split||state.defaultSplit;
+    const sp=ds.split||defaultSplitFor(d);
     const dow=getDOW(d); const hol=isHoliday(d);
     const day=parseInt(d.slice(-2));
     const wknd=dow>=5||hol;
@@ -4322,7 +4342,7 @@ function generateOvertimePDF(){
     const rows=[];
     for(const d of dates){
       const ds=state.schedule[d]||{};
-      const sp=ds.split||state.defaultSplit;
+      const sp=ds.split||defaultSplitFor(d);
       const hol=isHoliday(d);
       const day=parseInt(d.slice(-2));
       const dow=dowNames[getDOW(d)];
@@ -4448,8 +4468,7 @@ window.onload=()=>{
     initPersonalView(hash.slice(4));
   } else {
     const restored=autoLoad();
-    const splitEl=document.getElementById('default-split');
-    if(splitEl) splitEl.value=state.defaultSplit;
+    _syncSplitSelects();
     renderCalendar();
     updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
     initViewMode(); // 依裝置/使用者設定套用看板檢視模式
