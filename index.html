@@ -625,7 +625,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
       <thead><tr><th>設定</th><th>說明</th></tr></thead>
       <tbody>
         <tr><td>白班 / 小夜 / 大夜 / 假日偏好</td><td>-2（少）至 +2（多），影響自動排班分配比例</td></tr>
-        <tr><td>時數偏好</td><td>-2 至 +2，微調個人目標總時數</td></tr>
+        <tr><td>時數偏好</td><td><strong>僅 +1 / 0 / -1</strong>（每級 10 小時），目標＝全體平均 ± 10h；避免醫師間時數差距過大</td></tr>
         <tr><td>連班上限</td><td>連續上班天數最大值，超過觸發違規警告</td></tr>
         <tr><td>不排白班</td><td>勾選後僅排小夜或大夜</td></tr>
         <tr><td>醫務會議</td><td><strong>強制</strong>每月至少排一個週四主白/早班供簽到（僅在整月週四皆預假/鎖定時例外，統計會警告）</td></tr>
@@ -819,7 +819,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
     <div class="form-row"><label>大夜偏好 (20-08)</label><div class="pref-seg" id="seg-大夜"></div></div>
     <div class="form-row"><label>假日偏好</label><div class="pref-seg" id="seg-hol"></div></div>
     <h3>點值與連班</h3>
-    <div class="form-row"><label>時數偏好</label><div class="pref-seg" id="seg-htPref"></div><span class="pref-hint">＋1＝+10h／＋2＝+20h</span></div>
+    <div class="form-row"><label>時數偏好</label><div class="pref-seg" id="seg-htPref"></div><span class="pref-hint">＋1＝+10h／－1＝−10h</span></div>
     <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
@@ -2603,12 +2603,15 @@ function openDocModal(docId){
   document.getElementById('doctor-modal').classList.add('show');
 }
 
-// 偏好分段選擇：＋2 ＋1 0 －1 －2
+// 偏好分段選擇：班別偏好 ＋2~－2；時數偏好僅 ＋1 0 －1（避免時數差距過大）
 const _prefVals={};
+const PREF_RANGE={htPref:[1,0,-1]};
 function _renderPrefSeg(key,val){
-  _prefVals[key]=val|0;
+  const opts=PREF_RANGE[key]||[2,1,0,-1,-2];
+  const lo=opts[opts.length-1], hi=opts[0];
+  _prefVals[key]=Math.max(lo,Math.min(hi,val|0)); // 舊資料超出範圍自動收斂
   const el=document.getElementById('seg-'+key); if(!el) return;
-  el.innerHTML=[2,1,0,-1,-2].map(v=>{
+  el.innerHTML=opts.map(v=>{
     const on=(_prefVals[key]===v);
     const cls='on'+(v<0?' neg':(v===0?' zero':''));
     const lbl=v>0?('＋'+v):(v<0?('－'+Math.abs(v)):'0');
@@ -3379,12 +3382,12 @@ function initPersonalView(encoded){
     prefsHtml+='</div>';
     prefsHtml+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;">
       <div style="background:#f8f9fa;padding:10px;border-radius:6px">
-        <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">時數偏好 (-2少30h/-1少15h/0普通/+1多15h/+2多30h)</div>
+        <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">時數偏好 (-1 少10h ／ 0 普通 ／ +1 多10h)</div>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:10px">少</span>
-          <input type="range" id="pvp-htPref" min="-2" max="2" step="1" value="${pvState.prefs.htPref||0}" oninput="document.getElementById('pvpv-htPref').textContent=this.value" style="flex:1">
-          <span style="font-size:10px">多</span>
-          <span id="pvpv-htPref" style="min-width:28px;text-align:center;font-size:11px;background:#eee;padding:2px 5px;border-radius:3px">${pvState.prefs.htPref||0}</span>
+          <span style="font-size:10px">-1</span>
+          <input type="range" id="pvp-htPref" min="-1" max="1" step="1" value="${Math.max(-1,Math.min(1,pvState.prefs.htPref||0))}" oninput="document.getElementById('pvpv-htPref').textContent=this.value" style="flex:1">
+          <span style="font-size:10px">+1</span>
+          <span id="pvpv-htPref" style="min-width:28px;text-align:center;font-size:11px;background:#eee;padding:2px 5px;border-radius:3px">${Math.max(-1,Math.min(1,pvState.prefs.htPref||0))}</span>
         </div>
       </div>
       <div style="background:#f8f9fa;padding:10px;border-radius:6px">
@@ -3742,6 +3745,14 @@ function openCloudSettings(){
 }
 
 function migrateData(d){
+  // 時數偏好改為僅 +1/0/-1，舊資料的 ±2 收斂到 ±1
+  if(Array.isArray(d.doctors)){
+    for(const doc of d.doctors){
+      if(doc&&doc.prefs&&typeof doc.prefs.htPref==='number'){
+        doc.prefs.htPref=Math.max(-1,Math.min(1,doc.prefs.htPref));
+      }
+    }
+  }
   // Rename old '晚班' slot key to '小夜' in schedule and preRequests
   if(d.schedule){
     for(const ds of Object.values(d.schedule)){
