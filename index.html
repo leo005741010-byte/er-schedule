@@ -624,7 +624,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
     <table class="man-tbl">
       <thead><tr><th>設定</th><th>說明</th></tr></thead>
       <tbody>
-        <tr><td>白班 / 小夜 / 大夜 / 假日偏好</td><td>-2（少）至 +2（多），影響自動排班分配比例</td></tr>
+        <tr><td>白班 / 小夜 / 大夜 / 假日偏好</td><td><strong>+1 / 0 / -1</strong>（多／普通／少），影響自動排班分配比例</td></tr>
         <tr><td>時數偏好</td><td><strong>僅 +1 / 0 / -1</strong>（每級 10 小時），目標＝全體平均 ± 10h；避免醫師間時數差距過大</td></tr>
         <tr><td>連班上限</td><td>連續上班天數最大值，超過觸發違規警告</td></tr>
         <tr><td>不排白班</td><td>勾選後僅排小夜或大夜</td></tr>
@@ -1836,6 +1836,10 @@ function _generateOnce(y,m,dates){
     _fillEmpties(newSched,fullSched,dates);
   }
 
+  // 時數再平衡：貪婪填完後把「最超標者」的班移給「最不足者」
+  // （解決預假/休息鏈造成的容量窗錯位——貪婪當下看不到月底的失衡）
+  _rebalanceHours(newSched,fullSched,dates);
+
   // Auto-optimize split for each day based on assigned 早班/小夜 doctors
   for(const d of dates){
     // Only auto-optimize if split wasn't locked by a WORK_CUSTOM pre-request
@@ -1875,35 +1879,43 @@ function _generateOnce(y,m,dates){
         if(prs.some(pr=>['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type))) return false;
         return !SLOTS.some(s=>newSched[thu][s]===doc.id); // 當日已有其他班則跳過
       });
-      let done=false;
-      // 第一階段：塞空格
+      // 收集所有可行選項（含轉班數），優先挑轉班≤3且最小者；會議是鐵律，真沒有才硬排
+      const options=[];
+      const tryOpt=(thu,slot,occ)=>{
+        newSched[thu][slot]=doc.id;
+        if(canWorkForce(doc.id,thu,slot,fullSched)){
+          const t=countTurnovers(doc.id,newSched);
+          options.push({thu,slot,occ,t});
+        }
+        newSched[thu][slot]=occ; // 還原（occ 為 null 表原本是空格）
+      };
+      // 第一階段：空格
       for(const thu of usableThus){
         for(const slot of ['主白','早班']){
-          if(newSched[thu][slot]) continue;
-          if(canWorkForce(doc.id,thu,slot,fullSched)){ newSched[thu][slot]=doc.id; done=true; break; }
+          if(!newSched[thu][slot]) tryOpt(thu,slot,null);
         }
-        if(done) break;
       }
-      // 第二階段：擠掉別人（先挑不會害對方掉到135以下者；真沒有再放寬）
+      // 第二階段：擠掉別人（strict=不害對方<135h；放寬版本墊後）
       for(const strict of [true,false]){
-        if(done) break;
         for(const thu of usableThus){
-          if(done) break;
           for(const slot of ['主白','早班']){
             const occ=newSched[thu][slot];
             if(!occ) continue;
             const occDoc=state.doctors.find(x=>x.id===occ);
-            // 不搶別人的唯一醫務會議格
-            if(occDoc&&occDoc.prefs.medMeeting&&dayCoverCnt(occ)<=1) continue;
+            if(occDoc&&occDoc.prefs.medMeeting&&dayCoverCnt(occ)<=1) continue; // 不搶唯一簽到格
             if(strict){
               const sp=newSched[thu].split||defaultSplitFor(thu);
               if(calcDocHours(occ,newSched)-slotHours(slot,sp)<135) continue;
             }
-            newSched[thu][slot]=doc.id;
-            if(canWorkForce(doc.id,thu,slot,fullSched)){ done=true; break; }
-            newSched[thu][slot]=occ; // 還原
+            if(!options.some(o=>o.thu===thu&&o.slot===slot)) tryOpt(thu,slot,occ);
           }
         }
+      }
+      if(options.length){
+        // 空格優先於擠人、轉班≤3優先、轉班數小者優先
+        options.sort((a,b)=>((a.occ?1:0)-(b.occ?1:0)) || ((a.t>3?1:0)-(b.t>3?1:0)) || (a.t-b.t));
+        const best=options[0];
+        newSched[best.thu][best.slot]=doc.id;
       }
       // 全部週四都被預假/鎖定/休息規則擋住 → 只能放棄，統計報表會顯示警告
     }
@@ -1966,6 +1978,82 @@ function _removeRestViolations(newSched,dates){
   return removed;
 }
 
+// 時數再平衡：把最超標者的班移給最不足者（守住所有鐵律：預假/鎖定/休息/135h/醫務會議/轉班≤3/不交替大夜）
+function _rebalanceHours(newSched,fullSched,dates){
+  const LK=state.lockedDays||new Set();
+  const full=state.doctors.filter(x=>x.type==='full');
+  if(full.length<2) return;
+  const thursdays=dates.filter(x=>getDOW(x)===3);
+  // 嘗試把 giver 的某班移給 taker；成功回傳 true
+  const tryMove=(giver,taker)=>{
+    for(const d of shuffle([...dates])){
+      if(LK.has(d)) continue;
+      const ds=newSched[d]; if(!ds) continue;
+      if(SLOTS.some(s=>ds[s]===taker.doc.id)) continue; // 接手者當日已有班
+      for(const sl of SLOTS){
+        if(ds[sl]!==giver.doc.id) continue;
+        // 不動預班格
+        if((state.preRequests[d]||[]).some(pr=>pr.docId===giver.doc.id&&pr.type&&pr.type.startsWith('WORK'))) continue;
+        // 不拆超標者唯一的醫務會議覆蓋
+        if(giver.doc.prefs.medMeeting&&getDOW(d)===3&&(sl==='主白'||sl==='早班')){
+          const cover=thursdays.filter(x=>newSched[x]['主白']===giver.doc.id||newSched[x]['早班']===giver.doc.id).length;
+          if(cover<=1) continue;
+        }
+        // 超標者移除後不可低於135h
+        const sp=ds.split||defaultSplitFor(d);
+        if(giver.h-slotHours(sl,sp)<135) continue;
+        // 搬走大夜不可讓原主人形成「夜-休-夜」交替（精確模擬移除前後比較）
+        if(sl==='大夜'){
+          const gAlt=()=>{let c=0;for(let i=0;i<dates.length-2;i++){const a=(newSched[dates[i]]||{})['大夜']===giver.doc.id,b=(newSched[dates[i+1]]||{})['大夜']===giver.doc.id,e=(newSched[dates[i+2]]||{})['大夜']===giver.doc.id;if(a&&!b&&e)c++;}return c;};
+          const beforeAlt=gAlt();
+          ds[sl]=null;
+          const worse=gAlt()>beforeAlt;
+          ds[sl]=giver.doc.id;
+          if(worse) continue;
+        }
+        ds[sl]=null;
+        const ok=canWork(taker.doc.id,d,sl,fullSched)||canWorkRelaxed(taker.doc.id,d,sl,fullSched)||canWorkForce(taker.doc.id,d,sl,fullSched);
+        if(ok){
+          ds[sl]=taker.doc.id;
+          // 接手後不可造成第4次轉班或大夜交替
+          const t=countTurnovers(taker.doc.id,newSched);
+          let altBad=false;
+          if(sl==='大夜'){
+            const nAt=off=>{const dd=newSched[addDays(d,off)];return !!(dd&&dd['大夜']===taker.doc.id);};
+            if(!nAt(-1)&&!nAt(1)&&(nAt(-2)||nAt(2))) altBad=true;
+          }
+          if(t<=3&&!altBad) return true;
+          ds[sl]=giver.doc.id; // 還原
+        } else {
+          ds[sl]=giver.doc.id; // 還原
+        }
+      }
+    }
+    return false;
+  };
+  for(let iter=0; iter<80; iter++){
+    const hAvg=full.reduce((s,d)=>s+calcDocHours(d.id,newSched),0)/full.length;
+    const info=full.map(doc=>{
+      const off=countDocOffDays(doc.id);
+      const tgt=hAvg+(doc.prefs.htPref||0)*Math.max(0.25,1-off/30)*10;
+      return {doc, h:calcDocHours(doc.id,newSched), tgt};
+    }).sort((a,b)=>(a.h-a.tgt)-(b.h-b.tgt));
+    // 多對多：從最不足者開始，依序嘗試向每一位超標者(由重到輕)接班
+    let moved=false;
+    for(const under of info){
+      if(under.tgt-under.h<6) break; // 之後的更不缺
+      for(let j=info.length-1; j>=0; j--){
+        const over=info[j];
+        if(over.h-over.tgt<6) break; // 之後的更不超
+        if(over.doc.id===under.doc.id) continue;
+        if(tryMove(over,under)){ moved=true; break; }
+      }
+      if(moved) break;
+    }
+    if(!moved) break; // 所有不足×超標配對都無法移動
+  }
+}
+
 // ============================================================
 // 排班品質評分
 // ============================================================
@@ -2010,7 +2098,8 @@ function evaluateSchedule(sched,dates){
     const tgt=hAvg+(doc.prefs.htPref||0)*availScale*10;
     const dv=Math.abs(rec.h-tgt);
     tgtDev+=dv;
-    if(dv>6) hardDev+=dv-6; // 個別醫師大幅偏離目標：不容平均稀釋，重罰
+    if(dv>5) hardDev+=dv-5; // 個別醫師大幅偏離目標：不容平均稀釋，重罰
+    rec._tgt=tgt;
     turnTotal+=rec.turn;
     if(rec.turn>3) turnExcess+=rec.turn-3; // 目標≤3次，超過部分重罰
     const maxC=doc.prefs.maxConsec||6;
@@ -2028,17 +2117,29 @@ function evaluateSchedule(sched,dates){
     }
   }
   const hSd=full.length?tgtDev/full.length:0; // 平均偏離個人目標
+  // 反轉懲罰：時數偏好-1者的時數竟高於+1者，直接重罰其差距
+  let invPen=0;
+  for(const a of full){
+    if((a.prefs.htPref||0)!==1) continue;
+    for(const b of full){
+      if((b.prefs.htPref||0)!==-1) continue;
+      const over=perDoc[b.id].h-perDoc[a.id].h;
+      if(over>0) invPen+=over;
+    }
+  }
   let score=100;
-  score-=empty*8;
+  score-=empty*300;      // 空缺：鐵律級，有正常候選就絕不選有空缺的
   score-=hSd*2.0;
-  score-=hardDev*6;
+  score-=hardDev*10;
+  score-=invPen*4;
   score-=pSd*0.4;
-  score-=altNight*50;
-  score-=turnExcess*40;
+  score-=altNight*120;
+  score-=turnExcess*200; // 轉班>3：鐵律級
   score-=turnTotal*1.5;
   score-=consecViol*8;
   score-=under135*0.4;
-  score=Math.max(0,Math.round(score));
+  // 分數僅供內部挑最佳比較，可為負值（勿再夾0：會讓所有候選同分、挑選退化成亂數）
+  score=Math.round(score);
   return {score,empty,hSd:Math.round(hSd*10)/10,pSd:Math.round(pSd*10)/10,turnTotal,consecViol};
 }
 
@@ -2607,11 +2708,10 @@ function openDocModal(docId){
   document.getElementById('doctor-modal').classList.add('show');
 }
 
-// 偏好分段選擇：班別偏好 ＋2~－2；時數偏好僅 ＋1 0 －1（避免時數差距過大）
+// 偏好分段選擇：所有偏好一律 ＋1 0 －1（避免固定加分過大扭曲時數分配）
 const _prefVals={};
-const PREF_RANGE={htPref:[1,0,-1]};
 function _renderPrefSeg(key,val){
-  const opts=PREF_RANGE[key]||[2,1,0,-1,-2];
+  const opts=[1,0,-1];
   const lo=opts[opts.length-1], hi=opts[0];
   _prefVals[key]=Math.max(lo,Math.min(hi,val|0)); // 舊資料超出範圍自動收斂
   const el=document.getElementById('seg-'+key); if(!el) return;
@@ -3372,13 +3472,13 @@ function initPersonalView(encoded){
     const PREF_LABELS={'白班':'白班偏好 (08上班)','小夜':'小夜偏好 (迄02:00)','大夜':'大夜偏好 (20-08)','hol':'假日偏好'};
     let prefsHtml='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
     for(const [k,label] of Object.entries(PREF_LABELS)){
-      const v=pvState.prefs[k]||0;
+      const v=Math.max(-1,Math.min(1,pvState.prefs[k]||0));
       prefsHtml+=`<div style="background:#f8f9fa;padding:10px;border-radius:6px;">
         <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px">${label}</div>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:10px">少</span>
-          <input type="range" id="pvp-${k}" min="-2" max="2" step="1" value="${v}" oninput="document.getElementById('pvpv-${k}').textContent=this.value" style="flex:1">
-          <span style="font-size:10px">多</span>
+          <span style="font-size:10px">-1</span>
+          <input type="range" id="pvp-${k}" min="-1" max="1" step="1" value="${v}" oninput="document.getElementById('pvpv-${k}').textContent=this.value" style="flex:1">
+          <span style="font-size:10px">+1</span>
           <span id="pvpv-${k}" style="min-width:28px;text-align:center;font-size:11px;background:#eee;padding:2px 5px;border-radius:3px">${v}</span>
         </div>
       </div>`;
@@ -3749,11 +3849,13 @@ function openCloudSettings(){
 }
 
 function migrateData(d){
-  // 時數偏好改為僅 +1/0/-1，舊資料的 ±2 收斂到 ±1
+  // 所有偏好改為僅 +1/0/-1，舊資料的 ±2 收斂到 ±1
   if(Array.isArray(d.doctors)){
     for(const doc of d.doctors){
-      if(doc&&doc.prefs&&typeof doc.prefs.htPref==='number'){
-        doc.prefs.htPref=Math.max(-1,Math.min(1,doc.prefs.htPref));
+      if(doc&&doc.prefs){
+        for(const k of ['htPref','白班','小夜','大夜','hol']){
+          if(typeof doc.prefs[k]==='number') doc.prefs[k]=Math.max(-1,Math.min(1,doc.prefs[k]));
+        }
       }
     }
   }
