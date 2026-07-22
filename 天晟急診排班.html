@@ -1306,6 +1306,12 @@ function canWorkRelaxed(docId, date, slot, sched){
   if(SLOTS.some(s=>ds[s]===docId)) return false;
   const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
   for(const pr of prs){if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;}
+  // 隔天有「OFF+前天不大夜/不夜班」的預假 → 今天不可排對應夜班（與 canWork/canWorkForce 一致；預假為鐵律不得放寬）
+  const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
+  for(const pr of nextDayPRs){
+    if((pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')&&slot==='大夜') return false;
+    if(pr.type==='OFF_NO_NIGHT'&&slot==='小夜') return false;
+  }
   const last=getLastAssigned(docId,date,sched);
   if(last){
     const end=getShiftEndTime(last.slot,last.split,last.date);
@@ -3213,6 +3219,17 @@ function renderStats(){
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     if(s.consecMax>doc.prefs.maxConsec) viols.push(`⚠ ${doc.name} 連班超標(${s.consecMax}天 > ${doc.prefs.maxConsec}天)`);
     if(s.shifts>3) viols.push(`⚠ ${doc.name} 轉班次數${s.shifts}次（目標 ≤ 3次）`);
+    // 預假「OFF+前天不大夜/不夜班」被違反（例：9/20 設此預假，則 9/19 不得排大夜）
+    for(const d of dates){
+      const nx=(state.preRequests[addDays(d,1)]||[]).filter(r=>r.docId===doc.id);
+      const ds2=state.schedule[d]||{};
+      for(const pr of nx){
+        if((pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')&&ds2['大夜']===doc.id)
+          viols.push(`⚠ ${doc.name} ${d} 排了大夜，但隔日預假要求前一天不排大夜`);
+        if(pr.type==='OFF_NO_NIGHT'&&ds2['小夜']===doc.id)
+          viols.push(`⚠ ${doc.name} ${d} 排了小夜，但隔日預假要求前一天不排夜班`);
+      }
+    }
     const offDays=countDocOffDays(doc.id,_statsYear,_statsMonth);
     if(totalH<135) viols.push(`⚠ ${doc.name} 時數不足135h（實際${totalH}h，預假${offDays}天）`);
     const avgHrs=fullDocs.reduce((acc,d2)=>{const z=st[d2.id];return acc+z.w816+z.h816+z.w1602+z.h1602+z.w028+z.h028;},0)/(fullDocs.length||1);
