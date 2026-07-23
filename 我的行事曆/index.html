@@ -60,9 +60,24 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .cloud.err .dot{background:#f59e0b}
 
 /* ===== Month nav ===== */
-.navbar{display:flex;align-items:center;gap:8px;margin:4px 4px 12px}
-.navbar .mtitle{font-size:20px;font-weight:800;flex:1;letter-spacing:.5px}
+.navbar{display:flex;align-items:center;gap:8px;margin:4px 4px 12px;flex-wrap:wrap}
+.navgroup{display:flex;align-items:center;gap:4px;flex:1;min-width:200px}
+.navbar .mtitle{font-size:19px;font-weight:800;flex:1;letter-spacing:.5px;text-align:center;
+  display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 4px;border-radius:11px;transition:.12s;color:var(--ink)}
+.navbar .mtitle:active{background:var(--card)}
+.navbar .mtitle::after{content:"▾";font-size:12px;color:var(--muted);font-weight:700}
 .navbar .mtitle small{font-size:13px;color:var(--muted);font-weight:600;margin-left:6px}
+/* 月份選擇器 */
+.yearnav{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:18px}
+.yearnav .yr{font-size:21px;font-weight:800;min-width:96px;text-align:center}
+.monthgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.mopt{padding:17px 0;border-radius:14px;background:var(--bg);border:1.5px solid var(--line);
+  font-size:15px;font-weight:700;color:var(--ink);transition:.12s;position:relative}
+.mopt:active{transform:scale(.95)}
+.mopt.now{color:var(--brand);border-color:var(--brand)}
+.mopt.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.mopt .nowdot{position:absolute;top:8px;right:10px;width:6px;height:6px;border-radius:50%;background:var(--brand)}
+.mopt.on .nowdot{background:#fff}
 .iconbtn{width:38px;height:38px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);
   display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--ink);transition:.15s;flex-shrink:0}
 .iconbtn:active{transform:scale(.92)}
@@ -239,8 +254,11 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   </div>
 
   <div class="navbar">
-    <button class="iconbtn" onclick="shiftMonth(-1)">‹</button>
-    <div class="mtitle" id="mtitle"></div>
+    <div class="navgroup">
+      <button class="iconbtn" onclick="shiftMonth(-1)">‹</button>
+      <button class="mtitle" id="mtitle" onclick="openMonthPicker()"></button>
+      <button class="iconbtn" onclick="shiftMonth(1)">›</button>
+    </div>
     <button class="pill" onclick="goToday()">今天</button>
     <div class="seg">
       <button id="seg-month" class="active" onclick="setView('month')">月</button>
@@ -326,6 +344,20 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
       <button class="btn ghost" onclick="closeSheets()">取消</button>
       <button class="btn primary" onclick="saveEvent()">儲存</button>
     </div>
+  </div>
+</div>
+
+<!-- Month picker sheet -->
+<div class="sheet" id="monthsheet">
+  <div class="grab"></div>
+  <div class="sheet-head"><div class="sh-date">選擇月份</div></div>
+  <div class="sheet-body">
+    <div class="yearnav">
+      <button class="iconbtn" onclick="pickerYear(-1)">‹</button>
+      <div class="yr" id="pk-year"></div>
+      <button class="iconbtn" onclick="pickerYear(1)">›</button>
+    </div>
+    <div class="monthgrid" id="pk-months"></div>
   </div>
 </div>
 
@@ -647,11 +679,9 @@ function showSheet(id){
   document.getElementById('mask').classList.add('show');
   document.getElementById(id).classList.add('show');
 }
-function closeSheets(ev){
-  if(ev&&ev.target&&ev.target.id!=='mask'&&ev.type==='click') { /* clicked mask only */ }
+function closeSheets(){
   document.getElementById('mask').classList.remove('show');
-  document.getElementById('daysheet').classList.remove('show');
-  document.getElementById('formsheet').classList.remove('show');
+  ['daysheet','formsheet','monthsheet'].forEach(id=>document.getElementById(id).classList.remove('show'));
 }
 function setView(v){
   state.view=v;
@@ -664,6 +694,23 @@ function shiftMonth(n){
   render();
 }
 function goToday(){const d=new Date();viewY=d.getFullYear();viewM=d.getMonth();render();}
+
+/* 月份選擇器 */
+let pkYear;
+function openMonthPicker(){pkYear=viewY;renderPicker();showSheet('monthsheet');}
+function pickerYear(n){pkYear+=n;renderPicker();}
+function renderPicker(){
+  document.getElementById('pk-year').textContent=pkYear+'年';
+  const now=new Date(), ny=now.getFullYear(), nm=now.getMonth();
+  let html='';
+  for(let i=0;i<12;i++){
+    const cur=(pkYear===viewY&&i===viewM);
+    const isNow=(pkYear===ny&&i===nm);
+    html+=`<button class="mopt ${cur?'on':''} ${isNow?'now':''}" onclick="jumpMonth(${pkYear},${i})">${i+1}月${isNow?'<span class="nowdot"></span>':''}</button>`;
+  }
+  document.getElementById('pk-months').innerHTML=html;
+}
+function jumpMonth(y,m){viewY=y;viewM=m;closeSheets();render();}
 
 /* ============================================================
    Persistence
