@@ -1525,8 +1525,8 @@ function scoreDoc(docId, date, slot, sched){
   const myPts=calcDocPoints(docId,sched);
   const avgPts=avgPoints(sched);
   score+=(avgPts-myPts)*0.8;
-  // 班別偏好：大夜加重(60)避免被時數壓力蓋過 −1，其他班別 36
-  score+=(doc.prefs[slotPrefKey(slot)]||0)*(slot==='大夜'?60:36);
+  // 班別偏好：大夜 −1 者 150（壓過時數拉力，寧可時數少也不上大夜）、其他大夜 60、一般班別 36
+  score+=(doc.prefs[slotPrefKey(slot)]||0)*(slot==='大夜'?(((doc.prefs['大夜']||0)<0)?150:60):36);
   // 假日偏好：×5 幾乎無作用，提高到 ×30 使 −1/+1 真正有感
   if(isHoliday(date)) score+=(doc.prefs.hol||0)*30;
   const last=getLastAssigned(docId,date,sched);
@@ -2000,6 +2000,8 @@ function _rebalanceHours(newSched,fullSched,dates){
       if(SLOTS.some(s=>ds[s]===taker.doc.id)) continue; // 接手者當日已有班
       for(const sl of SLOTS){
         if(ds[sl]!==giver.doc.id) continue;
+        // 大夜 −1 者不藉再平衡接大夜（寧可時數少）
+        if(sl==='大夜'&&(taker.doc.prefs['大夜']||0)<0) continue;
         // 不動預班格
         if((state.preRequests[d]||[]).some(pr=>pr.docId===giver.doc.id&&pr.type&&pr.type.startsWith('WORK'))) continue;
         // 不拆超標者唯一的醫務會議覆蓋
@@ -2104,7 +2106,9 @@ function evaluateSchedule(sched,dates){
     const offDays=countDocOffDays(doc.id,y,m);
     const availScale=Math.max(0.25,1-offDays/30);
     const tgt=hAvg+(doc.prefs.htPref||0)*availScale*10;
-    const dv=Math.abs(rec.h-tgt);
+    let dv=Math.abs(rec.h-tgt);
+    // 大夜-1者「低於」目標視為避夜的合理代價，寬容15h內不罰（高於目標仍照罰）
+    if((doc.prefs['大夜']||0)<0 && rec.h<tgt) dv=Math.max(0,dv-15);
     tgtDev+=dv;
     if(dv>5) hardDev+=dv-5; // 個別醫師大幅偏離目標：不容平均稀釋，重罰
     rec._tgt=tgt;
