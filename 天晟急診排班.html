@@ -2583,7 +2583,9 @@ function confirmDayModal(){
   _dayDraft=null; _dayDraftDate=null;
   autoSave();
   closeModal('day-modal');
-  showToast(`✅ ${savedDate} 已儲存`);
+  const _iss=checkConstraints(savedDate);
+  if(_iss.length) showToast(`⚠ ${savedDate} 已儲存，但請注意：${_iss.join('；')}`,'warn');
+  else showToast(`✅ ${savedDate} 已儲存`);
 }
 
 function cancelDayModal(){
@@ -2771,9 +2773,17 @@ function delDoc(docId){
   if(!confirm('確定刪除？')) return;
   state.doctors=state.doctors.filter(d=>d.id!==docId);
   state.avoidPairs=(state.avoidPairs||[]).filter(p=>!p.includes(docId));
-  for(const ds of Object.values(state.schedule)){for(const sl of SLOTS)if(ds[sl]===docId)ds[sl]=null;}
+  for(const ds of Object.values(state.schedule)){
+    for(const sl of SLOTS)if(ds[sl]===docId)ds[sl]=null;
+    if(ds.extras) ds.extras=ds.extras.filter(ex=>ex.docId!==docId); // 清除加班/楊天/ICU 殘留
+  }
+  // 清除該醫師的預假/預班，避免月曆殘留「未知」孤兒徽章
+  for(const date of Object.keys(state.preRequests)){
+    state.preRequests[date]=state.preRequests[date].filter(pr=>pr.docId!==docId);
+    if(!state.preRequests[date].length) delete state.preRequests[date];
+  }
   autoSave();
-  renderDoctorTable(); renderCalendar();
+  renderDoctorTable(); renderCalendar(); renderPRList();
 }
 
 
@@ -3016,6 +3026,7 @@ function renderPRList(){
 }
 
 function delPRRange(docId,type,custom,dateStart,dateEnd){
+  if(blockIfCompleted()) return;
   if(!confirm(`確定刪除 ${getDocName(docId)} ${fmtShort(dateStart)}～${fmtShort(dateEnd)} 整段？`)) return;
   let cur=dateStart;
   while(cur<=dateEnd){
@@ -3028,6 +3039,7 @@ function delPRRange(docId,type,custom,dateStart,dateEnd){
   autoSave(); renderPRList(); renderCalendar();
 }
 function addPR(){
+  if(blockIfCompleted()) return;
   const docId=document.getElementById('pr-doc').value;
   const type=document.getElementById('pr-type').value;
   const note=document.getElementById('pr-note').value.trim();
@@ -3038,6 +3050,19 @@ function addPR(){
 
   if(custom&&!parseCustomShift(custom)){
     showToast('自訂時段格式有誤，請用 HH-HH，例如 08-17 或 17-02','warn');return;
+  }
+
+  // 同一人同一天矛盾設定偵測（OFF vs 預班、或兩個不同班別的預班）
+  {
+    const isOff=t=>['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(t);
+    const isWork=t=>t.startsWith('WORK_');
+    const conflicts=[];
+    for(const ds of [...prCal.selected].sort()){
+      const others=(state.preRequests[ds]||[]).filter(r=>r.docId===docId&&!(r.type===type&&(r.custom||'')===(custom||'')));
+      const bad=others.find(r=>(isOff(type)&&isWork(r.type))||(isWork(type)&&isOff(r.type))||(isWork(type)&&isWork(r.type)));
+      if(bad) conflicts.push(`${fmtShort(ds)}（已有：${prLabel(bad)}）`);
+    }
+    if(conflicts.length&&!confirm(`⚠ 以下日期與現有預假/預班衝突：\n${conflicts.join('、')}\n\n同一人同一天出現矛盾設定，自動排班可能無法正確處理。仍要新增嗎？`)) return;
   }
 
   let count=0;
@@ -3053,6 +3078,7 @@ function addPR(){
   showToast(`已新增 ${count} 筆預假/預班`);
 }
 function delPR(date,docId,type,custom){
+  if(blockIfCompleted()) return;
   if(!state.preRequests[date]) return;
   const pr=state.preRequests[date].find(r=>r.docId===docId&&r.type===type&&(r.custom||'')===(custom||''));
   if(!pr) return;
@@ -3272,6 +3298,31 @@ function renderStats(){
       }
     }
   }
+  // 手動排班把關：休息不足12h／N-OFF-D／同日重複（自動排班不會產生，人工調班可能）
+  for(const doc of state.doctors){
+    if(doc.type==='part') continue;
+    let prev=null;
+    for(const d of dates){
+      const ds=state.schedule[d]||{};
+      const sp=ds.split||defaultSplitFor(d);
+      const dayShifts=SLOTS.filter(sl=>ds[sl]===doc.id);
+      if(dayShifts.length>1) viols.push(`⚠ ${doc.name} ${d} 同日重複排班（${dayShifts.join('、')}）`);
+      if(ds['大夜']===doc.id){
+        const s1=state.schedule[addDays(d,1)]||{}, s2=state.schedule[addDays(d,2)]||{};
+        if(!SLOTS.some(s=>s1[s]===doc.id)&&(s2['主白']===doc.id||s2['早班']===doc.id))
+          viols.push(`⚠ ${doc.name} ${d} 大夜休一天接白班（違反 N-OFF-D）`);
+      }
+      for(const sl of SLOTS){
+        if(ds[sl]!==doc.id) continue;
+        if(prev){
+          const end=getShiftEndTime(prev.slot,prev.split,prev.date);
+          const rest=hoursBetween(end.date,end.hour,d,slotRange(sl,sp).s);
+          if(rest<12) viols.push(`⚠ ${doc.name} ${prev.date} ${prev.slot}→${d} ${sl} 休息不足12h（${rest}h）`);
+        }
+        prev={date:d,slot:sl,split:sp};
+      }
+    }
+  }
   let empties=0;
   for(const d of dates){
     const ds=state.schedule[d]; if(!ds) continue;
@@ -3415,6 +3466,8 @@ function importDoctorData(){
         if(!doc){showToast('找不到對應醫師: '+d.name,'warn');return;}
         // Update prefs
         Object.assign(doc.prefs,d.prefs);
+        // wkNight（周一至四不排大夜）僅陳孝綱適用，不得經匯入繞過
+        if(doc.name!=='陳孝綱') doc.prefs.wkNight=false;
         // Merge pre-requests (replace this doctor's entries for the given month)
         const monthStr=`${d.year}-${String(d.month+1).padStart(2,'0')}`;
         // Remove old PRs for this doctor in this month
@@ -3534,7 +3587,7 @@ function initPersonalView(encoded){
       <div style="background:#f8f9fa;padding:10px;border-radius:6px">
         <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">特殊選項</div>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-long" ${pvState.prefs.long?'checked':''}> 偏好長班(&gt;10h)</label>
-        <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-wkNight" ${pvState.prefs.wkNight?'checked':''}> 週末夜班</label>
+        ${pvState.name==='陳孝綱'?`<label style="font-size:11px;display:block"><input type="checkbox" id="pvp-wkNight" ${pvState.prefs.wkNight?'checked':''}> 周一至四不排大夜</label>`:''}
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-cluster" ${pvState.prefs.cluster?'checked':''}> 大夜班集中</label>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-medMeeting" ${pvState.prefs.medMeeting?'checked':''}> 醫務會議</label>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-morningReport" ${pvState.prefs.morningReport?'checked':''}> 晨會報告</label>
@@ -3556,7 +3609,7 @@ function initPersonalView(encoded){
       pvState.prefs.htPref=parseInt(document.getElementById('pvp-htPref').value)||0;
       pvState.prefs.maxConsec=parseInt(document.getElementById('pvp-maxConsec').value)||6;
       pvState.prefs.long=document.getElementById('pvp-long').checked;
-      pvState.prefs.wkNight=document.getElementById('pvp-wkNight').checked;
+      const _pvWk=document.getElementById('pvp-wkNight'); if(_pvWk) pvState.prefs.wkNight=_pvWk.checked;
       pvState.prefs.cluster=document.getElementById('pvp-cluster').checked;
       pvState.prefs.medMeeting=document.getElementById('pvp-medMeeting').checked;
       pvState.prefs.morningReport=document.getElementById('pvp-morningReport').checked;
@@ -3754,8 +3807,13 @@ function clearSchedule(){
   if(!confirm('確定清空本月排班？')) return;
   pushUndo();
   for(const d of monthDates(state.year,state.month)){
-    const sp=getDaySplit(d);
-    state.schedule[d]={split:sp,主白:null,早班:null,小夜:null,大夜:null};
+    const old=state.schedule[d]||{};
+    const sp=old.split||defaultSplitFor(d);
+    const cleared={split:sp,主白:null,早班:null,小夜:null,大夜:null};
+    // 保留額外醫師(加班/楊天/ICU)與當日備註，與自動排班一致（僅清主要四班別）
+    if(old.extras&&old.extras.length) cleared.extras=old.extras.map(e=>({...e}));
+    if(old.note) cleared.note=old.note;
+    state.schedule[d]=cleared;
     if(state.lockedDays) state.lockedDays.delete(d); // 清空同時解除當月日鎖
   }
   autoSave();
@@ -3995,10 +4053,10 @@ function exportCSV(){
   for(const d of dates){
     const ds=state.schedule[d]||{};const sp=ds.split||defaultSplitFor(d);
     rows.push([d,DOW[getDOW(d)],isHoliday(d)?'是':'',sp+':00',
-      getDocName(ds['主白'])||'',slotTimeStr('主白',sp),
-      getDocName(ds['早班'])||'',slotTimeStr('早班',sp),
-      getDocName(ds['小夜'])||'',slotTimeStr('小夜',sp),
-      getDocName(ds['大夜'])||'',slotTimeStr('大夜',sp),
+      ds['主白']?getDocName(ds['主白']):'',slotTimeStr('主白',sp),
+      ds['早班']?getDocName(ds['早班']):'',slotTimeStr('早班',sp),
+      ds['小夜']?getDocName(ds['小夜']):'',slotTimeStr('小夜',sp),
+      ds['大夜']?getDocName(ds['大夜']):'',slotTimeStr('大夜',sp),
     ]);
   }
   const csv='﻿'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
