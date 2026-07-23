@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>陳孝綱 的行事曆</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+:root{
+  --bg:#f4f6f9; --card:#ffffff; --ink:#1e293b; --muted:#64748b; --line:#e6eaf0;
+  --brand:#1565c0; --brand-soft:#e8f1fc; --accent:#0d9488;
+  --wknd:#c0392b; --wknd-bg:#fff5f5;
+  --today:#1565c0; --shadow:0 1px 3px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.04);
+  --shadow-lg:0 10px 40px rgba(15,23,42,.18);
+  --sheet:#ffffff; --chip-ink:#0f172a;
+  --sh-zhu-bg:#fff8e1; --sh-zhu-fg:#b45309; --sh-zhu-dot:#f59e0b;
+  --sh-zao-bg:#e8f7ec; --sh-zao-fg:#15803d; --sh-zao-dot:#22c55e;
+  --sh-xiao-bg:#e6f0fd; --sh-xiao-fg:#1565c0; --sh-xiao-dot:#3b82f6;
+  --sh-da-bg:#f4eafb; --sh-da-fg:#7b1fa2; --sh-da-dot:#a855f7;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b1220; --card:#151d2e; --ink:#e8edf6; --muted:#93a1b8; --line:#25304a;
+    --brand:#5b9be8; --brand-soft:#18263e; --accent:#2dd4bf;
+    --wknd:#f87171; --wknd-bg:#241618;
+    --today:#5b9be8; --shadow:0 1px 3px rgba(0,0,0,.4);
+    --shadow-lg:0 14px 46px rgba(0,0,0,.6);
+    --sheet:#151d2e; --chip-ink:#e8edf6;
+    --sh-zhu-bg:#3a2c0c; --sh-zhu-fg:#fbbf24; --sh-zhu-dot:#f59e0b;
+    --sh-zao-bg:#12331f; --sh-zao-fg:#4ade80; --sh-zao-dot:#22c55e;
+    --sh-xiao-bg:#13294a; --sh-xiao-fg:#7db4f5; --sh-xiao-dot:#3b82f6;
+    --sh-da-bg:#2e1740; --sh-da-fg:#c98be6; --sh-da-dot:#a855f7;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  background:var(--bg); color:var(--ink); line-height:1.4;
+  -webkit-font-smoothing:antialiased; overscroll-behavior-y:none;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.wrap{max-width:960px;margin:0 auto;padding:0 12px 120px;padding-top:env(safe-area-inset-top)}
+
+/* ===== App bar ===== */
+.appbar{
+  position:sticky;top:0;z-index:30;background:var(--bg);
+  padding:calc(env(safe-area-inset-top) + 10px) 4px 8px;
+  display:flex;align-items:center;gap:10px;
+}
+.appbar h1{font-size:19px;font-weight:800;margin:0;letter-spacing:.3px;flex:1;display:flex;align-items:center;gap:7px}
+.cloud{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-weight:600;
+  background:var(--card);padding:5px 9px;border-radius:20px;box-shadow:var(--shadow);white-space:nowrap}
+.cloud .dot{width:7px;height:7px;border-radius:50%;background:#cbd5e1;transition:.3s}
+.cloud.ok .dot{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.18)}
+.cloud.err .dot{background:#f59e0b}
+
+/* ===== Month nav ===== */
+.navbar{display:flex;align-items:center;gap:8px;margin:4px 4px 12px}
+.navbar .mtitle{font-size:20px;font-weight:800;flex:1;letter-spacing:.5px}
+.navbar .mtitle small{font-size:13px;color:var(--muted);font-weight:600;margin-left:6px}
+.iconbtn{width:38px;height:38px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);
+  display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--ink);transition:.15s;flex-shrink:0}
+.iconbtn:active{transform:scale(.92)}
+.pill{background:var(--card);box-shadow:var(--shadow);border-radius:20px;padding:8px 14px;font-size:13px;font-weight:700;color:var(--brand);transition:.15s}
+.pill:active{transform:scale(.95)}
+.seg{display:flex;background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.seg button{padding:8px 13px;font-size:13px;font-weight:700;color:var(--muted);transition:.15s}
+.seg button.active{background:var(--brand);color:#fff}
+
+/* ===== Today card ===== */
+.todaycard{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:14px 16px;margin:0 2px 14px;
+  border:1px solid var(--line)}
+.todaycard .tc-head{display:flex;align-items:baseline;gap:8px;margin-bottom:9px}
+.todaycard .tc-date{font-size:15px;font-weight:800}
+.todaycard .tc-dow{font-size:12px;color:var(--muted);font-weight:600}
+.todaycard .tc-badge{margin-left:auto;font-size:11px;font-weight:700;color:var(--wknd);background:var(--wknd-bg);padding:2px 8px;border-radius:8px}
+.todaycard .tc-row{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.tc-empty{font-size:13px;color:var(--muted)}
+
+/* ===== chips ===== */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;padding:5px 10px;border-radius:9px;line-height:1.2}
+.chip .t{font-weight:600;opacity:.85;font-size:11.5px}
+.chip.sh-主白{background:var(--sh-zhu-bg);color:var(--sh-zhu-fg)}
+.chip.sh-早班{background:var(--sh-zao-bg);color:var(--sh-zao-fg)}
+.chip.sh-小夜{background:var(--sh-xiao-bg);color:var(--sh-xiao-fg)}
+.chip.sh-大夜{background:var(--sh-da-bg);color:var(--sh-da-fg)}
+.chip.sh-extra{background:rgba(120,144,156,.16);color:#607d8b}
+.chip .cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.chip.ev{background:var(--brand-soft);color:var(--brand)}
+
+/* ===== Calendar grid ===== */
+.cal{background:var(--card);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;border:1px solid var(--line)}
+.dowrow{display:grid;grid-template-columns:repeat(7,1fr);background:var(--card);border-bottom:1px solid var(--line)}
+.dowrow div{text-align:center;font-size:11.5px;font-weight:700;color:var(--muted);padding:9px 0}
+.dowrow div.we{color:var(--wknd)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.cell{min-height:82px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px 4px 3px;
+  position:relative;overflow:hidden;transition:background .12s;display:flex;flex-direction:column;gap:2px}
+.cell:nth-child(7n){border-right:none}
+.cell.pad{background:transparent}
+.cell:active:not(.pad){background:var(--brand-soft)}
+.cell .dnum{font-size:13px;font-weight:700;width:23px;height:23px;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;flex-shrink:0}
+.cell.we .dnum{color:var(--wknd)}
+.cell.today .dnum{background:var(--today);color:#fff}
+.cell .hol{position:absolute;top:5px;right:5px;font-size:8.5px;font-weight:700;color:var(--wknd);background:var(--wknd-bg);
+  padding:1px 4px;border-radius:5px}
+.cbar{height:4.5px;border-radius:3px;margin-top:1px}
+.cbar.sh-主白{background:var(--sh-zhu-dot)} .cbar.sh-早班{background:var(--sh-zao-dot)}
+.cbar.sh-小夜{background:var(--sh-xiao-dot)} .cbar.sh-大夜{background:var(--sh-da-dot)}
+.cbar.sh-extra{background:#90a4ae}
+.cell .mini{font-size:9.5px;font-weight:700;padding:1.5px 4px;border-radius:5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:1.35}
+.mini.sh-主白{background:var(--sh-zhu-bg);color:var(--sh-zhu-fg)} .mini.sh-早班{background:var(--sh-zao-bg);color:var(--sh-zao-fg)}
+.mini.sh-小夜{background:var(--sh-xiao-bg);color:var(--sh-xiao-fg)} .mini.sh-大夜{background:var(--sh-da-bg);color:var(--sh-da-fg)}
+.mini.sh-extra{background:rgba(120,144,156,.16);color:#607d8b}
+.mini.ev{background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;gap:3px}
+.mini.ev .evdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.cell .more{font-size:9px;color:var(--muted);font-weight:700;padding-left:3px}
+
+/* ===== Agenda ===== */
+.agenda{display:none;flex-direction:column;gap:2px}
+.agenda.show{display:flex}
+.ag-day{background:var(--card);border-radius:14px;box-shadow:var(--shadow);border:1px solid var(--line);
+  margin-bottom:9px;overflow:hidden}
+.ag-dhead{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.ag-dnum{font-size:20px;font-weight:800;min-width:30px;text-align:center}
+.ag-dnum.we{color:var(--wknd)} .ag-dnum.today{color:var(--today)}
+.ag-dmeta{display:flex;flex-direction:column;gap:1px}
+.ag-dmeta .d1{font-size:12px;font-weight:700} .ag-dmeta .d2{font-size:11px;color:var(--muted)}
+.ag-todaytag{margin-left:auto;font-size:10px;font-weight:800;color:#fff;background:var(--today);padding:2px 9px;border-radius:8px}
+.ag-body{padding:9px 14px;display:flex;flex-direction:column;gap:7px}
+.ag-item{display:flex;align-items:center;gap:10px}
+.ag-time{font-size:11.5px;font-weight:700;color:var(--muted);min-width:82px;font-variant-numeric:tabular-nums}
+.ag-empty{text-align:center;color:var(--muted);font-size:13px;padding:40px 0}
+
+/* ===== FAB ===== */
+.fab{position:fixed;right:calc(env(safe-area-inset-right) + 18px);bottom:calc(env(safe-area-inset-bottom) + 20px);
+  width:60px;height:60px;border-radius:20px;background:var(--brand);color:#fff;font-size:30px;font-weight:300;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(21,101,192,.4);z-index:40;transition:.15s}
+.fab:active{transform:scale(.9)}
+
+/* ===== Sheet / modal ===== */
+.mask{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:50;opacity:0;pointer-events:none;transition:.2s;backdrop-filter:blur(2px)}
+.mask.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--sheet);
+  border-radius:22px 22px 0 0;box-shadow:var(--shadow-lg);transform:translateY(102%);transition:transform .28s cubic-bezier(.4,1.2,.5,1);
+  max-height:88vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+.sheet.show{transform:translateY(0)}
+.sheet .grab{width:40px;height:4.5px;border-radius:3px;background:var(--line);margin:9px auto 3px}
+.sheet-head{display:flex;align-items:center;gap:10px;padding:6px 18px 12px;border-bottom:1px solid var(--line)}
+.sheet-head .sh-date{font-size:19px;font-weight:800}
+.sheet-head .sh-dow{font-size:13px;color:var(--muted);font-weight:600}
+.sheet-head .sh-hol{font-size:11px;font-weight:700;color:var(--wknd);background:var(--wknd-bg);padding:2px 8px;border-radius:8px}
+.sheet-body{overflow-y:auto;padding:14px 18px 22px;-webkit-overflow-scrolling:touch}
+.sec-title{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.5px;margin:14px 0 8px;text-transform:uppercase}
+.sec-title:first-child{margin-top:0}
+
+.shift-line{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:13px;margin-bottom:7px}
+.shift-line.sh-主白{background:var(--sh-zhu-bg)} .shift-line.sh-早班{background:var(--sh-zao-bg)}
+.shift-line.sh-小夜{background:var(--sh-xiao-bg)} .shift-line.sh-大夜{background:var(--sh-da-bg)}
+.shift-line.sh-extra{background:rgba(120,144,156,.14)}
+.shift-line .sl-name{font-size:15px;font-weight:800}
+.shift-line.sh-主白 .sl-name{color:var(--sh-zhu-fg)} .shift-line.sh-早班 .sl-name{color:var(--sh-zao-fg)}
+.shift-line.sh-小夜 .sl-name{color:var(--sh-xiao-fg)} .shift-line.sh-大夜 .sl-name{color:var(--sh-da-fg)}
+.shift-line.sh-extra .sl-name{color:#607d8b}
+.shift-line .sl-time{margin-left:auto;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);opacity:.85}
+.noshift{font-size:13px;color:var(--muted);padding:4px 2px 2px}
+
+.ev-line{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:13px;margin-bottom:7px;
+  background:var(--bg);border:1px solid var(--line);transition:.12s}
+.ev-line:active{transform:scale(.985)}
+.ev-line .ev-cdot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.ev-line .ev-main{flex:1;min-width:0}
+.ev-line .ev-title{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev-line .ev-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.ev-line .ev-cat{font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;flex-shrink:0}
+.ev-line .chev{color:var(--muted);font-size:16px;flex-shrink:0}
+
+.addbtn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:13px;border-radius:13px;
+  background:var(--brand-soft);color:var(--brand);font-size:14px;font-weight:800;margin-top:4px;transition:.12s}
+.addbtn:active{transform:scale(.98)}
+
+.otherbox{background:var(--bg);border:1px solid var(--line);border-radius:13px;padding:4px 0;margin-top:2px}
+.other-row{display:flex;align-items:center;gap:9px;padding:7px 13px;font-size:12.5px}
+.other-row .or-slot{font-weight:700;min-width:38px;color:var(--muted)}
+.other-row .or-doc{font-weight:600}
+.other-row .or-doc.me{color:var(--brand);font-weight:800}
+.other-row .or-time{margin-left:auto;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* ===== Form ===== */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px;letter-spacing:.3px}
+.field input[type=text],.field input[type=date],.field input[type=time],.field textarea{
+  width:100%;padding:12px 13px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);
+  color:var(--ink);font-size:15px;font-family:inherit;transition:.15s;outline:none}
+.field input:focus,.field textarea:focus{border-color:var(--brand);background:var(--card)}
+.field textarea{resize:vertical;min-height:64px}
+.timerow{display:flex;gap:10px;align-items:center}
+.timerow .tspan{color:var(--muted);font-weight:700}
+.timerow>div{flex:1}
+.catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.catopt{display:flex;flex-direction:column;align-items:center;gap:4px;padding:11px 4px;border-radius:12px;
+  border:1.5px solid var(--line);background:var(--bg);font-size:12px;font-weight:700;color:var(--muted);transition:.12s}
+.catopt .ci{font-size:19px}
+.catopt.on{border-color:transparent;color:#fff}
+.toggle{display:flex;align-items:center;gap:10px}
+.switch{position:relative;width:50px;height:29px;border-radius:16px;background:var(--line);transition:.2s;flex-shrink:0}
+.switch.on{background:var(--brand)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:23px;height:23px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.switch.on::after{transform:translateX(21px)}
+.formbtns{display:flex;gap:10px;margin-top:20px}
+.btn{flex:1;padding:14px;border-radius:13px;font-size:15px;font-weight:800;transition:.12s}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--brand);color:#fff}
+.btn.ghost{background:var(--bg);color:var(--muted);border:1.5px solid var(--line)}
+.btn.danger{background:var(--wknd-bg);color:var(--wknd);flex:0 0 auto;padding:14px 18px}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 92px);transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:24px;font-size:13.5px;font-weight:700;
+  z-index:80;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow-lg);white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.legend{display:flex;flex-wrap:wrap;gap:9px 14px;justify-content:center;margin:14px 4px 0;font-size:11px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px;font-weight:600}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="appbar">
+    <h1>📅 <span id="app-title">陳孝綱 的行事曆</span></h1>
+    <div class="cloud" id="cloud"><span class="dot"></span><span id="cloud-txt">連線中…</span></div>
+  </div>
+
+  <div class="navbar">
+    <button class="iconbtn" onclick="shiftMonth(-1)">‹</button>
+    <div class="mtitle" id="mtitle"></div>
+    <button class="pill" onclick="goToday()">今天</button>
+    <div class="seg">
+      <button id="seg-month" class="active" onclick="setView('month')">月</button>
+      <button id="seg-list" onclick="setView('list')">清單</button>
+    </div>
+  </div>
+
+  <div class="todaycard" id="todaycard"></div>
+
+  <!-- Month view -->
+  <div id="monthview">
+    <div class="cal">
+      <div class="dowrow">
+        <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div class="we">六</div><div class="we">日</div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--sh-zhu-dot)"></i>主白</span>
+      <span><i style="background:var(--sh-zao-dot)"></i>早班</span>
+      <span><i style="background:var(--sh-xiao-dot)"></i>小夜</span>
+      <span><i style="background:var(--sh-da-dot)"></i>大夜</span>
+      <span><i style="background:#90a4ae"></i>加班</span>
+      <span><i style="background:var(--brand)"></i>我的行程</span>
+    </div>
+  </div>
+
+  <!-- Agenda view -->
+  <div class="agenda" id="listview"></div>
+</div>
+
+<button class="fab" onclick="openForm(null, selectedDate||todayStr())">＋</button>
+
+<!-- Day sheet -->
+<div class="mask" id="mask" onclick="closeSheets(event)"></div>
+<div class="sheet" id="daysheet">
+  <div class="grab"></div>
+  <div class="sheet-head">
+    <div><div class="sh-date" id="ds-date"></div></div>
+    <div class="sh-dow" id="ds-dow"></div>
+    <span class="sh-hol" id="ds-hol" style="display:none">假日</span>
+  </div>
+  <div class="sheet-body" id="ds-body"></div>
+</div>
+
+<!-- Event form sheet -->
+<div class="sheet" id="formsheet">
+  <div class="grab"></div>
+  <div class="sheet-head">
+    <div class="sh-date" id="fm-title">新增行程</div>
+  </div>
+  <div class="sheet-body">
+    <div class="field">
+      <label>標題</label>
+      <input type="text" id="fm-name" placeholder="例：科務會議、部門開會…" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>分類</label>
+      <div class="catgrid" id="fm-cats"></div>
+    </div>
+    <div class="field">
+      <label>日期</label>
+      <input type="date" id="fm-date">
+    </div>
+    <div class="field">
+      <div class="toggle"><div class="switch" id="fm-allday-sw" onclick="toggleAllDay()"></div>
+        <label style="margin:0">全天(不指定時間)</label></div>
+    </div>
+    <div class="field" id="fm-timefield">
+      <label>時間</label>
+      <div class="timerow">
+        <div><input type="time" id="fm-start"></div>
+        <span class="tspan">→</span>
+        <div><input type="time" id="fm-end"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>備註(選填)</label>
+      <textarea id="fm-note" placeholder="地點、會議連結、與會者…"></textarea>
+    </div>
+    <div class="formbtns">
+      <button class="btn danger" id="fm-del" style="display:none" onclick="deleteEvent()">刪除</button>
+      <button class="btn ghost" onclick="closeSheets()">取消</button>
+      <button class="btn primary" onclick="saveEvent()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   陳孝綱 個人行事曆 — 串接急診醫師排班系統 (唯讀班表) + 私人行程雲端同步
+   班表來源: Firebase erScheduleData (與排班系統同一資料庫，只讀不寫)
+   私人行程: Firebase chenCalendar (新節點，讀寫)
+   ============================================================ */
+const CFG={
+  CLOUD_URL:'https://tenchener-488d2-default-rtdb.firebaseio.com/',
+  SCHED_REF:'erScheduleData',      // 只讀
+  CAL_REF:'cal_cheng_9k7x2q4f',    // 讀寫（我的行程）— 難猜節點名，增加隱私遮蔽
+  MY_NAME:'陳孝綱', MY_ID_FALLBACK:'d1',
+  LS_SCHED:'chenCal_schedCache_v1',
+  LS_EVENTS:'chenCal_events_v1',
+};
+const NOCLOUD=/[?&]nocloud=1/.test(location.search);   // 測試用：略過雲端
+
+/* ---------- 狀態 ---------- */
+const state={
+  doctors:[], schedule:{}, holidays:new Set(), defaultSplit:20, holidaySplit:17,
+  events:{},                 // id -> event
+  myId:null,
+  view:'month',
+};
+let viewY, viewM;            // 目前檢視的年、月(0-based)
+let selectedDate=null;
+let editingId=null;
+let formAllDay=false, formCat='meeting';
+const _clientId=Math.random().toString(36).slice(2)+Date.now().toString(36);
+
+/* ============================================================
+   班別 / 日期 輔助函式（與排班系統邏輯完全一致）
+   ============================================================ */
+const SLOTS=['主白','早班','小夜','大夜'];
+const EXTRA_KINDS=[{v:'',name:'中天',color:'#78909c'},{v:'yangtian',name:'楊天',color:'#546e7a'},{v:'icu',name:'ICU',color:'#00838f'}];
+function kindInfo(v){return EXTRA_KINDS.find(k=>k.v===(v||''))||EXTRA_KINDS[0];}
+function fmtDate(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
+function getDOW(ds){const[y,mo,d]=ds.split('-').map(Number);return (new Date(Date.UTC(y,mo-1,d)).getUTCDay()+6)%7;} // Mon=0..Sun=6
+function addDays(ds,n){const[y,mo,d]=ds.split('-').map(Number);const dt=new Date(Date.UTC(y,mo-1,d));dt.setUTCDate(dt.getUTCDate()+n);return dt.toISOString().slice(0,10);}
+function isWeekend(ds){const w=getDOW(ds);return w===5||w===6;}
+function isHoliday(ds){return state.holidays.has(ds)||isWeekend(ds);}
+function clampSplit(v){return Math.min(20,Math.max(16,v||20));}
+function defaultSplitFor(ds){return clampSplit(isHoliday(ds)?(state.holidaySplit||17):(state.defaultSplit||20));}
+function slotRange(slot,split){
+  switch(slot){
+    case '主白':return {s:8,e:20};
+    case '早班':return {s:8,e:split};
+    case '小夜':return {s:split,e:26};
+    case '大夜':return {s:20,e:32};
+  }
+}
+const DOW_TW=['一','二','三','四','五','六','日'];
+function todayStr(){const d=new Date();return fmtDate(d.getFullYear(),d.getMonth(),d.getDate());}
+
+/* 取得某日「我」的所有班次（沿用排班系統 buildDoctorICS 的時段計算） */
+function myShiftsForDate(ds){
+  const out=[];
+  const day=state.schedule[ds];
+  if(!day||!state.myId) return out;
+  const sp=day.split||defaultSplitFor(ds);
+  for(const slot of SLOTS){
+    if(day[slot]!==state.myId) continue;
+    const ct=day.customTimes&&day.customTimes[slot];
+    let s,e;
+    if(ct){const m=ct.match(/^(\d{1,2})-(\d{1,2})$/);if(!m)continue;s=+m[1];e=+m[2];if(e<=s)e+=24;}
+    else{const r=slotRange(slot,sp);s=r.s;e=r.e;}
+    out.push({type:slot,name:slot,s,e,time:hhmm(s)+'–'+hhmm(e),cls:'sh-'+slot});
+  }
+  for(const ex of (day.extras||[])){
+    if(ex.docId!==state.myId||!ex.timeRange) continue;
+    const m=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/);if(!m)continue;
+    let s=+m[1],e=+m[2];if(e<=s)e+=24;
+    out.push({type:'extra',name:kindInfo(ex.kind).name,s,e,time:hhmm(s)+'–'+hhmm(e),cls:'sh-extra'});
+  }
+  out.sort((a,b)=>a.s-b.s);
+  return out;
+}
+function hhmm(h){return String(h%24).padStart(2,'0')+':00';}
+
+/* 當日全科班表（給「同事」小清單） */
+function allSlotsForDate(ds){
+  const day=state.schedule[ds]; if(!day) return [];
+  const sp=day.split||defaultSplitFor(ds);
+  const rows=[];
+  for(const slot of SLOTS){
+    const id=day[slot]; const doc=id?state.doctors.find(d=>d.id===id):null;
+    const ct=day.customTimes&&day.customTimes[slot];
+    let s,e;
+    if(ct){const m=ct.match(/^(\d{1,2})-(\d{1,2})$/);if(m){s=+m[1];e=+m[2];if(e<=s)e+=24;}}
+    if(s==null){const r=slotRange(slot,sp);s=r.s;e=r.e;}
+    rows.push({slot,name:doc?doc.name:'—',isMe:id===state.myId,time:hhmm(s)+'–'+hhmm(e)});
+  }
+  return rows;
+}
+
+/* ============================================================
+   事件時間工具
+   ============================================================ */
+function eventsForDate(ds){
+  return Object.values(state.events).filter(e=>e.date===ds)
+    .sort((a,b)=>(a.allDay?'':a.start||'').localeCompare(b.allDay?'':b.start||'')||(a.allDay?-1:1));
+}
+const CATS=[
+  {v:'meeting',name:'開會',color:'#0d9488',icon:'📋'},
+  {v:'admin',name:'公務',color:'#2563eb',icon:'🏥'},
+  {v:'personal',name:'私人',color:'#7c3aed',icon:'🏠'},
+  {v:'reminder',name:'提醒',color:'#d97706',icon:'🔔'},
+];
+function catInfo(v){return CATS.find(c=>c.v===v)||CATS[0];}
+
+/* ============================================================
+   Render
+   ============================================================ */
+function render(){
+  document.getElementById('mtitle').innerHTML=`${viewY}年${viewM+1}月`;
+  renderTodayCard();
+  if(state.view==='month') renderGrid(); else renderList();
+}
+
+function renderTodayCard(){
+  const ds=todayStr();
+  const shifts=myShiftsForDate(ds);
+  const evs=eventsForDate(ds);
+  const dow=getDOW(ds), hol=isHoliday(ds);
+  let rows='';
+  if(shifts.length){
+    rows+=shifts.map(s=>`<span class="chip ${s.cls}">${s.name}<span class="t">${s.time}</span></span>`).join('');
+  }
+  evs.forEach(e=>{const c=catInfo(e.category);rows+=`<span class="chip ev" style="background:${c.color}1a;color:${c.color}">${c.icon} ${esc(e.title)}${e.allDay?'':`<span class="t">${e.start||''}</span>`}</span>`;});
+  if(!shifts.length&&!evs.length) rows=`<span class="tc-empty">今天沒有班，也沒有安排的行程 🌤️</span>`;
+  document.getElementById('todaycard').innerHTML=`
+    <div class="tc-head">
+      <span class="tc-date">今天 · ${viewOrTodayMonthDay(ds)}</span>
+      <span class="tc-dow">星期${DOW_TW[dow]}</span>
+      ${hol?'<span class="tc-badge">假日</span>':''}
+    </div>
+    <div class="tc-row">${rows}</div>`;
+}
+function viewOrTodayMonthDay(ds){const[,m,d]=ds.split('-');return `${+m}月${+d}日`;}
+
+function renderGrid(){
+  document.getElementById('monthview').style.display='';
+  document.getElementById('listview').classList.remove('show');
+  const grid=document.getElementById('grid');
+  const dates=[];for(let d=1;d<=daysInMonth(viewY,viewM);d++)dates.push(fmtDate(viewY,viewM,d));
+  const firstDow=getDOW(dates[0]);
+  const today=todayStr();
+  let html='';
+  for(let i=0;i<firstDow;i++) html+='<div class="cell pad"></div>';
+  for(const ds of dates){
+    const dow=getDOW(ds), hol=isHoliday(ds), we=dow>=5;
+    const day=+ds.slice(-2);
+    const shifts=myShiftsForDate(ds);
+    const evs=eventsForDate(ds);
+    let inner='';
+    // 至多顯示：班次(合併成一條 mini + color bars) + 事件
+    const items=[];
+    shifts.forEach(s=>items.push(`<div class="mini ${s.cls}">${s.name}</div>`));
+    evs.forEach(e=>{const c=catInfo(e.category);items.push(`<div class="mini ev"><span class="evdot" style="background:${c.color}"></span>${esc(e.title)}</div>`);});
+    const shown=items.slice(0,3).join('');
+    const extra=items.length>3?`<div class="more">+${items.length-3}</div>`:'';
+    html+=`<div class="cell ${we?'we':''} ${ds===today?'today':''}" onclick="openDay('${ds}')">
+      <div style="display:flex;align-items:center"><span class="dnum">${day}</span></div>
+      ${hol&&!we?'<span class="hol">假</span>':''}
+      ${shown}${extra}
+    </div>`;
+  }
+  grid.innerHTML=html;
+}
+
+function renderList(){
+  document.getElementById('monthview').style.display='none';
+  const box=document.getElementById('listview');
+  box.classList.add('show');
+  const dates=[];for(let d=1;d<=daysInMonth(viewY,viewM);d++)dates.push(fmtDate(viewY,viewM,d));
+  const today=todayStr();
+  let html='', any=false;
+  for(const ds of dates){
+    const shifts=myShiftsForDate(ds), evs=eventsForDate(ds);
+    if(!shifts.length&&!evs.length) continue;
+    any=true;
+    const dow=getDOW(ds), we=dow>=5, day=+ds.slice(-2);
+    let body='';
+    shifts.forEach(s=>{body+=`<div class="ag-item"><span class="ag-time">${s.time}</span><span class="chip ${s.cls}">${s.name}</span></div>`;});
+    evs.forEach(e=>{const c=catInfo(e.category);body+=`<div class="ag-item" onclick="openForm('${e.id}','${ds}')" style="cursor:pointer">
+      <span class="ag-time">${e.allDay?'全天':(e.start||'')+(e.end?'–'+e.end:'')}</span>
+      <span class="chip ev" style="background:${c.color}1a;color:${c.color}">${c.icon} ${esc(e.title)}</span></div>`;});
+    html+=`<div class="ag-day">
+      <div class="ag-dhead" onclick="openDay('${ds}')">
+        <span class="ag-dnum ${we?'we':''} ${ds===today?'today':''}">${day}</span>
+        <span class="ag-dmeta"><span class="d1">${viewM+1}月${day}日 星期${DOW_TW[dow]}</span>
+        <span class="d2">${isHoliday(ds)?'假日':'　'}</span></span>
+        ${ds===today?'<span class="ag-todaytag">今天</span>':''}
+      </div>
+      <div class="ag-body">${body}</div>
+    </div>`;
+  }
+  box.innerHTML=any?html:`<div class="ag-empty">這個月沒有班次或行程</div>`;
+}
+
+/* ============================================================
+   Day sheet
+   ============================================================ */
+function openDay(ds){
+  selectedDate=ds;
+  const dow=getDOW(ds), hol=isHoliday(ds);
+  document.getElementById('ds-date').textContent=`${viewOrTodayMonthDay(ds)}`;
+  document.getElementById('ds-dow').textContent=`星期${DOW_TW[dow]}${ds===todayStr()?' · 今天':''}`;
+  document.getElementById('ds-hol').style.display=hol?'':'none';
+  const shifts=myShiftsForDate(ds);
+  const evs=eventsForDate(ds);
+  let html='';
+  html+=`<div class="sec-title">我的班</div>`;
+  if(shifts.length){
+    html+=shifts.map(s=>`<div class="shift-line ${s.cls}"><span class="sl-name">${s.name}</span><span class="sl-time">${s.time}</span></div>`).join('');
+  }else{
+    html+=`<div class="noshift">這天沒有排班</div>`;
+  }
+  html+=`<div class="sec-title">我的行程</div>`;
+  if(evs.length){
+    html+=evs.map(e=>{const c=catInfo(e.category);
+      return `<div class="ev-line" onclick="openForm('${e.id}','${ds}')">
+        <span class="ev-cdot" style="background:${c.color}"></span>
+        <span class="ev-main"><div class="ev-title">${esc(e.title)}</div>
+          <div class="ev-sub">${e.allDay?'全天':(e.start||'')+(e.end?' – '+e.end:'')}${e.note?' · '+esc(e.note):''}</div></span>
+        <span class="ev-cat" style="background:${c.color}1a;color:${c.color}">${c.name}</span>
+        <span class="chev">›</span>
+      </div>`;}).join('');
+  }
+  html+=`<button class="addbtn" onclick="openForm(null,'${ds}')">＋ 新增行程</button>`;
+  // 同事
+  const all=allSlotsForDate(ds);
+  if(all.length){
+    html+=`<div class="sec-title">當日全科班表</div><div class="otherbox">`;
+    html+=all.map(r=>`<div class="other-row"><span class="or-slot">${r.slot}</span><span class="or-doc ${r.isMe?'me':''}">${esc(r.name)}${r.isMe?' (我)':''}</span><span class="or-time">${r.time}</span></div>`).join('');
+    html+=`</div>`;
+  }
+  document.getElementById('ds-body').innerHTML=html;
+  showSheet('daysheet');
+}
+
+/* ============================================================
+   Event form
+   ============================================================ */
+function renderCatOptions(){
+  document.getElementById('fm-cats').innerHTML=CATS.map(c=>
+    `<div class="catopt ${c.v===formCat?'on':''}" style="${c.v===formCat?`background:${c.color};border-color:${c.color}`:''}" onclick="pickCat('${c.v}')">
+      <span class="ci">${c.icon}</span>${c.name}</div>`).join('');
+}
+function pickCat(v){formCat=v;renderCatOptions();}
+function toggleAllDay(){
+  formAllDay=!formAllDay;
+  document.getElementById('fm-allday-sw').classList.toggle('on',formAllDay);
+  document.getElementById('fm-timefield').style.display=formAllDay?'none':'';
+}
+function openForm(id,ds){
+  editingId=id;
+  const del=document.getElementById('fm-del');
+  if(id){
+    const e=state.events[id]; if(!e){return;}
+    document.getElementById('fm-title').textContent='編輯行程';
+    document.getElementById('fm-name').value=e.title||'';
+    document.getElementById('fm-date').value=e.date;
+    formAllDay=!!e.allDay; formCat=e.category||'meeting';
+    document.getElementById('fm-start').value=e.start||'09:00';
+    document.getElementById('fm-end').value=e.end||'10:00';
+    document.getElementById('fm-note').value=e.note||'';
+    del.style.display='';
+  }else{
+    document.getElementById('fm-title').textContent='新增行程';
+    document.getElementById('fm-name').value='';
+    document.getElementById('fm-date').value=ds||todayStr();
+    formAllDay=false; formCat='meeting';
+    document.getElementById('fm-start').value='09:00';
+    document.getElementById('fm-end').value='10:00';
+    document.getElementById('fm-note').value='';
+    del.style.display='none';
+  }
+  document.getElementById('fm-allday-sw').classList.toggle('on',formAllDay);
+  document.getElementById('fm-timefield').style.display=formAllDay?'none':'';
+  renderCatOptions();
+  showSheet('formsheet');
+  if(!id) setTimeout(()=>document.getElementById('fm-name').focus(),300);
+}
+function saveEvent(){
+  const title=document.getElementById('fm-name').value.trim();
+  const date=document.getElementById('fm-date').value;
+  if(!title){toast('請輸入標題');return;}
+  if(!date){toast('請選擇日期');return;}
+  const start=document.getElementById('fm-start').value;
+  const end=document.getElementById('fm-end').value;
+  const note=document.getElementById('fm-note').value.trim();
+  const id=editingId||('e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+  state.events[id]={id,title,date,allDay:formAllDay,start:formAllDay?'':start,end:formAllDay?'':end,category:formCat,note};
+  persistEvents();
+  closeSheets();
+  render();
+  toast(editingId?'已更新':'已新增');
+}
+function deleteEvent(){
+  if(!editingId) return;
+  if(!confirm('確定刪除這個行程？')) return;
+  delete state.events[editingId];
+  persistEvents();
+  closeSheets();
+  render();
+  toast('已刪除');
+}
+
+/* ============================================================
+   Sheets / view / nav
+   ============================================================ */
+function showSheet(id){
+  document.getElementById('mask').classList.add('show');
+  document.getElementById(id).classList.add('show');
+}
+function closeSheets(ev){
+  if(ev&&ev.target&&ev.target.id!=='mask'&&ev.type==='click') { /* clicked mask only */ }
+  document.getElementById('mask').classList.remove('show');
+  document.getElementById('daysheet').classList.remove('show');
+  document.getElementById('formsheet').classList.remove('show');
+}
+function setView(v){
+  state.view=v;
+  document.getElementById('seg-month').classList.toggle('active',v==='month');
+  document.getElementById('seg-list').classList.toggle('active',v==='list');
+  render();
+}
+function shiftMonth(n){
+  viewM+=n; if(viewM<0){viewM=11;viewY--;} if(viewM>11){viewM=0;viewY++;}
+  render();
+}
+function goToday(){const d=new Date();viewY=d.getFullYear();viewM=d.getMonth();render();}
+
+/* ============================================================
+   Persistence
+   ============================================================ */
+function persistEvents(){
+  try{localStorage.setItem(CFG.LS_EVENTS,JSON.stringify(state.events));}catch(e){}
+  cloudSaveEvents();
+}
+function loadLocalEvents(){
+  try{const r=localStorage.getItem(CFG.LS_EVENTS);if(r)state.events=JSON.parse(r)||{};}catch(e){}
+}
+function cacheSchedLocal(){
+  try{localStorage.setItem(CFG.LS_SCHED,JSON.stringify({
+    doctors:state.doctors,schedule:state.schedule,holidays:[...state.holidays],
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit
+  }));}catch(e){}
+}
+function loadSchedLocal(){
+  try{
+    const r=localStorage.getItem(CFG.LS_SCHED);if(!r)return false;
+    const d=JSON.parse(r);
+    applySchedData(d,true);
+    return true;
+  }catch(e){return false;}
+}
+function applySchedData(d,fromCache){
+  if(!d) return;
+  // 相容排班系統舊 key '晚班' -> '小夜'
+  if(d.schedule){for(const day of Object.values(d.schedule)){if(day&&'晚班'in day){day['小夜']=day['晚班'];delete day['晚班'];}}}
+  state.doctors=d.doctors||[];
+  state.schedule=d.schedule||{};
+  state.holidays=new Set(d.holidays||[]);
+  state.defaultSplit=clampSplit(d.defaultSplit||20);
+  state.holidaySplit=clampSplit(d.holidaySplit||17);
+  // 解析「我」
+  const me=state.doctors.find(x=>x.name===CFG.MY_NAME)||state.doctors.find(x=>x.id===CFG.MY_ID_FALLBACK);
+  state.myId=me?me.id:CFG.MY_ID_FALLBACK;
+  if(!fromCache) cacheSchedLocal();
+}
+
+/* ============================================================
+   Cloud
+   ============================================================ */
+let _fbApp=null,_calRef=null;
+function setCloud(cls,txt){
+  const el=document.getElementById('cloud');
+  el.className='cloud'+(cls?(' '+cls):'');
+  document.getElementById('cloud-txt').textContent=txt;
+}
+function initCloud(){
+  if(NOCLOUD){setCloud('','離線測試');return;}
+  if(!window.firebase){setCloud('err','SDK未載入');return;}
+  try{
+    _fbApp=firebase.initializeApp({databaseURL:CFG.CLOUD_URL},'chenCal');
+    const db=firebase.database(_fbApp);
+    // 班表（只讀）
+    db.ref(CFG.SCHED_REF).on('value',snap=>{
+      const d=snap.val(); if(!d) return;
+      applySchedData(d,false);
+      render();
+      setCloud('ok','已同步');
+    },err=>{setCloud('err','班表讀取失敗');});
+    // 我的行程（讀寫）
+    _calRef=db.ref(CFG.CAL_REF);
+    _calRef.on('value',snap=>{
+      const d=snap.val();
+      if(d&&d._client===_clientId) return;  // 略過自己寫入的回音
+      const evs=(d&&d.events)?d.events:{};
+      state.events=evs||{};
+      try{localStorage.setItem(CFG.LS_EVENTS,JSON.stringify(state.events));}catch(e){}
+      render();
+    },err=>{});
+    setCloud('ok','連線中…');
+  }catch(e){setCloud('err','連線失敗');}
+}
+function cloudSaveEvents(){
+  if(NOCLOUD||!_calRef) return;
+  _calRef.set({events:state.events,_ts:Date.now(),_client:_clientId})
+    .catch(()=>toast('雲端儲存失敗，已存本機'));
+}
+
+/* ============================================================
+   Utils / init
+   ============================================================ */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+let _toastT;
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('show'),1900);}
+
+function init(){
+  const d=new Date();viewY=d.getFullYear();viewM=d.getMonth();
+  loadLocalEvents();
+  loadSchedLocal();      // 先用本機快取畫面，雲端到了再更新
+  renderCatOptions();
+  render();
+  initCloud();
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
