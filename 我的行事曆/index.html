@@ -202,7 +202,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
 .otherbox{background:var(--bg);border:1px solid var(--line);border-radius:13px;padding:4px 0;margin-top:2px}
 .other-row{display:flex;align-items:center;gap:9px;padding:7px 13px;font-size:12.5px}
-.other-row .or-slot{font-weight:700;min-width:38px;color:var(--muted)}
+.other-row .or-slot{font-weight:700;min-width:52px;color:var(--muted);font-variant-numeric:tabular-nums}
 .other-row .or-doc{font-weight:600}
 .other-row .or-doc.me{color:var(--brand);font-weight:800}
 .other-row .or-time{margin-left:auto;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -429,18 +429,19 @@ function myShiftsForDate(ds){
     let s,e;
     if(ct){const m=ct.match(/^(\d{1,2})-(\d{1,2})$/);if(!m)continue;s=+m[1];e=+m[2];if(e<=s)e+=24;}
     else{const r=slotRange(slot,sp);s=r.s;e=r.e;}
-    out.push({type:slot,name:slot,s,e,time:hhmm(s)+'–'+hhmm(e),cls:'sh-'+slot});
+    out.push({type:slot,name:slot,s,e,time:hhmm(s)+'–'+hhmm(e),range:rng(s,e),cls:'sh-'+slot});
   }
   for(const ex of (day.extras||[])){
     if(ex.docId!==state.myId||!ex.timeRange) continue;
     const m=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/);if(!m)continue;
     let s=+m[1],e=+m[2];if(e<=s)e+=24;
-    out.push({type:'extra',name:kindInfo(ex.kind).name,s,e,time:hhmm(s)+'–'+hhmm(e),cls:'sh-extra'});
+    out.push({type:'extra',name:kindInfo(ex.kind).name,s,e,time:hhmm(s)+'–'+hhmm(e),range:rng(s,e),cls:'sh-extra'});
   }
   out.sort((a,b)=>a.s-b.s);
   return out;
 }
 function hhmm(h){return String(h%24).padStart(2,'0')+':00';}
+function rng(s,e){return String(s%24).padStart(2,'0')+'-'+String(e%24).padStart(2,'0');} // 20-02 / 20-08 格式
 
 /* 當日全科班表（給「同事」小清單） */
 function allSlotsForDate(ds){
@@ -453,7 +454,7 @@ function allSlotsForDate(ds){
     let s,e;
     if(ct){const m=ct.match(/^(\d{1,2})-(\d{1,2})$/);if(m){s=+m[1];e=+m[2];if(e<=s)e+=24;}}
     if(s==null){const r=slotRange(slot,sp);s=r.s;e=r.e;}
-    rows.push({slot,name:doc?doc.name:'—',isMe:id===state.myId,time:hhmm(s)+'–'+hhmm(e)});
+    rows.push({slot,range:rng(s,e),name:doc?doc.name:'—',isMe:id===state.myId,time:hhmm(s)+'–'+hhmm(e)});
   }
   return rows;
 }
@@ -489,7 +490,7 @@ function renderTodayCard(){
   const dow=getDOW(ds), hol=isHoliday(ds);
   let rows='';
   if(shifts.length){
-    rows+=shifts.map(s=>`<span class="chip ${s.cls}">${s.name}<span class="t">${s.time}</span></span>`).join('');
+    rows+=shifts.map(s=>`<span class="chip ${s.cls}">${s.range}</span>`).join('');
   }
   evs.forEach(e=>{const c=catInfo(e.category);rows+=`<span class="chip ev" style="background:${c.color}1a;color:${c.color}">${c.icon} ${esc(e.title)}${e.allDay?'':`<span class="t">${e.start||''}</span>`}</span>`;});
   if(!shifts.length&&!evs.length) rows=`<span class="tc-empty">今天沒有班，也沒有安排的行程 🌤️</span>`;
@@ -520,7 +521,7 @@ function renderGrid(){
     let inner='';
     // 至多顯示：班次(合併成一條 mini + color bars) + 事件
     const items=[];
-    shifts.forEach(s=>items.push(`<div class="mini ${s.cls}">${s.name}</div>`));
+    shifts.forEach(s=>items.push(`<div class="mini ${s.cls}">${s.range}</div>`));
     evs.forEach(e=>{const c=catInfo(e.category);items.push(`<div class="mini ev"><span class="evdot" style="background:${c.color}"></span>${esc(e.title)}</div>`);});
     const shown=items.slice(0,3).join('');
     const extra=items.length>3?`<div class="more">+${items.length-3}</div>`:'';
@@ -546,7 +547,7 @@ function renderList(){
     any=true;
     const dow=getDOW(ds), we=dow>=5, day=+ds.slice(-2);
     let body='';
-    shifts.forEach(s=>{body+=`<div class="ag-item"><span class="ag-time">${s.time}</span><span class="chip ${s.cls}">${s.name}</span></div>`;});
+    shifts.forEach(s=>{body+=`<div class="ag-item"><span class="ag-time">上班</span><span class="chip ${s.cls}">${s.range}</span></div>`;});
     evs.forEach(e=>{const c=catInfo(e.category);body+=`<div class="ag-item" onclick="openForm('${e.id}','${ds}')" style="cursor:pointer">
       <span class="ag-time">${e.allDay?'全天':(e.start||'')+(e.end?'–'+e.end:'')}</span>
       <span class="chip ev" style="background:${c.color}1a;color:${c.color}">${c.icon} ${esc(e.title)}</span></div>`;});
@@ -577,7 +578,7 @@ function openDay(ds){
   let html='';
   html+=`<div class="sec-title">我的班</div>`;
   if(shifts.length){
-    html+=shifts.map(s=>`<div class="shift-line ${s.cls}"><span class="sl-name">${s.name}</span><span class="sl-time">${s.time}</span></div>`).join('');
+    html+=shifts.map(s=>`<div class="shift-line ${s.cls}"><span class="sl-name">${s.range}</span><span class="sl-time">${s.time}</span></div>`).join('');
   }else{
     html+=`<div class="noshift">這天沒有排班</div>`;
   }
@@ -597,7 +598,7 @@ function openDay(ds){
   const all=allSlotsForDate(ds);
   if(all.length){
     html+=`<div class="sec-title">當日全科班表</div><div class="otherbox">`;
-    html+=all.map(r=>`<div class="other-row"><span class="or-slot">${r.slot}</span><span class="or-doc ${r.isMe?'me':''}">${esc(r.name)}${r.isMe?' (我)':''}</span><span class="or-time">${r.time}</span></div>`).join('');
+    html+=all.map(r=>`<div class="other-row"><span class="or-slot">${r.range}</span><span class="or-doc ${r.isMe?'me':''}">${esc(r.name)}${r.isMe?' (我)':''}</span></div>`).join('');
     html+=`</div>`;
   }
   document.getElementById('ds-body').innerHTML=html;
