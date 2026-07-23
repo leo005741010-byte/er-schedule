@@ -3644,7 +3644,7 @@ function extraDisplay(ex){
 function showToast(msg,type='ok'){
   let t=document.getElementById('_toast');
   if(!t){t=document.createElement('div');t.id='_toast';
-    t.style.cssText='position:fixed;bottom:20px;right:20px;padding:10px 18px;border-radius:6px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:opacity .5s;max-width:320px';
+    t.style.cssText='position:fixed;bottom:20px;right:20px;padding:10px 18px;border-radius:6px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:opacity .5s;max-width:320px;pointer-events:none';
     document.body.appendChild(t);}
   t.style.background=type==='ok'?'#27ae60':'#e67e22';
   t.style.color='#fff'; t.style.opacity='1';
