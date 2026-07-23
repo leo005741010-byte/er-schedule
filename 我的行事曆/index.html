@@ -18,7 +18,7 @@
 :root{
   --bg:#f4f6f9; --card:#ffffff; --ink:#1e293b; --muted:#64748b; --line:#e6eaf0;
   --brand:#1565c0; --brand-soft:#e8f1fc; --accent:#0d9488;
-  --wknd:#c0392b; --wknd-bg:#fff5f5;
+  --wknd:#c0392b; --wknd-bg:#fff5f5; --term:#0e7c66;
   --today:#1565c0; --shadow:0 1px 3px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.04);
   --shadow-lg:0 10px 40px rgba(15,23,42,.18);
   --sheet:#ffffff; --chip-ink:#0f172a;
@@ -31,7 +31,7 @@
   :root{
     --bg:#0b1220; --card:#151d2e; --ink:#e8edf6; --muted:#93a1b8; --line:#25304a;
     --brand:#5b9be8; --brand-soft:#18263e; --accent:#2dd4bf;
-    --wknd:#f87171; --wknd-bg:#241618;
+    --wknd:#f87171; --wknd-bg:#241618; --term:#34d399;
     --today:#5b9be8; --shadow:0 1px 3px rgba(0,0,0,.4);
     --shadow-lg:0 14px 46px rgba(0,0,0,.6);
     --sheet:#151d2e; --chip-ink:#e8edf6;
@@ -127,9 +127,13 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .cell .dnum{font-size:13px;font-weight:700;width:23px;height:23px;display:flex;align-items:center;justify-content:center;
   border-radius:50%;flex-shrink:0}
 .cell.we .dnum{color:var(--wknd)}
+.cell.hol-tw:not(.today) .dnum{color:var(--wknd)}
 .cell.today .dnum{background:var(--today);color:#fff}
-.cell .hol{position:absolute;top:5px;right:5px;font-size:8.5px;font-weight:700;color:var(--wknd);background:var(--wknd-bg);
-  padding:1px 4px;border-radius:5px}
+.cell .daytop{display:flex;align-items:center;gap:3px;min-height:22px;overflow:hidden}
+.cell .sub{font-size:9px;font-weight:700;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sub-lunar{color:var(--muted)}
+.sub-term{color:var(--term)}
+.sub-hol{color:var(--wknd)}
 .cbar{height:4.5px;border-radius:3px;margin-top:1px}
 .cbar.sh-主白{background:var(--sh-zhu-dot)} .cbar.sh-早班{background:var(--sh-zao-dot)}
 .cbar.sh-小夜{background:var(--sh-xiao-dot)} .cbar.sh-大夜{background:var(--sh-da-dot)}
@@ -472,6 +476,94 @@ const CATS=[
 function catInfo(v){return CATS.find(c=>c.v===v)||CATS[0];}
 
 /* ============================================================
+   農曆 + 節氣 + 台灣國定假日（全部本機計算，可離線）
+   萬年曆資料表 1900–2049；每年一個 16-bit 數字編碼各月大小月與閏月
+   ============================================================ */
+const LUNAR_INFO=[
+0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,//1900
+0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,//1910
+0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,//1920
+0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,//1930
+0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,//1940
+0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,//1950
+0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,//1960
+0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b5a0,0x195a6,//1970
+0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,//1980
+0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x055c0,0x0ab60,0x096d5,0x092e0,//1990
+0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,//2000
+0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,//2010
+0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,//2020
+0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,//2030
+0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0 //2040
+];
+const LMONTH=['正','二','三','四','五','六','七','八','九','十','冬','臘'];
+function lDayName(d){
+  if(d===10)return '初十'; if(d===20)return '二十'; if(d===30)return '三十';
+  const t=['','一','二','三','四','五','六','七','八','九','十'];
+  if(d<10) return '初'+t[d];
+  if(d<20) return '十'+t[d-10];
+  return '廿'+t[d-20];
+}
+function lLeapMonth(y){return LUNAR_INFO[y-1900]&0xf;}
+function lLeapDays(y){return lLeapMonth(y)?((LUNAR_INFO[y-1900]&0x10000)?30:29):0;}
+function lMonthDays(y,m){return (LUNAR_INFO[y-1900]&(0x10000>>m))?30:29;}
+function lYearDays(y){let s=348;for(let i=0x8000;i>0x8;i>>=1)s+=(LUNAR_INFO[y-1900]&i)?1:0;return s+lLeapDays(y);}
+function solar2lunar(y,m,d){        // m 1-based
+  if(y<1900||y>2049) return null;
+  let offset=Math.round((Date.UTC(y,m-1,d)-Date.UTC(1900,0,31))/86400000);
+  let i,temp=0;
+  for(i=1900;i<2050&&offset>0;i++){temp=lYearDays(i);offset-=temp;}
+  if(offset<0){offset+=temp;i--;}
+  const lYear=i; const leap=lLeapMonth(i); let isLeap=false;
+  for(i=1;i<13&&offset>0;i++){
+    if(leap>0&&i===leap+1&&!isLeap){--i;isLeap=true;temp=lLeapDays(lYear);}
+    else temp=lMonthDays(lYear,i);
+    if(isLeap&&i===leap+1) isLeap=false;
+    offset-=temp;
+  }
+  if(offset===0&&leap>0&&i===leap+1){ if(isLeap) isLeap=false; else{isLeap=true;--i;} }
+  if(offset<0){offset+=temp;--i;}
+  return {lYear,lMonth:i,lDay:offset+1,isLeap};
+}
+// 24 節氣（本機天文公式，日期準確度足夠）
+const TERMS=['小寒','大寒','立春','雨水','驚蟄','春分','清明','穀雨','立夏','小滿','芒種','夏至','小暑','大暑','立秋','處暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至'];
+const TERM_MIN=[0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
+function termDay(y,n){
+  const off=new Date(31556925974.7*(y-1900)+TERM_MIN[n]*60000+Date.UTC(1900,0,6,2,5,0));
+  return off.getUTCDate();
+}
+function solarTermName(y,m,d){       // m 1-based
+  const a=2*(m-1), b=a+1;
+  if(termDay(y,a)===d) return TERMS[a];
+  if(termDay(y,b)===d) return TERMS[b];
+  return null;
+}
+function lunarShort(ds){             // 月曆格子小字：初一顯示月、其餘顯示日
+  const[y,m,d]=ds.split('-').map(Number); const L=solar2lunar(y,m,d); if(!L)return '';
+  return L.lDay===1 ? (L.isLeap?'閏':'')+LMONTH[L.lMonth-1]+'月' : lDayName(L.lDay);
+}
+function lunarFull(ds){              // 完整：六月初十
+  const[y,m,d]=ds.split('-').map(Number); const L=solar2lunar(y,m,d); if(!L)return '';
+  return (L.isLeap?'閏':'')+LMONTH[L.lMonth-1]+'月'+lDayName(L.lDay);
+}
+// 台灣國定假日：回傳 {label, off:true}；off 代表全國放假日（畫紅）。不含每年公告的補班/補假。
+function twHoliday(ds){
+  const[y,m,d]=ds.split('-').map(Number);
+  const fixed={'1-1':'元旦','2-28':'和平紀念日','4-4':'兒童節','9-28':'教師節','10-10':'國慶日','10-25':'光復節','12-25':'行憲紀念日'};
+  let label=fixed[m+'-'+d]||null, off=!!label;
+  if(m===4 && termDay(y,6)===d){ label=label?label+'‧清明':'清明'; off=true; } // 清明節（節氣）
+  const L=solar2lunar(y,m,d);
+  if(L&&!L.isLeap){
+    if(L.lMonth===1&&L.lDay>=1&&L.lDay<=3){label='春節';off=true;}
+    else if(L.lMonth===5&&L.lDay===5){label='端午節';off=true;}
+    else if(L.lMonth===8&&L.lDay===15){label='中秋節';off=true;}
+  }
+  const nd=addDays(ds,1).split('-').map(Number); const N=solar2lunar(nd[0],nd[1],nd[2]); // 除夕：隔天為正月初一
+  if(N&&!N.isLeap&&N.lMonth===1&&N.lDay===1){label='除夕';off=true;}
+  return off ? {label,off} : null;
+}
+
+/* ============================================================
    Render
    ============================================================ */
 function render(){
@@ -491,11 +583,12 @@ function renderTodayCard(){
   }
   evs.forEach(e=>{const c=catInfo(e.category);rows+=`<span class="chip ev" style="background:${c.color}1a;color:${c.color}">${c.icon} ${esc(e.title)}${e.allDay?'':`<span class="t">${e.start||''}</span>`}</span>`;});
   if(!shifts.length&&!evs.length) rows=`<span class="tc-empty">今天沒有班，也沒有安排的行程 🌤️</span>`;
+  const twh=twHoliday(ds);
   document.getElementById('todaycard').innerHTML=`
     <div class="tc-head">
       <span class="tc-date">今天 · ${viewOrTodayMonthDay(ds)}</span>
-      <span class="tc-dow">星期${DOW_TW[dow]}</span>
-      ${hol?'<span class="tc-badge">假日</span>':''}
+      <span class="tc-dow">星期${DOW_TW[dow]} · 農曆${lunarFull(ds)}</span>
+      ${twh?`<span class="tc-badge">${twh.label||'國定假日'}</span>`:''}
     </div>
     <div class="tc-row">${rows}</div>`;
 }
@@ -523,9 +616,15 @@ function renderGrid(){
       items.push(`<div class="mini ev" style="background:${c.color}1a;color:${c.color}">${tm?`<b>${tm}</b> `:''}${esc(e.title)}</div>`);});
     const shown=items.slice(0,3).join('');
     const extra=items.length>3?`<div class="more">+${items.length-3}</div>`:'';
-    html+=`<div class="cell ${we?'we':''} ${ds===today?'today':''}" onclick="openDay('${ds}')">
-      <div style="display:flex;align-items:center"><span class="dnum">${day}</span></div>
-      ${hol&&!we?'<span class="hol">假</span>':''}
+    // 農曆 / 節氣 / 國定假日 小字（優先序：國定假日 > 節氣 > 農曆）
+    const[yy,mm,dd]=ds.split('-').map(Number);
+    const twh=twHoliday(ds), term=solarTermName(yy,mm,dd), lun=lunarShort(ds);
+    let sub,subCls;
+    if(twh&&twh.label){sub=twh.label;subCls='sub-hol';}
+    else if(term){sub=term;subCls='sub-term';}
+    else {sub=lun;subCls='sub-lunar';}
+    html+=`<div class="cell ${we?'we':''} ${ds===today?'today':''} ${twh?'hol-tw':''}" onclick="openDay('${ds}')">
+      <div class="daytop"><span class="dnum">${day}</span><span class="sub ${subCls}">${sub}</span></div>
       ${shown}${extra}
     </div>`;
   }
@@ -567,10 +666,12 @@ function renderList(){
    ============================================================ */
 function openDay(ds){
   selectedDate=ds;
-  const dow=getDOW(ds), hol=isHoliday(ds);
+  const dow=getDOW(ds);
+  const twh=twHoliday(ds);
   document.getElementById('ds-date').textContent=`${viewOrTodayMonthDay(ds)}`;
-  document.getElementById('ds-dow').textContent=`星期${DOW_TW[dow]}${ds===todayStr()?' · 今天':''}`;
-  document.getElementById('ds-hol').style.display=hol?'':'none';
+  document.getElementById('ds-dow').textContent=`星期${DOW_TW[dow]}${ds===todayStr()?' · 今天':''} · 農曆${lunarFull(ds)}`;
+  const holEl=document.getElementById('ds-hol');
+  if(twh){ holEl.textContent=twh.label||'國定假日'; holEl.style.display=''; } else holEl.style.display='none';
   const shifts=myShiftsForDate(ds);
   const evs=eventsForDate(ds);
   let html='';
