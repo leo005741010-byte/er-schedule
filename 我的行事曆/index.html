@@ -5,8 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="行事曆">
 <meta name="theme-color" content="#0f172a">
 <title>陳孝綱 的行事曆</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
@@ -133,8 +138,8 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .mini.sh-主白{background:var(--sh-zhu-bg);color:var(--sh-zhu-fg)} .mini.sh-早班{background:var(--sh-zao-bg);color:var(--sh-zao-fg)}
 .mini.sh-小夜{background:var(--sh-xiao-bg);color:var(--sh-xiao-fg)} .mini.sh-大夜{background:var(--sh-da-bg);color:var(--sh-da-fg)}
 .mini.sh-extra{background:rgba(120,144,156,.16);color:#607d8b}
-.mini.ev{background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;gap:3px}
-.mini.ev .evdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.mini.ev{background:var(--brand-soft);color:var(--brand)}
+.mini.ev b{font-weight:800;font-variant-numeric:tabular-nums}
 .cell .more{font-size:9px;color:var(--muted);font-weight:700;padding-left:3px}
 
 /* ===== Agenda ===== */
@@ -275,14 +280,6 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
         <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div class="we">六</div><div class="we">日</div>
       </div>
       <div class="grid" id="grid"></div>
-    </div>
-    <div class="legend">
-      <span><i style="background:var(--sh-zhu-dot)"></i>主白</span>
-      <span><i style="background:var(--sh-zao-dot)"></i>早班</span>
-      <span><i style="background:var(--sh-xiao-dot)"></i>小夜</span>
-      <span><i style="background:var(--sh-da-dot)"></i>大夜</span>
-      <span><i style="background:#90a4ae"></i>加班</span>
-      <span><i style="background:var(--brand)"></i>我的行程</span>
     </div>
   </div>
 
@@ -522,7 +519,8 @@ function renderGrid(){
     // 至多顯示：班次(合併成一條 mini + color bars) + 事件
     const items=[];
     shifts.forEach(s=>items.push(`<div class="mini ${s.cls}">${s.range}</div>`));
-    evs.forEach(e=>{const c=catInfo(e.category);items.push(`<div class="mini ev"><span class="evdot" style="background:${c.color}"></span>${esc(e.title)}</div>`);});
+    evs.forEach(e=>{const c=catInfo(e.category);const tm=e.allDay?'':(e.start||'');
+      items.push(`<div class="mini ev" style="background:${c.color}1a;color:${c.color}">${tm?`<b>${tm}</b> `:''}${esc(e.title)}</div>`);});
     const shown=items.slice(0,3).join('');
     const extra=items.length>3?`<div class="more">+${items.length-3}</div>`:'';
     html+=`<div class="cell ${we?'we':''} ${ds===today?'today':''}" onclick="openDay('${ds}')">
@@ -721,29 +719,76 @@ function renderPicker(){
 }
 function jumpMonth(y,m){viewY=y;viewM=m;closeSheets();render();}
 
-/* 垂直滑動換月：往上滑 → 上個月、往下滑 → 下個月（僅月檢視、無彈窗時） */
+/* 垂直滑動換月（拖曳跟手）：往上滑 → 上個月、往下滑 → 下個月（僅月檢視、無彈窗時） */
 function initSwipe(){
   const area=document.getElementById('monthview');
   if(!area) return;
+  const cal=()=>area.querySelector('.cal');
+  const THRESH=58;                       // 換月門檻
   let sy=0,sx=0,st=0,on=false,vert=false,decided=false;
+  let animating=false,animT1=0,animT2=0,animPending=false,animDir=0;
+
+  function finishAnim(){                  // 立即收尾（連續滑動時用），並補上還沒換的月
+    clearTimeout(animT1); clearTimeout(animT2);
+    if(animPending){ shiftMonth(animDir); animPending=false; }
+    const c=cal(); if(c){ c.style.transition='';c.style.transform='';c.style.opacity=''; }
+    animating=false;
+  }
+
   area.addEventListener('touchstart',e=>{
     if(e.touches.length!==1||document.querySelector('.sheet.show')){on=false;return;}
+    if(animating) finishAnim();           // 動畫進行中再次滑動 → 先收尾再開始
     const t=e.touches[0];sy=t.clientY;sx=t.clientX;st=Date.now();on=true;vert=false;decided=false;
+    const c=cal(); if(c) c.style.transition='none';
   },{passive:true});
+
   area.addEventListener('touchmove',e=>{
     if(!on) return;
     const t=e.touches[0],dy=t.clientY-sy,dx=t.clientX-sx;
-    if(!decided&&(Math.abs(dy)>8||Math.abs(dx)>8)){decided=true;vert=Math.abs(dy)>=Math.abs(dx);}
-    if(decided&&vert) e.preventDefault();      // 垂直滑動時不讓頁面捲動搶動作
+    if(!decided&&(Math.abs(dy)>7||Math.abs(dx)>7)){decided=true;vert=Math.abs(dy)>=Math.abs(dx);}
+    if(decided&&vert){
+      e.preventDefault();                // 垂直滑動時不讓頁面捲動搶動作
+      const c=cal(); if(!c) return;
+      // 阻尼：超過門檻後越拖越沉，像有彈性阻力
+      const damp=Math.sign(dy)*Math.min(Math.abs(dy),THRESH+(Math.abs(dy)-THRESH)*0.4);
+      c.style.transform=`translateY(${damp}px)`;
+      c.style.opacity=String(Math.max(.5,1-Math.abs(dy)/460));
+    }
   },{passive:false});
+
   area.addEventListener('touchend',e=>{
     if(!on) return; on=false;
-    if(!vert) return;
+    const c=cal(); if(!c) return;
+    if(!vert){ resetCal(c); return; }
     const t=e.changedTouches[0],dy=t.clientY-sy,dt=Date.now()-st;
-    if(Math.abs(dy)<45||dt>800) return;        // 距離太短或太慢，當作一般捲動
-    shiftMonth(dy<0?-1:1);                      // 上滑(dy<0)=上個月、下滑(dy>0)=下個月
-    if(navigator.vibrate) navigator.vibrate(8);
+    const fast=dt<480&&Math.abs(dy)>28;
+    if(Math.abs(dy)>=THRESH||fast) animateChange(c,dy<0?-1:1);   // 上滑=上個月、下滑=下個月
+    else resetCal(c);                                            // 回彈
   },{passive:true});
+
+  function resetCal(c){
+    c.style.transition='transform .3s cubic-bezier(.22,1,.36,1),opacity .3s';
+    c.style.transform='translateY(0)'; c.style.opacity='1';
+  }
+  // 純計時器動畫（不依賴 transitionend，避免頁面未合成時卡住）
+  function animateChange(c,dir){
+    animating=true; animPending=true; animDir=dir;
+    if(navigator.vibrate) navigator.vibrate(9);
+    const off=Math.min(150,(c.offsetHeight||400)*0.4);
+    const outY=dir<0?-off:off;           // 上個月往上飛出、下個月往下飛出
+    c.style.transition='transform .15s ease-in,opacity .15s ease-in';
+    c.style.transform=`translateY(${outY}px)`; c.style.opacity='0';
+    clearTimeout(animT1); clearTimeout(animT2);
+    animT1=setTimeout(()=>{
+      shiftMonth(dir); animPending=false;             // 換月並重繪
+      c.style.transition='none';
+      c.style.transform=`translateY(${-outY}px)`; c.style.opacity='0';  // 從相反方向進場
+      void c.offsetHeight;                            // reflow
+      c.style.transition='transform .26s cubic-bezier(.22,1,.36,1),opacity .26s';
+      c.style.transform='translateY(0)'; c.style.opacity='1';
+      animT2=setTimeout(()=>{ c.style.transition='';c.style.transform='';c.style.opacity=''; animating=false; },290);
+    },155);
+  }
 }
 
 /* ============================================================
