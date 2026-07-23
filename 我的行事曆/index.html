@@ -721,6 +721,31 @@ function renderPicker(){
 }
 function jumpMonth(y,m){viewY=y;viewM=m;closeSheets();render();}
 
+/* 垂直滑動換月：往上滑 → 上個月、往下滑 → 下個月（僅月檢視、無彈窗時） */
+function initSwipe(){
+  const area=document.getElementById('monthview');
+  if(!area) return;
+  let sy=0,sx=0,st=0,on=false,vert=false,decided=false;
+  area.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1||document.querySelector('.sheet.show')){on=false;return;}
+    const t=e.touches[0];sy=t.clientY;sx=t.clientX;st=Date.now();on=true;vert=false;decided=false;
+  },{passive:true});
+  area.addEventListener('touchmove',e=>{
+    if(!on) return;
+    const t=e.touches[0],dy=t.clientY-sy,dx=t.clientX-sx;
+    if(!decided&&(Math.abs(dy)>8||Math.abs(dx)>8)){decided=true;vert=Math.abs(dy)>=Math.abs(dx);}
+    if(decided&&vert) e.preventDefault();      // 垂直滑動時不讓頁面捲動搶動作
+  },{passive:false});
+  area.addEventListener('touchend',e=>{
+    if(!on) return; on=false;
+    if(!vert) return;
+    const t=e.changedTouches[0],dy=t.clientY-sy,dt=Date.now()-st;
+    if(Math.abs(dy)<45||dt>800) return;        // 距離太短或太慢，當作一般捲動
+    shiftMonth(dy<0?-1:1);                      // 上滑(dy<0)=上個月、下滑(dy>0)=下個月
+    if(navigator.vibrate) navigator.vibrate(8);
+  },{passive:true});
+}
+
 /* ============================================================
    Persistence
    ============================================================ */
@@ -814,6 +839,7 @@ function init(){
   loadSchedLocal();      // 先用本機快取畫面，雲端到了再更新
   renderCatOptions();
   render();
+  initSwipe();
   initCloud();
 }
 document.addEventListener('DOMContentLoaded',init);
