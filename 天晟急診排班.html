@@ -1525,8 +1525,10 @@ function scoreDoc(docId, date, slot, sched){
   const myPts=calcDocPoints(docId,sched);
   const avgPts=avgPoints(sched);
   score+=(avgPts-myPts)*0.8;
-  score+=(doc.prefs[slotPrefKey(slot)]||0)*36;
-  if(isHoliday(date)) score+=(doc.prefs.hol||0)*5;
+  // 班別偏好：大夜加重(60)避免被時數壓力蓋過 −1，其他班別 36
+  score+=(doc.prefs[slotPrefKey(slot)]||0)*(slot==='大夜'?60:36);
+  // 假日偏好：×5 幾乎無作用，提高到 ×30 使 −1/+1 真正有感
+  if(isHoliday(date)) score+=(doc.prefs.hol||0)*30;
   const last=getLastAssigned(docId,date,sched);
   if(last&&last.slot===slot) score+=5;
   else if(last) score-=3;
