@@ -352,7 +352,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
           </div>
         </div>
         <div>
-          <div style="margin-bottom:4px">選取日期（點擊選取，可連點多日）</div>
+          <div style="margin-bottom:4px">選取日期</div>
           <div class="pr-cal-wrap">
             <div class="pr-cal-nav" style="position:relative">
               <button onclick="prCalPrev()">&#9664;</button>
@@ -368,7 +368,6 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
               </div>
             </div>
             <div id="pr-cal-grid" class="pr-cal-grid"></div>
-            <div class="pr-cal-hint">點擊日期選取／取消，可連續點選多日</div>
             <div class="pr-cal-selected" id="pr-cal-selected">尚未選取日期</div>
           </div>
         </div>
@@ -386,7 +385,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
           <div>自訂時段 (HH-HH)</div>
           <input type="text" id="pr-custom" placeholder="例: 08-17 或 17-02" style="width:110px">
         </div>
-        <div><div>備註</div><input type="text" id="pr-note" style="width:110px" placeholder="(可留空)"></div>
+        <div><div>備註</div><input type="text" id="pr-note" style="width:110px"></div>
         <button class="action-btn btn-green" onclick="addPR()">新增</button>
       </div>
       <!-- 清單在下 -->
@@ -464,7 +463,6 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
     <div style="margin-top:8px;background:#f8fafc;border:1px solid #e3e8ef;border-radius:6px;padding:8px 12px;font-size:12px;color:#445">
       <strong style="color:#1a4a7a">點值說明（每小時）：</strong>
       08-16 平日 <b>1</b> ／ 假日 <b>1.2</b>　｜　16-02 平日 <b>1.2</b> ／ 假日 <b>1.4</b>　｜　02-08 平日 <b>1.6</b> ／ 假日 <b>1.8</b>
-      <div style="margin-top:4px;color:#777;font-size:11px">※ 08-16、16-02 以班次當日是否假日認定；<b>02-08 只要「當日」或「隔天」為假日就算假日</b>（含自訂假日）。例：週五 20-08 ＝ 1.2×6 ＋ 1.8×6 ＝ 18。</div>
     </div>
     <div id="stats-special" style="margin-top:10px;"></div>
     <div id="stats-violations" style="margin-top:10px;"></div>
@@ -819,7 +817,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
     <div class="form-row"><label>大夜偏好 (20-08)</label><div class="pref-seg" id="seg-大夜"></div></div>
     <div class="form-row"><label>假日偏好</label><div class="pref-seg" id="seg-hol"></div></div>
     <h3>點值與連班</h3>
-    <div class="form-row"><label>時數偏好</label><div class="pref-seg" id="seg-htPref"></div><span class="pref-hint">＋1＝+10h／－1＝−10h</span></div>
+    <div class="form-row"><label>時數偏好</label><div class="pref-seg" id="seg-htPref"></div></div>
     <div class="form-row"><label>最多連班天數</label><input type="number" id="pref-consec" value="6" min="1" max="14" style="width:70px"></div>
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
@@ -2440,14 +2438,12 @@ function _renderDayDraft(){
   let html=`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
     <button onclick="_draftToggleLock()" style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:12px;font-weight:700;color:#fff;background:${ds.locked?'#d4a017':'#8a9199'}">${ds.locked?'🔒 已鎖定（點擊解鎖）':'🔓 鎖定此日'}</button>
-    <span style="font-size:11px;color:${ds.locked?'#b8860b':'#888'}">${ds.locked?'自動排班將不會更動此日排班':'鎖定後，按自動排班時此日不會被更動'}</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px">
     <strong>當日切割點：</strong>
     <select onchange="_draftSplit(parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
       ${SPLIT_OPTS.map(h=>`<option value="${h}"${h===sp?' selected':''}>${h}:00</option>`).join('')}
     </select>
-    <span style="color:#888">白班與夜班的交接時間</span>
   </div>
   <table class="day-slot-table">
   <thead><tr><th>班別</th><th>時間 <span style="font-size:10px;color:#999">(HH-HH)</span></th><th>時數</th><th>點值</th><th>指派醫師</th></tr></thead><tbody>`;
@@ -2501,8 +2497,8 @@ function _renderDayDraft(){
 
   // 當日備註（行政事務）
   html+=`<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee">
-    <div style="font-size:12px;font-weight:700;margin-bottom:4px">📌 當日備註 <span style="font-weight:400;color:#999">（行政事務，可留空）</span></div>
-    <textarea id="day-note" rows="2" style="width:100%;font-size:12px;padding:5px 7px;border:1px solid #ddd;border-radius:4px;resize:vertical;box-sizing:border-box" placeholder="例：當日晨會、器材檢查、教學活動…" oninput="_draftNote(this.value)">${(ds.note||'').replace(/</g,'&lt;')}</textarea>
+    <div style="font-size:12px;font-weight:700;margin-bottom:4px">📌 當日備註</div>
+    <textarea id="day-note" rows="2" style="width:100%;font-size:12px;padding:5px 7px;border:1px solid #ddd;border-radius:4px;resize:vertical;box-sizing:border-box" oninput="_draftNote(this.value)">${(ds.note||'').replace(/</g,'&lt;')}</textarea>
   </div>`;
 
   const prs=state.preRequests[dateStr]||[];
