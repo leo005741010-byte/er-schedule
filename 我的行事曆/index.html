@@ -330,9 +330,9 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
     <div class="field" id="fm-timefield">
       <label>時間</label>
       <div class="timerow">
-        <div><input type="time" id="fm-start"></div>
+        <div><input type="time" id="fm-start" step="1800" onchange="autoEnd()"></div>
         <span class="tspan">→</span>
-        <div><input type="time" id="fm-end"></div>
+        <div><input type="time" id="fm-end" step="1800"></div>
       </div>
     </div>
     <div class="field">
@@ -613,6 +613,14 @@ function renderCatOptions(){
       <span class="ci">${c.icon}</span>${c.name}</div>`).join('');
 }
 function pickCat(v){formCat=v;renderCatOptions();}
+// 設定開始時間後，結束時間自動 +1 小時（可再手動修改）
+function autoEnd(){
+  const s=document.getElementById('fm-start').value;
+  if(!s) return;
+  const [h,m]=s.split(':').map(Number);
+  let t=h*60+m+60; if(t>1439) t=1439;
+  document.getElementById('fm-end').value=String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');
+}
 function toggleAllDay(){
   formAllDay=!formAllDay;
   document.getElementById('fm-allday-sw').classList.toggle('on',formAllDay);
