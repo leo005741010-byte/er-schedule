@@ -4603,7 +4603,9 @@ function generateOvertimePDF(){
         </tr>
         <tr><th>免稅</th><th>應稅</th><th>免稅</th><th>應稅</th></tr>
       </thead><tbody>${body}${subtotal}</tbody></table>
-      <table class="sign"><tbody>
+      <table class="sign"><colgroup>
+        <col style="width:34%"><col style="width:32%"><col style="width:34%">
+      </colgroup><tbody>
         <tr><td class="sh">院長室</td><td class="sh">內/外科主管</td><td class="sh">申請人親簽</td></tr>
         <tr><td class="sc"></td><td class="sc"></td><td class="sc"></td></tr>
       </tbody></table>
@@ -4653,9 +4655,10 @@ function generateOvertimePDF(){
   /* 只有班次特別多時才縮列高，一般月份維持原本表格尺寸 */
   .grid.dense th,.grid.dense td{height:18px;font-size:11px;}
   .grid.dense tr.sub td{height:20px;}
-  .sign{margin-top:0;}
+  /* 簽名欄分隔線需對齊上方表格：34% =「迄」右緣、66% =「假日應稅」右緣 */
+  .sign{margin-top:0;table-layout:fixed;}
   .sign td{border:1px solid #000;border-top:none;text-align:center;font-size:14px;}
-  .sign .sh{font-weight:bold;padding:4px;letter-spacing:2px;background:#fafafa;width:33.33%;}
+  .sign .sh{font-weight:bold;padding:4px;letter-spacing:2px;background:#fafafa;}
   .sign .sc{height:48px;}
   .foot{margin-top:0;}
   .foot td{border:1px solid #000;border-top:none;vertical-align:top;}
