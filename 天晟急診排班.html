@@ -4571,6 +4571,7 @@ function generateOvertimePDF(){
     const MINROWS=18;
     let body='', wd=0, hd=0;
     const n=Math.max(MINROWS, rows.length);
+    const dense=n>26; // 班次特別多時才縮小列高，避免撐破一頁被裁切
     for(let i=0;i<n;i++){
       const r=rows[i];
       if(r){
@@ -4590,7 +4591,11 @@ function generateOvertimePDF(){
         <td class="lbl">姓&nbsp;&nbsp;名</td><td>${doc.name}</td>
         <td class="lbl">職&nbsp;&nbsp;稱</td><td>主治醫師</td>
       </tr></tbody></table>
-      <table class="grid"><thead>
+      <table class="grid${dense?' dense':''}"><colgroup>
+        <col style="width:6%"><col style="width:5%"><col style="width:5%"><col style="width:9%"><col style="width:9%">
+        <col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:8%">
+        <col style="width:18%"><col style="width:16%">
+      </colgroup><thead>
         <tr>
           <th rowspan="2">日期</th><th rowspan="2">星期</th><th rowspan="2">例假</th><th rowspan="2">起</th><th rowspan="2">迄</th>
           <th colspan="2">平日時數</th><th colspan="2">假日時數</th>
@@ -4622,29 +4627,32 @@ function generateOvertimePDF(){
 
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>加班單_${rocYear}年${m+1}月</title>
   <style>
-  @page{size:A4 portrait;margin:10mm;}
+  @page{size:A4 portrait;margin:6mm;}
   *{box-sizing:border-box;}
   body{font-family:'標楷體','DFKai-SB',serif;color:#000;margin:0;}
-  .page{page-break-after:always;padding:2mm;}
+  /* padding 為「頁內安全邊界」：列印時就算使用者把邊界設成「無」（@page margin 會被忽略），
+     仍保留 6mm 不會被印表機的不可列印區裁掉——這是邊邊/上方文字被切的主因 */
+  .page{page-break-after:always;page-break-inside:avoid;padding:6mm;}
   .page:last-child{page-break-after:auto;}
   .title{text-align:center;font-size:22px;font-weight:bold;letter-spacing:2px;margin-bottom:4px;}
   .subhd{display:flex;justify-content:center;align-items:baseline;gap:40px;margin-bottom:8px;}
   .subhd .ym{font-size:17px;font-weight:bold;letter-spacing:3px;}
   .subhd .appd{font-size:13px;}
   table{border-collapse:collapse;width:100%;}
+  thead{display:table-header-group;}
   .info{margin-bottom:0;}
   .info td{border:1px solid #000;padding:5px 6px;font-size:14px;}
   .info .lbl{width:9%;text-align:center;font-weight:bold;letter-spacing:2px;background:#fafafa;}
   .grid{table-layout:fixed;}
-  .grid th,.grid td{border:1px solid #000;text-align:center;font-size:12px;height:22px;padding:0 2px;}
+  .grid th,.grid td{border:1px solid #000;text-align:center;font-size:12px;height:22px;padding:0 2px;word-break:break-all;}
   .grid th{font-weight:bold;background:#f5f5f5;padding:3px 2px;}
   .grid td.lft{text-align:center;}
   .grid tr.sub td{font-weight:bold;height:24px;}
   .grid tr.sub td[colspan]{text-align:center;letter-spacing:6px;}
-  /* 欄寬 */
-  .grid th:nth-child(1),.grid td:nth-child(1){width:6%;}
-  .grid th:nth-child(2),.grid td:nth-child(2){width:5%;}
-  .grid th:nth-child(3),.grid td:nth-child(3){width:5%;}
+  /* 欄寬改用 <colgroup> 指定（表頭有 rowspan/colspan，nth-child 對不到實際欄位） */
+  /* 只有班次特別多時才縮列高，一般月份維持原本表格尺寸 */
+  .grid.dense th,.grid.dense td{height:18px;font-size:11px;}
+  .grid.dense tr.sub td{height:20px;}
   .sign{margin-top:0;}
   .sign td{border:1px solid #000;border-top:none;text-align:center;font-size:14px;}
   .sign .sh{font-weight:bold;padding:4px;letter-spacing:2px;background:#fafafa;width:33.33%;}
