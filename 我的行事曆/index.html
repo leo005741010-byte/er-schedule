@@ -134,6 +134,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .sub-lunar{color:var(--muted)}
 .sub-term{color:var(--term)}
 .sub-hol{color:var(--wknd)}
+.hosp-hol{margin-left:auto;font-size:8.5px;font-weight:700;color:var(--wknd);background:var(--wknd-bg);padding:1px 4px;border-radius:5px;flex-shrink:0}
 .cbar{height:4.5px;border-radius:3px;margin-top:1px}
 .cbar.sh-主白{background:var(--sh-zhu-dot)} .cbar.sh-早班{background:var(--sh-zao-dot)}
 .cbar.sh-小夜{background:var(--sh-xiao-dot)} .cbar.sh-大夜{background:var(--sh-da-dot)}
@@ -224,6 +225,9 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   color:var(--ink);font-size:15px;font-family:inherit;transition:.15s;outline:none}
 .field input:focus,.field textarea:focus{border-color:var(--brand);background:var(--card)}
 .field textarea{resize:vertical;min-height:64px}
+.field select{width:100%;padding:12px 13px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);
+  color:var(--ink);font-size:15px;font-family:inherit;outline:none;-webkit-appearance:none;appearance:none}
+.field select:focus{border-color:var(--brand);background:var(--card)}
 .timerow{display:flex;gap:10px;align-items:center}
 .timerow .tspan{color:var(--muted);font-weight:700}
 .timerow>div{flex:1}
@@ -250,15 +254,18 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   z-index:80;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow-lg);white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-.legend{display:flex;flex-wrap:wrap;gap:9px 14px;justify-content:center;margin:14px 4px 0;font-size:11px;color:var(--muted)}
-.legend span{display:inline-flex;align-items:center;gap:5px;font-weight:600}
-.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.exportrow{display:flex;justify-content:center;margin:12px 0 0}
+.exportrow button{font-size:12px;font-weight:700;color:var(--muted);background:var(--card);border:1px solid var(--line);
+  border-radius:18px;padding:8px 14px;box-shadow:var(--shadow);transition:.12s}
+.exportrow button:active{transform:scale(.96)}
+.ag-dmeta .d2.d2hol{color:var(--wknd);font-weight:700}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="appbar">
     <h1>📅 <span id="app-title">陳孝綱 的行事曆</span></h1>
+    <button class="iconbtn" id="bellbtn" style="width:34px;height:34px;font-size:16px;opacity:.55" onclick="toggleNotify()" title="提醒通知">🔕</button>
     <div class="cloud" id="cloud"><span class="dot"></span><span id="cloud-txt">連線中…</span></div>
   </div>
 
@@ -285,13 +292,14 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
       </div>
       <div class="grid" id="grid"></div>
     </div>
+    <div class="exportrow"><button onclick="exportMonthICS()">📲 匯出本月行程 (.ics 含提醒)</button></div>
   </div>
 
   <!-- Agenda view -->
   <div class="agenda" id="listview"></div>
 </div>
 
-<button class="fab" onclick="openForm(null, selectedDate||todayStr())">＋</button>
+<button class="fab" onclick="openForm(null, todayStr())">＋</button>
 
 <!-- Day sheet -->
 <div class="mask" id="mask" onclick="closeSheets(event)"></div>
@@ -335,6 +343,10 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
         <span class="tspan">→</span>
         <div><input type="time" id="fm-end" step="1800"></div>
       </div>
+    </div>
+    <div class="field">
+      <label>提醒</label>
+      <select id="fm-remind"></select>
     </div>
     <div class="field">
       <label>備註(選填)</label>
@@ -562,6 +574,17 @@ function twHoliday(ds){
   if(N&&!N.isLeap&&N.lMonth===1&&N.lDay===1){label='除夕';off=true;}
   return off ? {label,off} : null;
 }
+// 每日農曆/節氣/假日快取（純日期函數，算一次就好，滑動換月更順）
+const _dayMeta=new Map();
+function dayMeta(ds){
+  let m=_dayMeta.get(ds);
+  if(!m){
+    const[y,mo,d]=ds.split('-').map(Number);
+    m={twh:twHoliday(ds),term:solarTermName(y,mo,d),lun:lunarShort(ds),lunFull:lunarFull(ds)};
+    _dayMeta.set(ds,m);
+  }
+  return m;
+}
 
 /* ============================================================
    Render
@@ -583,12 +606,12 @@ function renderTodayCard(){
   }
   evs.forEach(e=>{const c=catInfo(e.category);rows+=`<span class="chip ev" style="background:${c.color}1a;color:${c.color}">${c.icon} ${esc(e.title)}${e.allDay?'':`<span class="t">${e.start||''}</span>`}</span>`;});
   if(!shifts.length&&!evs.length) rows=`<span class="tc-empty">今天沒有班，也沒有安排的行程 🌤️</span>`;
-  const twh=twHoliday(ds);
+  const meta=dayMeta(ds);
   document.getElementById('todaycard').innerHTML=`
     <div class="tc-head">
       <span class="tc-date">今天 · ${viewOrTodayMonthDay(ds)}</span>
-      <span class="tc-dow">星期${DOW_TW[dow]} · 農曆${lunarFull(ds)}</span>
-      ${twh?`<span class="tc-badge">${twh.label||'國定假日'}</span>`:''}
+      <span class="tc-dow">星期${DOW_TW[dow]} · 農曆${meta.lunFull}</span>
+      ${meta.twh?`<span class="tc-badge">${meta.twh.label||'國定假日'}</span>`:''}
     </div>
     <div class="tc-row">${rows}</div>`;
 }
@@ -617,14 +640,15 @@ function renderGrid(){
     const shown=items.slice(0,3).join('');
     const extra=items.length>3?`<div class="more">+${items.length-3}</div>`:'';
     // 農曆 / 節氣 / 國定假日 小字（優先序：國定假日 > 節氣 > 農曆）
-    const[yy,mm,dd]=ds.split('-').map(Number);
-    const twh=twHoliday(ds), term=solarTermName(yy,mm,dd), lun=lunarShort(ds);
+    const {twh,term,lun}=dayMeta(ds);
     let sub,subCls;
     if(twh&&twh.label){sub=twh.label;subCls='sub-hol';}
     else if(term){sub=term;subCls='sub-term';}
     else {sub=lun;subCls='sub-lunar';}
+    // 排班系統設定的醫院假日（如補假，影響切割點）：非週末、非國定假日時補「假」徽章
+    const hospHol=hol&&!we&&!twh;
     html+=`<div class="cell ${we?'we':''} ${ds===today?'today':''} ${twh?'hol-tw':''}" onclick="openDay('${ds}')">
-      <div class="daytop"><span class="dnum">${day}</span><span class="sub ${subCls}">${sub}</span></div>
+      <div class="daytop"><span class="dnum">${day}</span><span class="sub ${subCls}">${sub}</span>${hospHol?'<span class="hosp-hol">假</span>':''}</div>
       ${shown}${extra}
     </div>`;
   }
@@ -652,7 +676,7 @@ function renderList(){
       <div class="ag-dhead" onclick="openDay('${ds}')">
         <span class="ag-dnum ${we?'we':''} ${ds===today?'today':''}">${day}</span>
         <span class="ag-dmeta"><span class="d1">${viewM+1}月${day}日 星期${DOW_TW[dow]}</span>
-        <span class="d2">${isHoliday(ds)?'假日':'　'}</span></span>
+        <span class="d2 ${dayMeta(ds).twh?'d2hol':''}">${(m=>m.twh?(m.twh.label||'國定假日'):((m.term||m.lun)+(isHoliday(ds)&&dow<5?' · 假':'')))(dayMeta(ds))}</span></span>
         ${ds===today?'<span class="ag-todaytag">今天</span>':''}
       </div>
       <div class="ag-body">${body}</div>
@@ -667,11 +691,13 @@ function renderList(){
 function openDay(ds){
   selectedDate=ds;
   const dow=getDOW(ds);
-  const twh=twHoliday(ds);
+  const meta=dayMeta(ds), twh=meta.twh;
   document.getElementById('ds-date').textContent=`${viewOrTodayMonthDay(ds)}`;
-  document.getElementById('ds-dow').textContent=`星期${DOW_TW[dow]}${ds===todayStr()?' · 今天':''} · 農曆${lunarFull(ds)}`;
+  document.getElementById('ds-dow').textContent=`星期${DOW_TW[dow]}${ds===todayStr()?' · 今天':''} · 農曆${meta.lunFull}`;
   const holEl=document.getElementById('ds-hol');
-  if(twh){ holEl.textContent=twh.label||'國定假日'; holEl.style.display=''; } else holEl.style.display='none';
+  if(twh){ holEl.textContent=twh.label||'國定假日'; holEl.style.display=''; }
+  else if(isHoliday(ds)&&dow<5){ holEl.textContent='假日'; holEl.style.display=''; }  // 排班系統設定的醫院假日
+  else holEl.style.display='none';
   const shifts=myShiftsForDate(ds);
   const evs=eventsForDate(ds);
   let html='';
@@ -687,7 +713,7 @@ function openDay(ds){
       return `<div class="ev-line" onclick="openForm('${e.id}','${ds}')">
         <span class="ev-cdot" style="background:${c.color}"></span>
         <span class="ev-main"><div class="ev-title">${esc(e.title)}</div>
-          <div class="ev-sub">${e.allDay?'全天':(e.start||'')+(e.end?' – '+e.end:'')}${e.note?' · '+esc(e.note):''}</div></span>
+          <div class="ev-sub">${e.allDay?'全天':(e.start||'')+(e.end?' – '+e.end:'')}${remindOf(e)!=='none'?' · ⏰':''}${e.note?' · '+esc(e.note):''}</div></span>
         <span class="ev-cat" style="background:${c.color}1a;color:${c.color}">${c.name}</span>
         <span class="chev">›</span>
       </div>`;}).join('');
@@ -725,6 +751,18 @@ function toggleAllDay(){
   formAllDay=!formAllDay;
   document.getElementById('fm-allday-sw').classList.toggle('on',formAllDay);
   document.getElementById('fm-timefield').style.display=formAllDay?'none':'';
+  populateRemind();   // 全天/定時的提醒選項不同
+}
+// 提醒選項：定時行程=提前N分鐘；全天行程=當天早上8點
+function populateRemind(sel){
+  const el=document.getElementById('fm-remind');
+  const opts=formAllDay
+    ?[['none','不提醒'],['d8','當天早上 8:00（預設）']]
+    :[['none','不提醒'],['0','準時'],['10','前 10 分鐘'],['30','前 30 分鐘（預設）'],['60','前 1 小時'],['120','前 2 小時']];
+  el.innerHTML=opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('');
+  const def=formAllDay?REMIND_DEF_ALLDAY:REMIND_DEF_TIMED;
+  const want=(sel!==undefined&&sel!==null)?String(sel):def;
+  el.value=opts.some(o=>o[0]===want)?want:def;
 }
 function openForm(id,ds){
   editingId=id;
@@ -751,6 +789,7 @@ function openForm(id,ds){
   }
   document.getElementById('fm-allday-sw').classList.toggle('on',formAllDay);
   document.getElementById('fm-timefield').style.display=formAllDay?'none':'';
+  populateRemind(id&&state.events[id]?remindOf(state.events[id]):undefined);
   renderCatOptions();
   showSheet('formsheet');
   if(!id) setTimeout(()=>document.getElementById('fm-name').focus(),300);
@@ -762,19 +801,26 @@ function saveEvent(){
   if(!date){toast('請選擇日期');return;}
   const start=document.getElementById('fm-start').value;
   const end=document.getElementById('fm-end').value;
+  if(!formAllDay&&start&&end&&end<=start){toast('結束時間需晚於開始時間');return;}
   const note=document.getElementById('fm-note').value.trim();
+  const remind=document.getElementById('fm-remind').value;
   const id=editingId||('e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
-  state.events[id]={id,title,date,allDay:formAllDay,start:formAllDay?'':start,end:formAllDay?'':end,category:formCat,note};
-  persistEvents();
+  state.events[id]={id,title,date,allDay:formAllDay,start:formAllDay?'':start,end:formAllDay?'':end,category:formCat,note,remind};
+  persistEvent(id,state.events[id]);
   closeSheets();
   render();
   toast(editingId?'已更新':'已新增');
+  // 有設提醒且尚未授權通知 → 順勢請求（需在使用者手勢中）
+  if(remind!=='none'&&('Notification' in window)&&Notification.permission==='default'){
+    try{Notification.requestPermission().then(updateBell);}catch(e){}
+  }
 }
 function deleteEvent(){
   if(!editingId) return;
   if(!confirm('確定刪除這個行程？')) return;
-  delete state.events[editingId];
-  persistEvents();
+  const id=editingId;
+  delete state.events[id];
+  persistEvent(id,null);
   closeSheets();
   render();
   toast('已刪除');
@@ -895,9 +941,13 @@ function initSwipe(){
 /* ============================================================
    Persistence
    ============================================================ */
-function persistEvents(){
+// 單筆寫入（ev=null 代表刪除）：兩台裝置同時各改一筆也不會互相蓋掉
+function persistEvent(id,ev){
   try{localStorage.setItem(CFG.LS_EVENTS,JSON.stringify(state.events));}catch(e){}
-  cloudSaveEvents();
+  if(NOCLOUD||!_calRef) return;
+  const u={_ts:Date.now(),_client:_clientId};
+  u['events/'+id]=ev;
+  _calRef.update(u).catch(()=>toast('雲端儲存失敗，已存本機'));
 }
 function loadLocalEvents(){
   try{const r=localStorage.getItem(CFG.LS_EVENTS);if(r)state.events=JSON.parse(r)||{};}catch(e){}
@@ -966,10 +1016,150 @@ function initCloud(){
     setCloud('ok','連線中…');
   }catch(e){setCloud('err','連線失敗');}
 }
-function cloudSaveEvents(){
-  if(NOCLOUD||!_calRef) return;
-  _calRef.set({events:state.events,_ts:Date.now(),_client:_clientId})
-    .catch(()=>toast('雲端儲存失敗，已存本機'));
+/* ============================================================
+   提醒引擎：App 開著時（電腦分頁 / 手機前景）到點通知
+   搭配「匯出 .ics」可讓手機內建行事曆在 App 關閉時也提醒
+   ============================================================ */
+const NOTIFIED_KEY='chenCal_notified_v1';
+const REMIND_DEF_TIMED='30', REMIND_DEF_ALLDAY='d8';
+// 舊行程沒存 remind 欄位 → 視為預設有提醒（定時=前30分、全天=當天8點）
+function remindOf(e){
+  const r=e&&e.remind;
+  if(r===undefined||r===null||r==='') return e&&e.allDay?REMIND_DEF_ALLDAY:REMIND_DEF_TIMED;
+  return String(r);
+}
+function _notifiedMap(){try{return JSON.parse(localStorage.getItem(NOTIFIED_KEY))||{};}catch(e){return{};}}
+function _saveNotified(m){
+  const cut=Date.now()-3*86400000;
+  for(const k in m) if(m[k]<cut) delete m[k];
+  try{localStorage.setItem(NOTIFIED_KEY,JSON.stringify(m));}catch(e){}
+}
+function checkReminders(){
+  const now=new Date(), ds=todayStr();
+  const evs=eventsForDate(ds); if(!evs.length) return;
+  const[Y,Mo,D]=ds.split('-').map(Number);
+  const m=_notifiedMap(); let changed=false;
+  for(const e of evs){
+    const r=remindOf(e); if(r==='none') continue;
+    const key=e.id+'@'+ds; if(m[key]) continue;
+    let fireAt,until;
+    if(e.allDay){
+      if(r!=='d8') continue;
+      fireAt=new Date(Y,Mo-1,D,8,0,0); until=new Date(Y,Mo-1,D,23,59,0);
+    }else{
+      if(!e.start) continue;
+      const[h,mi]=e.start.split(':').map(Number);
+      const st=new Date(Y,Mo-1,D,h,mi,0);
+      let mins=parseInt(r,10); if(isNaN(mins)) mins=30;
+      fireAt=new Date(st.getTime()-mins*60000);
+      until=new Date(st.getTime()+10*60000);   // 開始後10分鐘內開App仍補提醒
+    }
+    if(now>=fireAt&&now<=until){
+      const c=catInfo(e.category);
+      notifyUser(`${c.icon} ${e.title}`, e.allDay?'今天整天':`今天 ${e.start}${e.end?'–'+e.end:''}${e.note?'｜'+e.note:''}`);
+      m[key]=Date.now(); changed=true;
+    }
+  }
+  if(changed) _saveNotified(m);
+}
+async function notifyUser(title,body){
+  toast('🔔 '+title);
+  if(navigator.vibrate){try{navigator.vibrate([90,50,90]);}catch(e){}}
+  try{
+    if(('Notification' in window)&&Notification.permission==='granted'){
+      let reg=null;
+      try{ if(navigator.serviceWorker) reg=await navigator.serviceWorker.getRegistration(); }catch(e){}
+      const opt={body,icon:'icon-192.png',badge:'icon-192.png',tag:'chenCal-'+title};
+      if(reg&&reg.showNotification) reg.showNotification(title,opt);
+      else new Notification(title,opt);
+    }
+  }catch(e){}
+}
+function updateBell(){
+  const b=document.getElementById('bellbtn'); if(!b) return;
+  const ok=('Notification' in window)&&Notification.permission==='granted';
+  b.textContent=ok?'🔔':'🔕';
+  b.style.opacity=ok?'1':'.55';
+}
+async function toggleNotify(){
+  if(!('Notification' in window)){toast('此裝置不支援系統通知；App 開著時仍會畫面提醒');return;}
+  if(Notification.permission==='granted'){toast('🔔 系統通知已開啟');updateBell();return;}
+  if(Notification.permission==='denied'){toast('通知被封鎖，請到瀏覽器/系統設定開啟');return;}
+  try{
+    const p=await Notification.requestPermission();
+    updateBell();
+    toast(p==='granted'?'✅ 系統通知已開啟':'未開啟；App 開著時仍會畫面提醒');
+  }catch(e){}
+}
+let _lastDayStr=null;
+function initReminders(){
+  _lastDayStr=todayStr();
+  updateBell();
+  setInterval(()=>{
+    const t=todayStr();
+    if(t!==_lastDayStr){_lastDayStr=t;goToday();}   // 跨日：自動跳到今天並重繪
+    checkReminders();
+  },30000);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden) return;
+    const t=todayStr();
+    if(t!==_lastDayStr){_lastDayStr=t;goToday();} else renderTodayCard();
+    updateBell(); checkReminders();
+  });
+  setTimeout(checkReminders,3000);   // 等雲端資料到齊後首檢
+}
+
+/* ============================================================
+   匯出本月（我的班+行程）.ics，含 VALARM 提醒
+   匯入 iPhone/Google 行事曆後，App 關著也會由系統提醒
+   ============================================================ */
+function _icsDT(ds,h,mi){let d=ds,hh=h;if(hh>=24){d=addDays(ds,1);hh-=24;}return d.replace(/-/g,'')+'T'+String(hh).padStart(2,'0')+String(mi||0).padStart(2,'0')+'00';}
+function _icsEsc(s){return String(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');}
+function buildMonthICS(y,m){
+  const dt=new Date(),p=n=>String(n).padStart(2,'0');
+  const stamp=dt.getUTCFullYear()+p(dt.getUTCMonth()+1)+p(dt.getUTCDate())+'T'+p(dt.getUTCHours())+p(dt.getUTCMinutes())+p(dt.getUTCSeconds())+'Z';
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//ChenCal//個人行事曆//TW','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+    `X-WR-CALNAME:陳孝綱 ${y}年${m+1}月`,'X-WR-TIMEZONE:Asia/Taipei'];
+  let cnt=0;
+  for(let d=1;d<=daysInMonth(y,m);d++){
+    const ds=fmtDate(y,m,d);
+    for(const s of myShiftsForDate(ds)){
+      L.push('BEGIN:VEVENT',`UID:${ds}-${s.name}-${s.s}@chencal`,'DTSTAMP:'+stamp,
+        'DTSTART:'+_icsDT(ds,s.s),'DTEND:'+_icsDT(ds,s.e),
+        'SUMMARY:'+_icsEsc(`急診 ${s.range}`),'LOCATION:天晟醫院急診部',
+        'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:上班提醒','TRIGGER:-PT60M','END:VALARM','END:VEVENT');
+      cnt++;
+    }
+    for(const e of eventsForDate(ds)){
+      const r=remindOf(e), c=catInfo(e.category);
+      L.push('BEGIN:VEVENT',`UID:${e.id}@chencal`,'DTSTAMP:'+stamp);
+      if(e.allDay){
+        L.push('DTSTART;VALUE=DATE:'+ds.replace(/-/g,''),'DTEND;VALUE=DATE:'+addDays(ds,1).replace(/-/g,''));
+      }else{
+        const[sh,sm]=(e.start||'09:00').split(':').map(Number);
+        let eh,em;
+        const em2=(e.end||'').split(':').map(Number);
+        if(em2.length===2&&!isNaN(em2[0])){eh=em2[0];em=em2[1];}else{eh=sh+1;em=sm;}
+        L.push('DTSTART:'+_icsDT(ds,sh,sm),'DTEND:'+_icsDT(ds,eh,em));
+      }
+      L.push('SUMMARY:'+_icsEsc(`${c.icon} ${e.title}`));
+      if(e.note) L.push('DESCRIPTION:'+_icsEsc(e.note));
+      if(e.allDay){ if(r==='d8') L.push('BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+_icsEsc(e.title),'TRIGGER:PT8H','END:VALARM'); }
+      else if(r!=='none'){ const mm=parseInt(r,10)||0; L.push('BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+_icsEsc(e.title),`TRIGGER:-PT${mm}M`,'END:VALARM'); }
+      L.push('END:VEVENT'); cnt++;
+    }
+  }
+  L.push('END:VCALENDAR');
+  return {ics:L.join('\r\n'),cnt};
+}
+function exportMonthICS(){
+  const {ics,cnt}=buildMonthICS(viewY,viewM);
+  if(!cnt){toast('這個月沒有班或行程');return;}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([ics],{type:'text/calendar;charset=utf-8'}));
+  a.download=`陳孝綱_行事曆_${viewY}_${viewM+1}.ics`;
+  a.click();
+  toast(`✅ 已匯出 ${viewY}年${viewM+1}月（${cnt} 筆，含提醒）`);
 }
 
 /* ============================================================
@@ -987,6 +1177,7 @@ function init(){
   render();
   initSwipe();
   initCloud();
+  initReminders();
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
