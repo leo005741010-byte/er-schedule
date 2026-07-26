@@ -7,7 +7,7 @@
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#b81c22">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -278,6 +278,8 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
   <button class="action-btn" data-pwa-hide style="background:#b45309;color:#fff" onclick="generateOvertimePDF()">🧾 加班單</button>
   <button class="action-btn" data-pwa-hide style="background:#00897b;color:#fff" onclick="openICalModal()">📅 行事曆</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
+  <button class="action-btn" data-pwa-hide style="background:#37474f;color:#fff;font-size:11px" onclick="saveData()" title="下載完整JSON備份（含所有月份班表/醫師/預假）">💾 備份</button>
+  <button class="action-btn" data-pwa-hide style="background:#607d8b;color:#fff;font-size:11px" onclick="loadData()" title="從JSON備份檔還原（會覆蓋現有資料）">📂 還原備份</button>
   <button class="action-btn btn-purple" data-pwa-hide onclick="openCloudSettings()" style="font-size:11px">☁️ 雲端設定</button>
   <span id="_cloud_status" data-pwa-hide style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
   <span id="_pwa-badge" style="display:none;font-size:11px;color:#a5d6a7;font-weight:700">📱 檢視模式</span>
@@ -1212,16 +1214,21 @@ function parseCustomShift(custom){
 // ELIGIBILITY
 // ============================================================
 function getLastAssigned(docId, beforeDate, sched){
-  const dates=Object.keys(sched).filter(d=>d<beforeDate).sort();
-  let last=null;
-  for(const d of dates){
-    const ds=sched[d];
-    const sp=ds.split||defaultSplitFor(d);
-    for(const sl of SLOTS){
-      if(ds[sl]===docId) last={date:d,slot:sl,split:sp};
+  // 由 beforeDate 往回逐日查（最多45天）：休息/連班/轉班判斷只需最近的班。
+  // 原寫法每次把「所有月份」的日期 filter+sort，是自動排班最內圈的熱路徑，
+  // 資料逐月累積會越來越慢；改逐日回掃後與資料量無關。
+  let cur=addDays(beforeDate,-1);
+  for(let i=0;i<45;i++){
+    const ds=sched[cur];
+    if(ds){
+      for(let j=SLOTS.length-1;j>=0;j--){ // 反向掃：同日重複時取 SLOTS 順序最後者，與原行為一致
+        const sl=SLOTS[j];
+        if(ds[sl]===docId) return {date:cur,slot:sl,split:ds.split||defaultSplitFor(cur)};
+      }
     }
+    cur=addDays(cur,-1);
   }
-  return last;
+  return null;
 }
 
 function canWork(docId, date, slot, sched){
@@ -1464,14 +1471,10 @@ function avgPoints(sched){
 
 // 取得 firstDate 之前（即上個月以前）該醫師最後上的班別，作為跨月轉班的起點
 function lastSlotBefore(docId, firstDate){
-  let bestD=null, bestSlot=null;
-  for(const [d,ds] of Object.entries(state.schedule)){
-    if(d>=firstDate) continue;
-    for(const sl of SLOTS){
-      if(ds[sl]===docId && (!bestD || d>bestD)){ bestD=d; bestSlot=sl; }
-    }
-  }
-  return bestSlot;
+  // 改走 getLastAssigned 的 45 天回掃（原寫法掃整份歷史，且此函式位於轉班數模擬的熱路徑）。
+  // 45 天以上沒上班者視為無前班，跨這麼久也不該算轉班。
+  const last=getLastAssigned(docId, firstDate, state.schedule);
+  return last?last.slot:null;
 }
 
 function countTurnovers(docId, sched){
@@ -1593,7 +1596,8 @@ function bestSplitForPair(earlyId, lateId, date, sched){
 
   // Pre-check: rest constraints that depend on split
   const prevDate = addDays(date, -1);
-  const prevDs = sched[prevDate] || {};
+  // 前一天可能落在上個月（D=月初1號）：生成中的 sched 只有本月，須回退查 state.schedule
+  const prevDs = sched[prevDate] || state.schedule[prevDate] || {};
   // 大夜(D-1) ends at 08:00 on D. 小夜(D) starts at sp. Rest = sp-8. Need ≥12 → sp≥20.
   const lateNeedsMinSp20 = lateId && prevDs['大夜']===lateId;
   // 早班(D) starts at 08:00. If early doctor worked 小夜(D-1) ending 02:00 → rest=6h always blocked.
@@ -1700,13 +1704,15 @@ function _generateOnce(y,m,dates){
     for(const pr of (state.preRequests[d]||[])){
       if(!pr.type.startsWith('WORK_')) continue;
       const slKey=pr.type.replace('WORK_','');
+      // 同一位醫師當日已被排入其他格（例如同日有兩筆不同班別的預班）則跳過，避免一天兩班
+      const alreadyToday=SLOTS.some(s=>newSched[d][s]===pr.docId);
       if(slKey==='CUSTOM'){
         const parsed=parseCustomShift(pr.custom);
-        if(parsed&&!newSched[d][parsed.slot]){
+        if(parsed&&!newSched[d][parsed.slot]&&!alreadyToday){
           newSched[d][parsed.slot]=pr.docId;
           if(parsed.split!==null) newSched[d].split=parsed.split;
         }
-      } else if(SLOTS.includes(slKey)&&!newSched[d][slKey]){
+      } else if(SLOTS.includes(slKey)&&!newSched[d][slKey]&&!alreadyToday){
         newSched[d][slKey]=pr.docId;
       }
     }
@@ -1861,8 +1867,9 @@ function _generateOnce(y,m,dates){
   }
 
   // POST-SPLIT safety pass: fix any 大夜(D)→小夜(D+1) violations where sp<20
-  for(const d of dates){
-    const ds=newSched[d]; if(!ds||!ds['大夜']) continue;
+  // （含跨月：上個月最後一天的大夜 → 本月1號小夜，D 需多掃前一天、資料取自 state.schedule）
+  for(const d of [addDays(dates[0],-1),...dates]){
+    const ds=newSched[d]||state.schedule[d]; if(!ds||!ds['大夜']) continue;
     const did=ds['大夜'];
     const d1=addDays(d,1); const ds1=newSched[d1]; if(!ds1||!ds1['小夜']) continue;
     if(LK.has(d1)) continue; // 鎖定日的切割點不改
@@ -3297,7 +3304,7 @@ function renderStats(){
   // 手動排班把關：休息不足12h／N-OFF-D／同日重複（自動排班不會產生，人工調班可能）
   for(const doc of state.doctors){
     if(doc.type==='part') continue;
-    let prev=null;
+    let prev=getLastAssigned(doc.id,dates[0],state.schedule); // 含上月月底的班，跨月違規也抓得到
     for(const d of dates){
       const ds=state.schedule[d]||{};
       const sp=ds.split||defaultSplitFor(d);
@@ -4007,14 +4014,18 @@ function autoLoad(){
 function saveData(){
   const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt};
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
+  const _d=new Date(), _p=n=>String(n).padStart(2,'0');
   a.href=URL.createObjectURL(blob);
-  a.download=`天晟排班_${state.year}_${state.month+1}.json`;
+  a.download=`天晟急診排班備份_${_d.getFullYear()}${_p(_d.getMonth()+1)}${_p(_d.getDate())}.json`;
   a.click();
+  showToast('💾 已匯出完整備份（含所有月份）');
 }
 function loadData(){
+  if(blockIfViewOnly()) return;
   const inp=document.createElement('input');inp.type='file';inp.accept='.json';
   inp.onchange=e=>{
     const f=e.target.files[0]; if(!f) return;
@@ -4023,6 +4034,8 @@ function loadData(){
       try{
         const d=migrateData(JSON.parse(ev.target.result));
         if(!d||!Array.isArray(d.doctors)||!d.schedule) throw new Error('檔案格式不正確');
+        if(!confirm('⚠ 還原備份會以檔案內容「覆蓋」目前所有資料（含各月份班表、醫師設定、預假預班），並同步到雲端。\n\n確定要還原？')) return;
+        pushUndo();
         state.doctors=d.doctors; state.schedule=d.schedule;
         state.preRequests=d.preRequests||{};
         state.holidays=new Set(d.holidays||[]);
@@ -4033,9 +4046,13 @@ function loadData(){
         state.holidaySplit=clampSplit(d.holidaySplit||17);
         state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
+        _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
+        _completedMonths.clear(); (d.completedMonths||[]).forEach(k=>_completedMonths.add(k));
         _syncSplitSelects();
         autoSave();
-        renderCalendar(); showToast('載入成功！');
+        renderCalendar(); renderDoctorTable(); renderPRList();
+        updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
+        showToast('✅ 備份還原成功！');
       }catch(err){showToast('載入失敗: '+err.message,'warn');}
     };
     r.readAsText(f);
