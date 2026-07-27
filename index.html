@@ -1774,6 +1774,12 @@ function _generateOnce(y,m,dates){
             return canWorkRelaxed(doc.id,d,slot,fullSched);
           });
         }
+        // 大夜分層：偏好≥0者優先，「大夜−1」者只在完全無人可上時才候補
+        // （原本只靠 −150 軟扣分，會被時數偏好的持續拉力蓋過 → 大夜−1者仍被塞滿大夜）
+        if(slot==='大夜'&&candidates.length){
+          const nonAverse=candidates.filter(doc=>(doc.prefs['大夜']||0)>=0);
+          if(nonAverse.length) candidates=nonAverse;
+        }
         if(candidates.length){
           const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
           scored.sort((a,b)=>b.sc-a.sc);
@@ -1807,7 +1813,9 @@ function _generateOnce(y,m,dates){
           }
         }
         if(candA.length){
-          candA.sort((a,b)=>a.t-b.t);
+          // 大夜−1 者補時數時，大夜格排最後選（原本只看轉班數，會主動把夜班塞給避夜者）
+          const _nAv=(doc.prefs['大夜']||0)<0;
+          candA.sort((a,b)=>((_nAv&&a.slot==='大夜'?1:0)-(_nAv&&b.slot==='大夜'?1:0))||(a.t-b.t));
           newSched[d][candA[0].slot]=doc.id; anyProgress=true; filled=true;
         }
         if(filled) continue;
@@ -1831,7 +1839,8 @@ function _generateOnce(y,m,dates){
           }
         }
         if(candB.length){
-          candB.sort((a,b)=>a.t-b.t);
+          const _nAv=(doc.prefs['大夜']||0)<0;
+          candB.sort((a,b)=>((_nAv&&a.slot==='大夜'?1:0)-(_nAv&&b.slot==='大夜'?1:0))||(a.t-b.t));
           newSched[d][candB[0].slot]=doc.id; anyProgress=true; filled=true;
         }
       }
@@ -1945,11 +1954,16 @@ function _fillEmpties(newSched,fullSched,dates){
     if(LK.has(d)) continue; // 鎖定日不補填
     for(const slot of SLOTS){
       if(newSched[d][slot]) continue;
-      const candidates=state.doctors.filter(doc=>{
+      let candidates=state.doctors.filter(doc=>{
         if(doc.type==='part') return false;
         if(SLOTS.some(s=>newSched[d][s]===doc.id)) return false;
         return canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched);
       });
+      // 大夜分層：與 greedy 相同——不留空格是鐵律，但有偏好≥0者可上就不用大夜−1者
+      if(slot==='大夜'&&candidates.length){
+        const nonAverse=candidates.filter(doc=>(doc.prefs['大夜']||0)>=0);
+        if(nonAverse.length) candidates=nonAverse;
+      }
       if(candidates.length){
         const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
         scored.sort((a,b)=>b.sc-a.sc);
@@ -2134,6 +2148,13 @@ function evaluateSchedule(sched,dates){
       if(n0&&!n1&&n2) altNight++;
     }
   }
+  // 班別偏好滿足度：「大夜−1」者每上一班大夜記一次
+  // （原評分完全沒有偏好項，避夜者上8班和3班的版本同分，10次重排挑不出較好的）
+  let aversePen=0;
+  for(const doc of full){
+    if((doc.prefs['大夜']||0)>=0) continue;
+    for(const d of dates){ if((sched[d]||{})['大夜']===doc.id) aversePen++; }
+  }
   const hSd=full.length?tgtDev/full.length:0; // 平均偏離個人目標
   // 反轉懲罰：時數偏好-1者的時數竟高於+1者，直接重罰其差距
   let invPen=0;
@@ -2152,6 +2173,7 @@ function evaluateSchedule(sched,dates){
   score-=invPen*4;
   score-=pSd*0.4;
   score-=altNight*120;
+  score-=aversePen*60;   // 大夜−1者的每班大夜：低於鐵律、高於均衡項，重排時偏向避夜版本
   score-=turnExcess*200; // 轉班>3：鐵律級
   score-=turnTotal*1.5;
   score-=consecViol*8;
