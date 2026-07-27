@@ -1545,6 +1545,13 @@ function scoreDoc(docId, date, slot, sched){
       if(ydN||tmN) score+=90;
       else score-=15;
     }
+    // 夜班均衡（偏好≥0者）：低於個人配額給拉力、超過給阻力
+    // （否則夜班全跟著時數缺口走：同樣偏好0，缺時數者9班、不缺者0班）
+    if(_nightQuotas&&(doc.prefs['大夜']||0)>=0&&_nightQuotas[docId]!=null){
+      let myN=0;
+      for(const dd of Object.keys(sched)) if((sched[dd]||{})['大夜']===docId) myN++;
+      score+=(_nightQuotas[docId]-myN)*30;
+    }
   }
   if(doc.prefs.long&&slotHours(slot,split)>10) score+=40;
   const addH=slotHours(slot,split);
@@ -1585,6 +1592,32 @@ function scoreDoc(docId, date, slot, sched){
     }
   }
   return score;
+}
+
+// ===== 夜班均衡 =====
+// 大夜偏好≥0者之間按「可上大夜天數」比例分擔大夜（−1者由分層機制處理，不參與配額）。
+// 權重 = 可上天數(扣預假OFF；wkNight者僅計五六日) × (1＋0.5×大夜偏好) → ＋1者多分一些。
+let _nightQuotas=null; // _generateOnce 開始時計算，scoreDoc 讀取
+function computeNightQuotas(y,m,dates){
+  const group=state.doctors.filter(x=>x.type==='full'&&(x.prefs['大夜']||0)>=0);
+  const w={}; let sum=0;
+  for(const doc of group){
+    let elig=0;
+    for(const d of dates){
+      if(doc.prefs.wkNight&&![4,5,6].includes(getDOW(d))) continue;
+      const prs=(state.preRequests[d]||[]).filter(r=>r.docId===doc.id);
+      if(prs.some(pr=>['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type))) continue;
+      // 隔天有「OFF+前天不大夜/不夜班」的預假 → 當天大夜也被封，不算可上日
+      const nx=(state.preRequests[addDays(d,1)]||[]).filter(r=>r.docId===doc.id);
+      if(nx.some(pr=>pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')) continue;
+      elig++;
+    }
+    const wt=elig*(1+0.5*(doc.prefs['大夜']||0));
+    w[doc.id]=wt; sum+=wt;
+  }
+  const q={};
+  for(const doc of group) q[doc.id]=sum>0?dates.length*w[doc.id]/sum:0;
+  return q;
 }
 
 // Choose optimal split for a day given the assigned 早班 and 小夜 doctors
@@ -1663,6 +1696,7 @@ function autoSchedule(){
 function _generateOnce(y,m,dates){
   const newSched={};
   const LK=state.lockedDays||new Set(); // 已鎖定的日期，自動排班全程不更動
+  _nightQuotas=computeNightQuotas(y,m,dates); // 夜班均衡配額（scoreDoc 讀取）
 
   for(const d of dates){
     const existing=state.schedule[d]||{};
@@ -2155,6 +2189,17 @@ function evaluateSchedule(sched,dates){
     if((doc.prefs['大夜']||0)>=0) continue;
     for(const d of dates){ if((sched[d]||{})['大夜']===doc.id) aversePen++; }
   }
+  // 夜班均衡：偏好≥0者實際大夜數與個人配額的總偏差
+  let nightDev=0;
+  {
+    const quotas=computeNightQuotas(y,m,dates);
+    for(const doc of full){
+      if((doc.prefs['大夜']||0)<0||quotas[doc.id]==null) continue;
+      let n=0;
+      for(const d of dates) if((sched[d]||{})['大夜']===doc.id) n++;
+      nightDev+=Math.abs(n-quotas[doc.id]);
+    }
+  }
   const hSd=full.length?tgtDev/full.length:0; // 平均偏離個人目標
   // 反轉懲罰：時數偏好-1者的時數竟高於+1者，直接重罰其差距
   let invPen=0;
@@ -2174,6 +2219,7 @@ function evaluateSchedule(sched,dates){
   score-=pSd*0.4;
   score-=altNight*120;
   score-=aversePen*60;   // 大夜−1者的每班大夜：低於鐵律、高於均衡項，重排時偏向避夜版本
+  score-=nightDev*20;    // 夜班均衡：偏好≥0者偏離配額的總量
   score-=turnExcess*200; // 轉班>3：鐵律級
   score-=turnTotal*1.5;
   score-=consecViol*8;
