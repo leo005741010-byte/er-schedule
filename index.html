@@ -77,7 +77,9 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 .ms-ex .k{font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:#546e7a;color:#fff;flex-shrink:0;}
 .ms-ex .t{font-size:11px;color:#8a94a6;font-variant-numeric:tabular-nums;}
 .ms-ex .n{font-size:14px;font-weight:700;margin-left:auto;}
-#header h1{font-size:17px;font-weight:700;flex:1;min-width:120px;}
+/* 標題一律單行：原本 min-width:120px 允許被壓縮，直式螢幕會斷成兩行、
+   連帶把整條工具列撐高。改為不得縮到比文字窄，且不換行。 */
+#header h1{font-size:17px;font-weight:700;flex:1 1 auto;min-width:max-content;white-space:nowrap;}
 .nav-btn{background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:13px;}
 .nav-btn:hover{background:rgba(255,255,255,0.35);}
 .action-btn{border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;}
