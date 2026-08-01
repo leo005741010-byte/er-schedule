@@ -19,6 +19,10 @@ if('serviceWorker' in navigator){
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
+/* 捲軸空間恆定保留：各分頁內容長短不同，垂直捲軸會忽隱忽現，
+   可用寬度隨之變化，使工具列(flex-wrap)換行、按鈕位置跑掉（直式螢幕更明顯）。
+   scrollbar-gutter 為現代瀏覽器解法，overflow-y:scroll 為舊版瀏覽器後備。 */
+html{scrollbar-gutter:stable;overflow-y:scroll;}
 body{font-family:'Microsoft JhengHei','微軟正黑體',Arial,sans-serif;background:#f0f2f5;color:#333;font-size:14px;}
 #header{background:#1a4a7a;color:#fff;padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 /* 手機看板：底部月份切換列（避開動態島/瀏海，拇指好按） */
