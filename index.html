@@ -107,6 +107,11 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 /* 資料類（備份/還原/雲端）：最低調 */
 #header .tb-data{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.16);color:#c7d3e0;font-size:11px;}
 #header .tb-data:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.32);color:#fff;}
+/* 狀態鈕固定寬度：切換狀態時文字長短不同，若寬度跟著變會把後面的按鈕擠到
+   下一行、整條工具列位移（直式螢幕最明顯）。取兩種狀態的較寬者固定住。 */
+#header #btn-finish-lock{min-width:120px;justify-content:center;}
+#header #btn-complete-month{min-width:96px;justify-content:center;}
+#header #btn-view-toggle{min-width:96px;justify-content:center;}
 /* 狀態鈕：未啟用=線框，啟用=實心+光環 */
 #header #btn-finish-lock.on{background:#b3261e;border-color:#e05a52;color:#fff;box-shadow:0 0 0 2px rgba(239,83,80,.35);}
 #header #btn-complete-month.on{background:#1b7f3b;border-color:#3fa863;color:#fff;box-shadow:0 0 0 2px rgba(76,175,80,.35);}
@@ -634,8 +639,8 @@ body.mobile-view .legend-item{flex-shrink:0;font-size:12px;padding:5px 11px !imp
       <tbody>
         <tr><td>◀ 上月 / 下月 ▶</td><td>切換查看月份</td></tr>
         <tr><td>⚡ 自動排班</td><td>演算法自動填滿本月班表（已鎖定時需密碼）</td></tr>
-        <tr><td>🔓 結束自動排班<br>🔒 已鎖定（點擊解鎖）</td><td>鎖定/解鎖本月，僅擋「自動排班/清空」，仍可手動改；需管理密碼（請洽主管）</td></tr>
-        <tr><td>✅ 完成本月<br>✅ 已完成本月（點擊取消）</td><td>完成本月後<strong>整月唯讀，任何更動都無法進行</strong>；再點一次可取消。需管理密碼（請洽主管）</td></tr>
+        <tr><td>🔓 結束自動排班<br>🔒 已鎖定</td><td>鎖定/解鎖本月，僅擋「自動排班/清空」，仍可手動改；鎖定後按鈕變紅字「🔒 已鎖定」，再點一次可解鎖。需管理密碼（請洽主管）</td></tr>
+        <tr><td>✅ 完成本月<br>✅ 已完成</td><td>完成本月後<strong>整月唯讀，任何更動都無法進行</strong>；按鈕變綠底「✅ 已完成」，再點一次可取消。需管理密碼（請洽主管）</td></tr>
         <tr><td>🗑 清空</td><td>清除本月所有班別（需密碼）</td></tr>
         <tr><td>↩ 還原 / ↪ 重做</td><td>步驟式還原或重做操作</td></tr>
         <tr><td>🖨 生成 PDF</td><td>輸出月曆＋統計報表＋預假預班清單</td></tr>
@@ -771,14 +776,14 @@ body.mobile-view .legend-item{flex-shrink:0;font-size:12px;padding:5px 11px !imp
     <p>排班確認後可鎖定本月，防止自動排班意外覆蓋。鎖定狀態儲存於本機與雲端，重新整理後仍維持。</p>
     <h4>鎖定</h4>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點「🔓 結束自動排班」→ 輸入管理密碼（請洽主管）。</div></div>
-    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">按鈕變為深紅色「🔒 已鎖定（點擊解鎖）」表示鎖定成功。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">按鈕變為深紅色實心「🔒 已鎖定」表示鎖定成功。</div></div>
     <h4>解鎖</h4>
-    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點「🔒 已鎖定（點擊解鎖）」→ 輸入管理密碼（請洽主管）。</div></div>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點「🔒 已鎖定」→ 輸入管理密碼（請洽主管）。</div></div>
     <div class="man-note warn"><strong>⚠ 注意</strong> 「結束自動排班」的鎖定後仍可手動修改個別日期，只擋「自動排班」與「清空」。</div>
     <h4>✅ 完成本月（整月唯讀）</h4>
-    <p>當整份班表都確定、不再需要任何調整時，點工具列「✅ 完成本月」並輸入管理密碼（請洽主管）。完成後<strong>整月唯讀，任何更動都無法進行</strong>：自動排班、清空、還原/重做、手動改當日、設假日全部被擋下。按鈕會變為「✅ 已完成本月（點擊取消）」。</p>
+    <p>當整份班表都確定、不再需要任何調整時，點工具列「✅ 完成本月」並輸入管理密碼（請洽主管）。完成後<strong>整月唯讀，任何更動都無法進行</strong>：自動排班、清空、還原/重做、手動改當日、設假日全部被擋下。按鈕會變為綠底實心「✅ 已完成」。</p>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">確認班表無誤 → 點「✅ 完成本月」→ 輸入管理密碼。</div></div>
-    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">要再修改：點「✅ 已完成本月（點擊取消）」→ 輸入管理密碼，即可解除唯讀。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">要再修改：點「✅ 已完成」→ 輸入管理密碼，即可解除唯讀。</div></div>
     <div class="man-note"><strong>💡 差別</strong> 「結束自動排班」只擋自動排班/清空、仍可手動改；「完成本月」是最終定案，<strong>完全唯讀</strong>。兩者狀態都會存本機與雲端，重整後維持。</div>
   </div>
 
@@ -1055,14 +1060,18 @@ function updateLockBtn(){
   const b=document.getElementById('btn-finish-lock');
   if(!b) return;
   const locked=isCurrentMonthLocked();
-  b.textContent=locked?'🔒 已鎖定（點擊解鎖）':'🔓 結束自動排班';
+  // 文字長度須與未鎖定時相近，否則按鈕變寬會把工具列擠到換行（提示改放 title）
+  b.textContent=locked?'🔒 已鎖定':'🔓 結束自動排班';
+  b.title=locked?'本月已鎖定（僅擋自動排班/清空，仍可手動改）－點擊解鎖':'點擊以結束自動排班並鎖定本月';
   b.classList.toggle('on',locked); // 樣式見 #header #btn-finish-lock.on
 }
 function updateCompleteBtn(){
   const b=document.getElementById('btn-complete-month');
   if(!b) return;
   const done=isCurrentMonthCompleted();
-  b.textContent=done?'✅ 已完成本月（點擊取消）':'✅ 完成本月';
+  // 同上：兩種狀態文字長度需相近，避免工具列位移
+  b.textContent=done?'✅ 已完成':'✅ 完成本月';
+  b.title=done?'本月已完成，班表唯讀－點擊取消完成':'點擊以完成本月（完成後整月唯讀）';
   b.classList.toggle('on',done); // 樣式見 #header #btn-complete-month.on
 }
 function completeMonth(){
