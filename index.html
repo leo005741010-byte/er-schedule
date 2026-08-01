@@ -4047,8 +4047,7 @@ function autoLoad(){
     state.preRequests=d.preRequests||{};
     state.holidays=new Set(d.holidays||[]);
     state.lockedDays=new Set(d.lockedDays||[]);
-    if(d.year!=null) state.year=d.year;
-    if(d.month!=null) state.month=d.month;
+    // 刻意不還原 d.year/d.month：開啟時一律顯示「當月」（見 window.onload 的 gotoCurrentMonth）
     state.defaultSplit=clampSplit(d.defaultSplit||20);
     state.holidaySplit=clampSplit(d.holidaySplit||17);
     state.avoidPairs=d.avoidPairs||[];
@@ -4632,12 +4631,21 @@ function generateOvertimePDF(){
 // ============================================================
 // INIT
 // ============================================================
+// 每次開啟一律顯示「當月」（不再還原上次檢視的月份）
+function gotoCurrentMonth(){
+  const now=new Date();
+  state.year=now.getFullYear(); state.month=now.getMonth();
+  _statsYear=state.year; _statsMonth=state.month;
+  _prListYear=state.year; _prListMonth=state.month;
+  if(typeof prCal==='object'){ prCal.year=state.year; prCal.month=state.month; }
+}
 window.onload=()=>{
   const hash=window.location.hash;
   if(hash.startsWith('#pv=')){
     initPersonalView(hash.slice(4));
   } else {
     const restored=autoLoad();
+    gotoCurrentMonth(); // 覆蓋 localStorage 內的舊檢視月份
     _syncSplitSelects();
     renderCalendar();
     updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
@@ -4646,6 +4654,18 @@ window.onload=()=>{
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
     let _rzT; window.addEventListener('resize',()=>{ clearTimeout(_rzT); _rzT=setTimeout(_syncScheduleViewMode,150); });
+    // 手機 App(PWA) 常是「喚醒」而非重新載入：若在背景期間跨了月，回到前景時自動跳到新的當月。
+    // 僅在真實月份與載入時不同才動作，避免把正在翻看其他月份的使用者拉回來。
+    let _loadedMonthKey=`${state.year}-${state.month}`;
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState!=='visible') return;
+      const now=new Date();
+      const nowKey=`${now.getFullYear()}-${now.getMonth()}`;
+      if(nowKey!==_loadedMonthKey){
+        _loadedMonthKey=nowKey;
+        setViewMonth(now.getFullYear(), now.getMonth());
+      }
+    });
   }
 };
 </script>
