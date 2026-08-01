@@ -516,7 +516,8 @@ body.mobile-view .legend-item{flex-shrink:0;font-size:12px;padding:5px 11px !imp
       </div>
       <button onclick="changeStatsMonth(1)" style="padding:4px 10px;border:1px solid #1a4a7a;border-radius:4px;background:#e8f0fb;color:#1a4a7a;cursor:pointer;font-size:13px;font-weight:700">&#9654;</button>
       <button class="action-btn btn-blue" onclick="renderStats()">重新計算</button>
-      <button class="action-btn btn-green" onclick="exportDoctorHoursCSV()">📥 匯出醫師時數 CSV</button>
+      <button class="action-btn btn-green" onclick="exportShiftCSV()" title="逐班一列（含醫師/開始/結束時間），業績報告產生器的建議格式">📤 匯出班表 CSV（業績報表用）</button>
+      <button class="action-btn btn-blue" onclick="exportDoctorHoursCSV()" title="每位醫師一列的時數彙總">📥 匯出醫師時數 CSV</button>
     </div>
     <div class="stats-wrap">
       <table id="stats-table">
@@ -4195,6 +4196,54 @@ function loadData(){
   };
   inp.click();
 }
+// 匯出「逐班班表 CSV」→ 供『急診業績報告產生器』讀取（該工具的建議格式）
+// 規格對齊其 parseHoursCSV()：需有 醫師/開始時間/結束時間 三個欄名（逐班一列），
+// 它會依 白班08-16、小夜16-02、大夜02-08 拆分時數；「時數」欄若有值優先採用；
+// 「假日」欄填「是」即計入假日時數；「班次數」由它以不重複「日期」計算。
+function exportShiftCSV(){
+  const y=_statsYear, m=_statsMonth;
+  const dates=monthDates(y,m);
+  const DOW=['一','二','三','四','五','六','日'];
+  const fh=h=>`${String(h%24).padStart(2,'0')}:00`;
+  const rows=[['日期','星期','醫師','班別','開始時間','結束時間','時數','假日']];
+  let n=0;
+  for(const d of dates){
+    const ds=state.schedule[d]||{};
+    const sp=ds.split||defaultSplitFor(d);
+    const hol=isHoliday(d)?'是':'';
+    const dow=DOW[getDOW(d)];
+    for(const slot of SLOTS){
+      const docId=ds[slot]; if(!docId) continue;
+      const doc=state.doctors.find(x=>x.id===docId); if(!doc) continue;
+      const ct=ds.customTimes&&ds.customTimes[slot];
+      let sH,eH,hrs;
+      if(ct){
+        const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+        sH=parseInt(mm[1]); eH=parseInt(mm[2]); if(eH<=sH) eH+=24;
+        hrs=customTimeHours(ct);
+      } else {
+        const r=slotRange(slot,sp); sH=r.s; eH=r.e; hrs=r.h;
+      }
+      rows.push([d,dow,doc.name,slot,fh(sH),fh(eH),hrs,hol]); n++;
+    }
+    // 額外醫師：一般加班計入；楊天/ICU 不計時數點值，與統計報表一致故排除
+    for(const ex of (ds.extras||[])){
+      if(!ex.docId||!ex.timeRange||isSpecialKind(ex.kind)) continue;
+      const doc=state.doctors.find(x=>x.id===ex.docId); if(!doc) continue;
+      const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+      let sH=parseInt(mm[1]), eH=parseInt(mm[2]); if(eH<=sH) eH+=24;
+      rows.push([d,dow,doc.name,kindInfo(ex.kind).name,fh(sH),fh(eH),customTimeHours(ex.timeRange),hol]); n++;
+    }
+  }
+  if(!n){ showToast('本月尚無排班可匯出','warn'); return; }
+  const csv='﻿'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`急診班表_${y}年${m+1}月.csv`;
+  a.click();
+  showToast(`✅ 已匯出 ${n} 筆班次（${y}年${m+1}月），可直接上傳業績報告產生器`);
+}
+
 function exportDoctorHoursCSV(){
   const dates=monthDates(_statsYear,_statsMonth);
   const st={};
