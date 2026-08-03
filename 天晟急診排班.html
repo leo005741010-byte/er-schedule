@@ -286,7 +286,14 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 .legend-item{display:inline-flex;align-items:center;gap:3px;font-size:11px;}
 /* 手機看板：醫師篩選全部同畫面顯示（不橫向捲動，免得要往右滑才找到人），
    縮小字級與間距讓所有醫師擠進約兩行 */
-body.mobile-view #doc-legend{flex-wrap:wrap;gap:3px;padding:2px 0 6px;}
+/* 看板模式：分頁列與醫師選項固定在畫面上方，捲動時不會被推走；
+   今天的卡片停在它們「下方」，而不是整頁置頂被 iPhone 動態島吃掉。
+   --ms-tabs-h 由 _syncScheduleViewMode() 依實際分頁列高度寫入。 */
+body.mobile-view #tabs{position:sticky;top:0;z-index:860;background:#fff;
+  padding-top:env(safe-area-inset-top);box-shadow:0 1px 5px rgba(0,0,0,.10);}
+body.mobile-view #cal-header{position:sticky;top:var(--ms-tabs-h,44px);z-index:855;
+  background:#f0f2f5;margin:0 -10px 6px;padding:5px 10px 3px;box-shadow:0 3px 6px -3px rgba(0,0,0,.15);}
+body.mobile-view #doc-legend{flex-wrap:wrap;gap:3px;padding:2px 0 4px;}
 /* 只調尺寸；選取狀態的框線/底色由 renderCalendar 的 inline style 控制，不覆蓋 */
 body.mobile-view .legend-item{font-size:12px;padding:5px 6px !important;border-radius:12px !important;}
 body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
@@ -2442,6 +2449,9 @@ function _syncScheduleViewMode(){
   if(_useMobileSchedule()){
     grid.style.display='none';
     mob.style.display='block';
+    // 分頁列實際高度（含 iPhone 安全區）→ 供醫師選項列 sticky 定位用
+    const _tb=document.getElementById('tabs');
+    if(_tb) document.body.style.setProperty('--ms-tabs-h', _tb.offsetHeight+'px');
     renderMobileSchedule();
   } else {
     grid.style.display='grid';
@@ -2507,7 +2517,12 @@ function _msScrollToToday(){
   // 篩選醫師時，今天可能沒班 → 取今天之後最近的一筆
   const target=cards.find(c=>c.dataset.date>=todayStr);
   if(!target){ window.scrollTo(0,0); return; } // 今天之後已無班，回到最上面
-  const y=target.getBoundingClientRect().top+window.pageYOffset-8;
+  // 停在「分頁列＋醫師選項」這兩塊固定區的正下方，而不是整頁置頂
+  // （整頁置頂會把它們推走，卡片還會被 iPhone 動態島遮住）
+  const tb=document.getElementById('tabs');
+  const ch=document.getElementById('cal-header');
+  const sticky=(tb?tb.offsetHeight:0)+(ch?ch.offsetHeight:0);
+  const y=target.getBoundingClientRect().top+window.pageYOffset-sticky-6;
   window.scrollTo(0,Math.max(0,y));
 }
 
