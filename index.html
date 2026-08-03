@@ -284,12 +284,12 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 /* ===== DOC LEGEND ===== */
 #doc-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:3px;}
 .legend-item{display:inline-flex;align-items:center;gap:3px;font-size:11px;}
-/* 手機看板：醫師篩選改單行橫向滑動（原本佔滿3行，卡片被擠到畫面外） */
-body.mobile-view #doc-legend{flex-wrap:nowrap;overflow-x:auto;gap:7px;padding:2px 0 6px;
-  scrollbar-width:none;-webkit-overflow-scrolling:touch;}
-body.mobile-view #doc-legend::-webkit-scrollbar{display:none;}
-/* 只放大觸控範圍；選取狀態的框線/底色由 renderCalendar 的 inline style 控制，不覆蓋 */
-body.mobile-view .legend-item{flex-shrink:0;font-size:12px;padding:5px 11px !important;}
+/* 手機看板：醫師篩選全部同畫面顯示（不橫向捲動，免得要往右滑才找到人），
+   縮小字級與間距讓所有醫師擠進約兩行 */
+body.mobile-view #doc-legend{flex-wrap:wrap;gap:3px;padding:2px 0 6px;}
+/* 只調尺寸；選取狀態的框線/底色由 renderCalendar 的 inline style 控制，不覆蓋 */
+body.mobile-view .legend-item{font-size:12px;padding:5px 6px !important;border-radius:12px !important;}
+body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
 /* ===== PERSONAL PAGE ===== */
 #personal-page-wrap{max-width:700px;margin:0 auto;}
 .personal-card{background:#fff;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.1);}
@@ -989,7 +989,9 @@ function isPWA(){
 }
 function computeViewOnly(){ return _manualView!==null ? _manualView : isPWA(); }
 function applyViewMode(){
+  const _wasView=_viewOnly;
   _viewOnly = computeViewOnly();
+  if(_viewOnly&&!_wasView) _msWantScroll=true; // 進入看板模式時定位到今天
   document.querySelectorAll('[data-pwa-hide]').forEach(el=>{ el.style.display = _viewOnly?'none':''; });
   const badge=document.getElementById('_pwa-badge'); if(badge) badge.style.display=_viewOnly?'inline':'none';
   const tbtn=document.getElementById('btn-view-toggle');
@@ -1108,6 +1110,7 @@ function updateRedoBtn(){
 }
 function toggleDocFilter(docId){
   _filterDocId = (_filterDocId===docId) ? null : docId;
+  _msWantScroll=true; // 切換醫師後定位到今天之後最近的班
   renderCalendar();
 }
 let _prListYear = new Date().getFullYear();
@@ -2489,6 +2492,25 @@ function _msPickMonth(y,m){
 
 function _ctToTime(ct){ const m=(ct||'').match(/^(\d{1,2})-(\d{1,2})$/); return m?`${String(m[1]).padStart(2,'0')}:00-${String(m[2]).padStart(2,'0')}:00`:''; }
 
+// 看板開啟／切月／切換醫師後，自動捲到「今天」（或今天之後最近一筆）
+// 用旗標控制，避免雲端同步、存檔等背景重繪時把使用者正在看的位置拉走
+let _msWantScroll=false;
+function _msScrollToToday(){
+  const wrap=document.getElementById('mobile-schedule');
+  if(!wrap||wrap.style.display==='none') return;
+  const now=new Date();
+  // 只在檢視當月時定位；看其他月份維持從月初開始
+  if(state.year!==now.getFullYear()||state.month!==now.getMonth()){ window.scrollTo(0,0); return; }
+  const todayStr=fmtDate(now.getFullYear(),now.getMonth(),now.getDate());
+  const cards=[...wrap.querySelectorAll('.ms-card[data-date]')];
+  if(!cards.length) return;
+  // 篩選醫師時，今天可能沒班 → 取今天之後最近的一筆
+  const target=cards.find(c=>c.dataset.date>=todayStr);
+  if(!target){ window.scrollTo(0,0); return; } // 今天之後已無班，回到最上面
+  const y=target.getBoundingClientRect().top+window.pageYOffset-8;
+  window.scrollTo(0,Math.max(0,y));
+}
+
 // 手機直式看板：一天一張卡，僅上下捲動
 function renderMobileSchedule(){
   const wrap=document.getElementById('mobile-schedule'); if(!wrap) return;
@@ -2547,13 +2569,14 @@ function renderMobileSchedule(){
     shown++;
     const isToday=d===todayStr;
     const noteHtml=(ds.note&&!filt)?`<div class="ms-note">📌 ${ds.note.replace(/</g,'&lt;')}</div>`:'';
-    html+=`<div class="ms-card${hol?' hol':''}${isToday?' today':''}">
+    html+=`<div class="ms-card${hol?' hol':''}${isToday?' today':''}" data-date="${d}">
       <div class="ms-head"><span class="ms-date">${m+1}/${day}</span><span class="ms-dow${dow>=5||hol?' wk':''}">週${dowNames[dow]}${hol?'・假日':''}</span>${isToday?'<span class="ms-today-chip">今天</span>':''}</div>
       ${bodyHtml}${exHtml}${noteHtml}
     </div>`;
   }
   if(filt&&shown===0) html+=`<div class="ms-none">${filtName} 本月尚無排班</div>`;
   wrap.innerHTML=html;
+  if(_msWantScroll){ _msWantScroll=false; requestAnimationFrame(_msScrollToToday); }
 }
 
 // ============================================================
@@ -3979,6 +4002,7 @@ function closeModal(id){document.getElementById(id).classList.remove('show');ren
 function setViewMonth(y,m){
   if(m<0){m=11;y--;} if(m>11){m=0;y++;}
   state.year=y; state.month=m;
+  _msWantScroll=true; // 切到當月時定位今天；其他月份則回到月初
   _statsYear=y; _statsMonth=m;
   _prListYear=y; _prListMonth=m;
   if(typeof prCal==='object'){ prCal.year=y; prCal.month=m; }
@@ -4911,6 +4935,7 @@ window.onload=()=>{
   } else {
     const restored=autoLoad();
     gotoCurrentMonth(); // 覆蓋 localStorage 內的舊檢視月份
+    _msWantScroll=true; // 一開啟看板就停在今天（手機瀏覽器與安裝成App皆適用）
     _syncSplitSelects();
     renderCalendar();
     updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
