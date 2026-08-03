@@ -2743,48 +2743,99 @@ function cancelDayModal(){
 
 // ============================================================
 // 每日 24 小時人力覆蓋檢查
-// 以「當日08:00 → 隔日08:00」為一天，逐小時算在班人數：
-//   0 人  → 空窗（沒人顧急診，最嚴重）
-//   3 人↑ → 時段重疊（換班時最常見的重複排班）
-// 正常班型為 08:00-02:00 兩人、02:00-08:00 一人，故 3 人以上即異常。
-// 只計主要四班別；額外醫師(加班/楊天/ICU)屬支援人力，不納入判斷以免誤報。
+// 以「當日08:00 → 隔日08:00」為一天，逐小時比對「實際在班人數 vs 標準人數」。
+// 標準人數來自班型：08:00-02:00 兩人（主白+早班／主白+小夜／小夜+大夜）、
+//                   02:00-08:00 一人（僅大夜）。
+//   0 人      → 空窗（沒人顧急診）
+//   少於標準  → 人力不足（例：08-20 只剩 1 人）
+//   多於標準  → 重複值班（例：02-04 排到 2 人、08-12 排到 3 人）
+// 兩種人數分開算，避免互相誤判：
+//   coverAll  = 主要四班 + 「中天」加班（中天＝本院急診加班，是真的有人在顧）
+//               → 用來判斷「空窗／人力不足」。楊天/ICU 在別的地點，不算急診人力。
+//   coverMain = 只算主要四班 → 用來判斷「重複值班」。
+//               （刻意加的中天加班屬額外支援，計入會把正常加班誤判成超額）
+// 另檢查同一位醫師是否被排到重疊時段（例：08-12 兩線都是同一人）——
+// 這項把所有額外醫師都納入（含楊天/ICU），因為同一個人不可能同時在兩個地方。
 function computeDayCoverage(dateStr){
   const ds=state.schedule[dateStr]||{};
   const sp=ds.split||defaultSplitFor(dateStr);
-  const cover=new Array(24).fill(0); // index 0 = 08:00，index 23 = 隔日 07:00
+  const coverAll=new Array(24).fill(0);  // index 0 = 08:00，index 23 = 隔日 07:00
+  const coverMain=new Array(24).fill(0);
+  const byDoc={};                        // docId → 每小時被排幾次
+  const mark=(s,e,docId,kind)=>{ // kind: 'main' | 'er'(中天) | 'other'(楊天/ICU)
+    for(let h=Math.max(8,s); h<Math.min(32,e); h++){
+      if(kind==='main'){ coverMain[h-8]++; coverAll[h-8]++; }
+      else if(kind==='er'){ coverAll[h-8]++; }
+      if(docId){ (byDoc[docId]||(byDoc[docId]=new Array(24).fill(0)))[h-8]++; }
+    }
+  };
+  const parseCT=v=>{
+    const mm=String(v||'').match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) return null;
+    let s=parseInt(mm[1]), e=parseInt(mm[2]);
+    if(s<8) s+=24;              // 例 02-08 視為隔日凌晨，落在本日窗格尾端
+    if(e<=s) e+=24;
+    return [s,e];
+  };
   for(const slot of SLOTS){
     if(!ds[slot]) continue;
     const ct=ds.customTimes&&ds.customTimes[slot];
     let s,e;
-    if(ct){
-      const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
-      s=parseInt(mm[1]); e=parseInt(mm[2]);
-      if(s<8) s+=24;            // 例 02-08 視為隔日凌晨，落在本日窗格尾端
-      if(e<=s) e+=24;
-    } else { const r=slotRange(slot,sp); s=r.s; e=r.e; }
-    for(let h=Math.max(8,s); h<Math.min(32,e); h++) cover[h-8]++;
+    if(ct){ const p=parseCT(ct); if(!p) continue; [s,e]=p; }
+    else { const r=slotRange(slot,sp); s=r.s; e=r.e; }
+    mark(s,e,ds[slot],'main');
   }
-  const runs=pred=>{
-    const out=[]; let st=-1;
+  // 額外醫師：中天加班算急診人力（可補主要班別的空檔）；楊天/ICU 只納入「同一人重複」檢查
+  for(const ex of (ds.extras||[])){
+    if(!ex.docId) continue;
+    const p=parseCT(ex.timeRange); if(!p) continue;
+    mark(p[0],p[1],ex.docId,isSpecialKind(ex.kind)?'other':'er');
+  }
+  const STD=i=>i<18?2:1;   // index 18 = 02:00 起，標準降為 1 人
+  const hL=i=>String((i+8)%24).padStart(2,'0')+':00';
+  const fmt=([a,b])=>(a===0&&b===24)?'整天':`${hL(a)}-${hL(b)}`; // 全天用「整天」，避免顯示成 08:00-08:00
+  // 依「同一狀態」合併連續時段；label 用來判斷是否可併段
+  const runsBy=(labelAt)=>{
+    const out=[]; let st=-1, cur=null;
     for(let i=0;i<24;i++){
-      if(pred(cover[i])){ if(st<0) st=i; }
-      else if(st>=0){ out.push([st,i]); st=-1; }
+      const l=labelAt(i);
+      if(l!==cur){ if(cur!=null&&st>=0) out.push([st,i,cur]); st=l==null?-1:i; cur=l; }
     }
-    if(st>=0) out.push([st,24]);
+    if(cur!=null&&st>=0) out.push([st,24,cur]);
     return out;
   };
-  const fmt=([a,b])=>`${String((a+8)%24).padStart(2,'0')}:00-${String((b+8)%24).padStart(2,'0')}:00`;
-  return {gaps:runs(c=>c===0).map(fmt), overs:runs(c=>c>=3).map(fmt)};
+  const gaps=[], under=[], over=[];
+  // 空窗／人力不足：看實際在急診的人（含中天加班）
+  for(const [a,b,l] of runsBy(i=>{
+    const c=coverAll[i], s=STD(i);
+    return c===0?'gap':(c<s?`under${c}/${s}`:null);
+  })){
+    const r=fmt([a,b]);
+    if(l==='gap') gaps.push(r);
+    else under.push(`${r} 僅${l.slice(5).split('/')[0]}人（標準${l.split('/')[1]}人）`);
+  }
+  // 重複值班：只看主要四班別（刻意加的加班不算超額）
+  for(const [a,b,l] of runsBy(i=>coverMain[i]>STD(i)?`over${coverMain[i]}/${STD(i)}`:null)){
+    over.push(`${fmt([a,b])} 有${l.slice(4).split('/')[0]}人（標準${l.split('/')[1]}人）`);
+  }
+  // 同一位醫師時段重疊
+  const dup=[];
+  for(const [docId,arr] of Object.entries(byDoc)){
+    const rs=runsBy(i=>arr[i]>=2?'d':null).map(([a,b])=>fmt([a,b]));
+    if(rs.length) dup.push(`${getDocName(docId)} ${rs.join('、')}`);
+  }
+  return {gaps,under,over,dup};
 }
 
 function checkConstraints(dateStr){
   const issues=[];
   const ds=state.schedule[dateStr]||{};
   const sp=ds.split||defaultSplitFor(dateStr);
-  // 換班後最容易漏掉的破口：當日出現無人時段或時段重疊
+  // 換班後最容易漏掉的破口：無人時段／人力不足／重複值班／同一醫師時段重疊
   const cov=computeDayCoverage(dateStr);
-  if(cov.gaps.length) issues.push(`⛔ 無人值班時段 ${cov.gaps.join('、')}`);
-  if(cov.overs.length) issues.push(`同時段3人以上 ${cov.overs.join('、')}（請確認是否重複排班）`);
+  if(cov.gaps.length) issues.push(`⛔ 無人值班 ${cov.gaps.join('、')}`);
+  if(cov.under.length) issues.push(`人力不足 ${cov.under.join('、')}`);
+  if(cov.over.length) issues.push(`重複值班 ${cov.over.join('、')}`);
+  if(cov.dup.length) issues.push(`同一醫師時段重疊：${cov.dup.join('；')}`);
   for(const slot of SLOTS){
     const docId=ds[slot]; if(!docId) continue;
     const last=getLastAssigned(docId,dateStr,state.schedule);
@@ -3514,18 +3565,28 @@ function renderStats(){
   }
   // ===== 每日24小時人力覆蓋：抓「沒填滿(無人時段)」與「填超過(時段重疊)」=====
   // 換班/手動調整時最容易漏掉，故逐日列出實際有問題的時間區間
-  const gapDays=[], overDays=[];
+  const gapDays=[], underDays=[], overDays=[], dupDays=[];
   for(const d of dates){
+    // 整天都還沒排的日子跳過：那屬於「尚未排班」，已由上面的空缺數統計，
+    // 逐日再列一次只會洗版。這裡專抓「排了但有破口」的危險情況。
+    const _ds=state.schedule[d]||{};
+    if(!SLOTS.some(s=>_ds[s]) && !(_ds.extras||[]).some(e=>e.docId)) continue;
     const cov=computeDayCoverage(d);
     const md=d.slice(5).replace('-','/');
-    if(cov.gaps.length) gapDays.push(`${md} ${cov.gaps.join('、')}`);
-    if(cov.overs.length) overDays.push(`${md} ${cov.overs.join('、')}`);
+    if(cov.gaps.length)  gapDays.push(`${md} ${cov.gaps.join('、')}`);
+    if(cov.under.length) underDays.push(`${md} ${cov.under.join('、')}`);
+    if(cov.over.length)  overDays.push(`${md} ${cov.over.join('、')}`);
+    if(cov.dup.length)   dupDays.push(`${md} ${cov.dup.join('；')}`);
   }
   const LIST_CAP=8;
-  gapDays.slice(0,LIST_CAP).forEach(x=>hard.push(`⛔ 無人值班：${x}`));
-  if(gapDays.length>LIST_CAP) hard.push(`⛔ 另有 ${gapDays.length-LIST_CAP} 天也出現無人值班時段（共 ${gapDays.length} 天）`);
-  overDays.slice(0,LIST_CAP).forEach(x=>soft.push(`同時段3人以上：${x}（請確認是否重複排班）`));
-  if(overDays.length>LIST_CAP) soft.push(`另有 ${overDays.length-LIST_CAP} 天也有時段重疊（共 ${overDays.length} 天）`);
+  const emit=(arr,bucket,prefix,tailWord)=>{
+    arr.slice(0,LIST_CAP).forEach(x=>bucket.push(`${prefix}${x}`));
+    if(arr.length>LIST_CAP) bucket.push(`${prefix}另有 ${arr.length-LIST_CAP} 天也有${tailWord}（共 ${arr.length} 天）`);
+  };
+  emit(gapDays , hard, '⛔ 無人值班：', '無人值班時段');
+  emit(underDays,hard, '人力不足：'   , '人力不足時段');
+  emit(dupDays , hard, '同一醫師時段重疊：', '醫師時段重疊');
+  emit(overDays, soft, '重複值班：'   , '超額時段');
 
   let empties=0;
   for(const d of dates){
