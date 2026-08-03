@@ -2505,25 +2505,53 @@ function _ctToTime(ct){ const m=(ct||'').match(/^(\d{1,2})-(\d{1,2})$/); return 
 // 看板開啟／切月／切換醫師後，自動捲到「今天」（或今天之後最近一筆）
 // 用旗標控制，避免雲端同步、存檔等背景重繪時把使用者正在看的位置拉走
 let _msWantScroll=false;
+// 內容太少時（例：只篩選出兩三個班、或切到班數少的月份），文件高度不足以把上方
+// 標題列捲走，sticky 的分頁列／醫師選項就會停在不同高度，造成切換醫師或月份時
+// 整個版面上下跳動。這裡補足最小高度，確保任何情況都能捲到同一個位置。
+// 讓「分頁列＋醫師選項」兩排 sticky 完全咬合所需的捲動量
+// ＝標題列高度 ＋ 內容區上邊距（標題列捲掉後，醫師選項才會貼到分頁列下緣）
+function _msMinScroll(){
+  const hdr=document.getElementById('header'), ct=document.getElementById('content');
+  const pad=ct?(parseFloat(getComputedStyle(ct).paddingTop)||0):0;
+  return (hdr?hdr.offsetHeight:0)+pad;
+}
+function _msPadForStickyHeader(){
+  const mob=document.getElementById('mobile-schedule'); if(!mob) return;
+  mob.style.minHeight='';
+  if(!document.body.classList.contains('mobile-view')) return;
+  // 用 body.scrollHeight 取真實內容高度；documentElement.scrollHeight 會被視窗高度墊底，
+  // 內容比一頁短時永遠回傳視窗高，算出來的差額會不足。
+  const need=(window.innerHeight+_msMinScroll()+2)-document.body.scrollHeight;
+  if(need>0) mob.style.minHeight=(mob.offsetHeight+need)+'px';
+}
 function _msScrollToToday(){
   const wrap=document.getElementById('mobile-schedule');
   if(!wrap||wrap.style.display==='none') return;
-  const now=new Date();
-  // 只在檢視當月時定位；看其他月份維持從月初開始
-  if(state.year!==now.getFullYear()||state.month!==now.getMonth()){ window.scrollTo(0,0); return; }
-  const todayStr=fmtDate(now.getFullYear(),now.getMonth(),now.getDate());
-  const cards=[...wrap.querySelectorAll('.ms-card[data-date]')];
-  if(!cards.length) return;
-  // 篩選醫師時，今天可能沒班 → 取今天之後最近的一筆
-  const target=cards.find(c=>c.dataset.date>=todayStr);
-  if(!target){ window.scrollTo(0,0); return; } // 今天之後已無班，回到最上面
-  // 停在「分頁列＋醫師選項」這兩塊固定區的正下方，而不是整頁置頂
-  // （整頁置頂會把它們推走，卡片還會被 iPhone 動態島遮住）
   const tb=document.getElementById('tabs');
   const ch=document.getElementById('cal-header');
-  const sticky=(tb?tb.offsetHeight:0)+(ch?ch.offsetHeight:0);
-  const y=target.getBoundingClientRect().top+window.pageYOffset-sticky-6;
+  const hdr=document.getElementById('header');
+  const tabsH=tb?tb.offsetHeight:0, chH=ch?ch.offsetHeight:0, headerH=hdr?hdr.offsetHeight:0;
+  // 兩排 sticky 完全咬合（分頁列貼齊上緣、醫師選項緊接其下）。
+  // 用實測殘餘差距補捲，不必依賴 padding/margin 的假設，任何機型都會對齊。
+  const engageSticky=()=>{
+    if(!ch) return;
+    const gap=ch.getBoundingClientRect().top-tabsH;
+    if(gap>0.5) window.scrollTo(0,Math.round(window.pageYOffset+gap));
+  };
+  const now=new Date();
+  const isCurMonth=(state.year===now.getFullYear()&&state.month===now.getMonth());
+  const cards=[...wrap.querySelectorAll('.ms-card[data-date]')];
+  const todayStr=fmtDate(now.getFullYear(),now.getMonth(),now.getDate());
+  // 非當月、或今天之後已無班 → 從月初看起（仍捲到 sticky 咬合位置，版面才不會跳）
+  const target=(isCurMonth&&cards.length)?cards.find(c=>c.dataset.date>=todayStr):null;
+  // 停在「分頁列＋醫師選項」這兩塊固定區的正下方，而不是整頁置頂
+  // （整頁置頂會把它們推走，卡片還會被 iPhone 動態島遮住）
+  const minY=_msMinScroll();
+  const y=target
+    ? Math.max(minY,target.getBoundingClientRect().top+window.pageYOffset-tabsH-chH-6)
+    : minY;
   window.scrollTo(0,Math.max(0,y));
+  engageSticky();
 }
 
 // 手機直式看板：一天一張卡，僅上下捲動
@@ -2591,6 +2619,7 @@ function renderMobileSchedule(){
   }
   if(filt&&shown===0) html+=`<div class="ms-none">${filtName} 本月尚無排班</div>`;
   wrap.innerHTML=html;
+  _msPadForStickyHeader(); // 先補足高度，sticky 位置才不會因內容多寡而忽上忽下
   if(_msWantScroll){ _msWantScroll=false; requestAnimationFrame(_msScrollToToday); }
 }
 
