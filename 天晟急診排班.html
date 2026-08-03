@@ -2741,10 +2741,50 @@ function cancelDayModal(){
   closeModal('day-modal');
 }
 
+// ============================================================
+// 每日 24 小時人力覆蓋檢查
+// 以「當日08:00 → 隔日08:00」為一天，逐小時算在班人數：
+//   0 人  → 空窗（沒人顧急診，最嚴重）
+//   3 人↑ → 時段重疊（換班時最常見的重複排班）
+// 正常班型為 08:00-02:00 兩人、02:00-08:00 一人，故 3 人以上即異常。
+// 只計主要四班別；額外醫師(加班/楊天/ICU)屬支援人力，不納入判斷以免誤報。
+function computeDayCoverage(dateStr){
+  const ds=state.schedule[dateStr]||{};
+  const sp=ds.split||defaultSplitFor(dateStr);
+  const cover=new Array(24).fill(0); // index 0 = 08:00，index 23 = 隔日 07:00
+  for(const slot of SLOTS){
+    if(!ds[slot]) continue;
+    const ct=ds.customTimes&&ds.customTimes[slot];
+    let s,e;
+    if(ct){
+      const mm=ct.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
+      s=parseInt(mm[1]); e=parseInt(mm[2]);
+      if(s<8) s+=24;            // 例 02-08 視為隔日凌晨，落在本日窗格尾端
+      if(e<=s) e+=24;
+    } else { const r=slotRange(slot,sp); s=r.s; e=r.e; }
+    for(let h=Math.max(8,s); h<Math.min(32,e); h++) cover[h-8]++;
+  }
+  const runs=pred=>{
+    const out=[]; let st=-1;
+    for(let i=0;i<24;i++){
+      if(pred(cover[i])){ if(st<0) st=i; }
+      else if(st>=0){ out.push([st,i]); st=-1; }
+    }
+    if(st>=0) out.push([st,24]);
+    return out;
+  };
+  const fmt=([a,b])=>`${String((a+8)%24).padStart(2,'0')}:00-${String((b+8)%24).padStart(2,'0')}:00`;
+  return {gaps:runs(c=>c===0).map(fmt), overs:runs(c=>c>=3).map(fmt)};
+}
+
 function checkConstraints(dateStr){
   const issues=[];
   const ds=state.schedule[dateStr]||{};
   const sp=ds.split||defaultSplitFor(dateStr);
+  // 換班後最容易漏掉的破口：當日出現無人時段或時段重疊
+  const cov=computeDayCoverage(dateStr);
+  if(cov.gaps.length) issues.push(`⛔ 無人值班時段 ${cov.gaps.join('、')}`);
+  if(cov.overs.length) issues.push(`同時段3人以上 ${cov.overs.join('、')}（請確認是否重複排班）`);
   for(const slot of SLOTS){
     const docId=ds[slot]; if(!docId) continue;
     const last=getLastAssigned(docId,dateStr,state.schedule);
@@ -3472,6 +3512,21 @@ function renderStats(){
       }
     }
   }
+  // ===== 每日24小時人力覆蓋：抓「沒填滿(無人時段)」與「填超過(時段重疊)」=====
+  // 換班/手動調整時最容易漏掉，故逐日列出實際有問題的時間區間
+  const gapDays=[], overDays=[];
+  for(const d of dates){
+    const cov=computeDayCoverage(d);
+    const md=d.slice(5).replace('-','/');
+    if(cov.gaps.length) gapDays.push(`${md} ${cov.gaps.join('、')}`);
+    if(cov.overs.length) overDays.push(`${md} ${cov.overs.join('、')}`);
+  }
+  const LIST_CAP=8;
+  gapDays.slice(0,LIST_CAP).forEach(x=>hard.push(`⛔ 無人值班：${x}`));
+  if(gapDays.length>LIST_CAP) hard.push(`⛔ 另有 ${gapDays.length-LIST_CAP} 天也出現無人值班時段（共 ${gapDays.length} 天）`);
+  overDays.slice(0,LIST_CAP).forEach(x=>soft.push(`同時段3人以上：${x}（請確認是否重複排班）`));
+  if(overDays.length>LIST_CAP) soft.push(`另有 ${overDays.length-LIST_CAP} 天也有時段重疊（共 ${overDays.length} 天）`);
+
   let empties=0;
   for(const d of dates){
     const ds=state.schedule[d]; if(!ds) continue;
