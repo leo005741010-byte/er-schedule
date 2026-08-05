@@ -289,9 +289,23 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 /* 看板模式：分頁列與醫師選項固定在畫面上方，捲動時不會被推走；
    今天的卡片停在它們「下方」，而不是整頁置頂被 iPhone 動態島吃掉。
    --ms-tabs-h 由 _syncScheduleViewMode() 依實際分頁列高度寫入。 */
-body.mobile-view #tabs{position:sticky;top:0;z-index:860;background:#fff;
+/* 「完成本月」唯讀狀態的常駐提示：事前告知，不必等按下去被擋才知道 */
+#lock-banner{display:none;background:#b3261e;color:#fff;font-size:12.5px;font-weight:700;
+  padding:8px 16px;text-align:center;line-height:1.5;cursor:pointer;letter-spacing:.3px;}
+#lock-banner:hover{background:#c62f27;}
+#lock-banner u{text-underline-offset:2px;}
+body.month-completed #lock-banner{display:block;}
+/* 看板模式：橫幅也要固定在最上方，否則捲動後就看不到了 */
+body.mobile-view #lock-banner{position:sticky;top:0;z-index:870;
+  padding-top:calc(8px + env(safe-area-inset-top));cursor:default;}
+/* 看板模式為唯讀，無法在此取消完成 → 隱藏「點此…」提示 */
+body.mobile-view #lock-banner u{display:none;}
+body.mobile-view #tabs{position:sticky;top:var(--ms-banner-h,0px);z-index:860;background:#fff;
   padding-top:env(safe-area-inset-top);box-shadow:0 1px 5px rgba(0,0,0,.10);}
-body.mobile-view #cal-header{position:sticky;top:var(--ms-tabs-h,44px);z-index:855;
+/* 有橫幅時安全區已由橫幅讓出，分頁列不再重複讓一次 */
+body.mobile-view.month-completed #tabs{padding-top:0;}
+body.mobile-view #cal-header{position:sticky;z-index:855;
+  top:calc(var(--ms-banner-h,0px) + var(--ms-tabs-h,44px));
   background:#f0f2f5;margin:0 -10px 6px;padding:5px 10px 3px;box-shadow:0 3px 6px -3px rgba(0,0,0,.15);}
 body.mobile-view #doc-legend{flex-wrap:wrap;gap:3px;padding:2px 0 4px;}
 /* 只調尺寸；選取狀態的框線/底色由 renderCalendar 的 inline style 控制，不覆蓋 */
@@ -377,6 +391,10 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
   <span id="_cloud_status" data-pwa-hide style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
   <span id="_pwa-badge" style="display:none;font-size:11px;color:#a5d6a7;font-weight:700">📱 檢視模式</span>
+</div>
+
+<div id="lock-banner" onclick="_lockBannerClick()" title="點擊輸入管理密碼以取消完成，即可恢復編輯">
+  🔒 本月已完成（唯讀）－ 自動排班／清空／改班／預假都會被擋下。<u>點此輸入密碼取消完成</u>
 </div>
 
 <div id="tabs">
@@ -1077,13 +1095,22 @@ function updateLockBtn(){
   b.classList.toggle('on',locked); // 樣式見 #header #btn-finish-lock.on
 }
 function updateCompleteBtn(){
+  const done=isCurrentMonthCompleted();
+  // 常駐紅色橫幅（#lock-banner）由此 class 控制顯示；橫幅高度會影響看板模式
+  // 兩排 sticky 的位置，故一併重算 CSS 變數
+  document.body.classList.toggle('month-completed',done);
+  _syncStickyVars();
   const b=document.getElementById('btn-complete-month');
   if(!b) return;
-  const done=isCurrentMonthCompleted();
   // 同上：兩種狀態文字長度需相近，避免工具列位移
   b.textContent=done?'✅ 已完成':'✅ 完成本月';
   b.title=done?'本月已完成，班表唯讀－點擊取消完成':'點擊以完成本月（完成後整月唯讀）';
   b.classList.toggle('on',done); // 樣式見 #header #btn-complete-month.on
+}
+// 點紅色唯讀橫幅：完整版→直接進入取消完成流程；看板模式為唯讀→說明改用完整版
+function _lockBannerClick(){
+  if(_viewOnly){ showToast('📱 看板檢視模式為唯讀。請用電腦開啟，或按右上「🖥 完整版」後再取消完成。','warn'); return; }
+  completeMonth();
 }
 function completeMonth(){
   if(blockIfViewOnly()) return;
@@ -2449,9 +2476,7 @@ function _syncScheduleViewMode(){
   if(_useMobileSchedule()){
     grid.style.display='none';
     mob.style.display='block';
-    // 分頁列實際高度（含 iPhone 安全區）→ 供醫師選項列 sticky 定位用
-    const _tb=document.getElementById('tabs');
-    if(_tb) document.body.style.setProperty('--ms-tabs-h', _tb.offsetHeight+'px');
+    _syncStickyVars();
     renderMobileSchedule();
   } else {
     grid.style.display='grid';
@@ -2508,6 +2533,13 @@ let _msWantScroll=false;
 // 內容太少時（例：只篩選出兩三個班、或切到班數少的月份），文件高度不足以把上方
 // 標題列捲走，sticky 的分頁列／醫師選項就會停在不同高度，造成切換醫師或月份時
 // 整個版面上下跳動。這裡補足最小高度，確保任何情況都能捲到同一個位置。
+// 看板模式 sticky 定位用的實測高度：唯讀橫幅（未顯示時為 0）與分頁列
+function _syncStickyVars(){
+  const bn=document.getElementById('lock-banner'), tb=document.getElementById('tabs');
+  if(bn) document.body.style.setProperty('--ms-banner-h',(bn.offsetHeight||0)+'px');
+  if(tb) document.body.style.setProperty('--ms-tabs-h',tb.offsetHeight+'px');
+}
+
 // 讓「分頁列＋醫師選項」兩排 sticky 完全咬合所需的捲動量
 // ＝標題列高度 ＋ 內容區上邊距（標題列捲掉後，醫師選項才會貼到分頁列下緣）
 function _msMinScroll(){
@@ -2527,15 +2559,22 @@ function _msPadForStickyHeader(){
 function _msScrollToToday(){
   const wrap=document.getElementById('mobile-schedule');
   if(!wrap||wrap.style.display==='none') return;
+  // 橫幅可能在渲染後才出現/消失（切月時），先依「現在的」版面重算可捲動高度
+  _msPadForStickyHeader();
   const tb=document.getElementById('tabs');
   const ch=document.getElementById('cal-header');
   const hdr=document.getElementById('header');
+  const bn=document.getElementById('lock-banner');
+  // 唯讀橫幅也是固定區的一部分（未顯示時 offsetHeight 為 0），必須一併扣除，
+  // 否則卡片會躲到橫幅後面
+  const bnH=bn?bn.offsetHeight:0;
   const tabsH=tb?tb.offsetHeight:0, chH=ch?ch.offsetHeight:0, headerH=hdr?hdr.offsetHeight:0;
   // 兩排 sticky 完全咬合（分頁列貼齊上緣、醫師選項緊接其下）。
   // 用實測殘餘差距補捲，不必依賴 padding/margin 的假設，任何機型都會對齊。
   const engageSticky=()=>{
     if(!ch) return;
-    const gap=ch.getBoundingClientRect().top-tabsH;
+    // 醫師選項列的咬合位置＝橫幅高＋分頁列高（漏算橫幅會多捲一段，把卡片推到橫幅底下）
+    const gap=ch.getBoundingClientRect().top-(bnH+tabsH);
     if(gap>0.5) window.scrollTo(0,Math.round(window.pageYOffset+gap));
   };
   const now=new Date();
@@ -2548,7 +2587,7 @@ function _msScrollToToday(){
   // （整頁置頂會把它們推走，卡片還會被 iPhone 動態島遮住）
   const minY=_msMinScroll();
   const y=target
-    ? Math.max(minY,target.getBoundingClientRect().top+window.pageYOffset-tabsH-chH-6)
+    ? Math.max(minY,target.getBoundingClientRect().top+window.pageYOffset-bnH-tabsH-chH-6)
     : minY;
   window.scrollTo(0,Math.max(0,y));
   engageSticky();
