@@ -398,11 +398,11 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
 </div>
 
 <div id="tabs">
-  <div class="tab active" onclick="switchTab('schedule')">📅 排班表</div>
-  <div class="tab" data-pwa-hide onclick="switchTab('doctors')">👨‍⚕️ 醫師設定</div>
-  <div class="tab" onclick="switchTab('prereq')">📝 預假/預班</div>
-  <div class="tab" onclick="switchTab('stats')">📈 統計報表</div>
-  <div class="tab" data-pwa-hide onclick="switchTab('manual')">📖 操作說明</div>
+  <div class="tab active" data-tab="schedule" onclick="switchTab('schedule')">📅 排班表</div>
+  <div class="tab" data-tab="doctors" data-pwa-hide onclick="switchTab('doctors')">👨‍⚕️ 醫師設定</div>
+  <div class="tab" data-tab="prereq" onclick="switchTab('prereq')">📝 預假/預班</div>
+  <div class="tab" data-tab="stats" onclick="switchTab('stats')">📈 統計報表</div>
+  <div class="tab" data-tab="manual" data-pwa-hide onclick="switchTab('manual')">📖 操作說明</div>
 </div>
 
 <div id="content">
@@ -414,13 +414,13 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <div class="split-control" data-pwa-hide>
           <label>預設切割點：</label>
           <span style="font-size:11px;color:#555">平日</span>
-          <select id="default-split" onchange="state.defaultSplit=parseInt(this.value);autoSave();renderCalendar();">
+          <select id="default-split" onchange="changeSplitSetting('weekday',this.value)">
             <option value="16">16:00</option><option value="17">17:00</option>
             <option value="18">18:00</option>
             <option value="20" selected>20:00</option>
           </select>
           <span style="font-size:11px;color:#c0392b">假日</span>
-          <select id="holiday-split" onchange="state.holidaySplit=parseInt(this.value);autoSave();renderCalendar();">
+          <select id="holiday-split" onchange="changeSplitSetting('holiday',this.value)">
             <option value="16">16:00</option><option value="17" selected>17:00</option>
             <option value="18">18:00</option>
             <option value="20">20:00</option>
@@ -934,7 +934,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <h3>特殊選項</h3>
     <div class="check-row"><input type="checkbox" id="pref-long"><label for="pref-long">偏好長班(&gt;10h)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-noday"><label for="pref-noday">不排白班 (不排主白/早班，僅排小夜/大夜)</label></div>
-    <div class="check-row" id="wknight-row" style="display:none"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">周一到周四不夜班 (20-08大夜嚴格鎖定，僅周五六日可排) ─ 僅陳孝綱適用</label></div>
+    <div class="check-row" id="wknight-row" style="display:none"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">僅周五六可夜班 (20-08大夜嚴格鎖定，其餘日子不排) ─ 僅陳孝綱適用</label></div>
     <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">大夜班集中 (大夜盡量連上，避免上1休1上1)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-morningReport"><label for="pref-morningReport">晨會報告 (第1、3週四08:00，需排主白/早班或週三大夜)</label></div>
@@ -1055,8 +1055,39 @@ function blockIfViewOnly(){
 }
 let _undoStack = [];
 let _redoStack = [];
-function pushUndo(){
-  _undoStack.push(JSON.stringify({schedule:state.schedule,preRequests:state.preRequests}));
+// 快照「只含單一月份」的資料：原本整份 state.schedule/preRequests 都進快照，
+// 在未完成月按還原會連帶把已完成月份一起回滾（而 blockIfCompleted 只看目前檢視月）。
+function _monthSnapshot(y,m){
+  if(y==null) y=state.year;
+  if(m==null) m=state.month;
+  const pre=`${y}-${String(m+1).padStart(2,'0')}-`;
+  const sch={}, prq={};
+  for(const d of monthDates(y,m)) if(state.schedule[d]!==undefined) sch[d]=state.schedule[d];
+  for(const k of Object.keys(state.preRequests)) if(k.startsWith(pre)) prq[k]=state.preRequests[k];
+  return JSON.stringify({y,m,schedule:sch,preRequests:prq});
+}
+function _restoreSnapshot(snap){
+  const y=snap.y, m=snap.m;
+  const pre=`${y}-${String(m+1).padStart(2,'0')}-`;
+  for(const d of monthDates(y,m)){
+    if(snap.schedule[d]!==undefined) state.schedule[d]=snap.schedule[d];
+    else delete state.schedule[d];
+  }
+  for(const k of Object.keys(state.preRequests)) if(k.startsWith(pre)) delete state.preRequests[k];
+  for(const k of Object.keys(snap.preRequests)) state.preRequests[k]=snap.preRequests[k];
+}
+// 還原/重做前，依「快照所屬月份」而非目前檢視月做唯讀/鎖定把關
+function _snapBlocked(snap,verb){
+  const key=`${snap.y}-${snap.m}`;
+  if(_completedMonths.has(key)){showToast(`✅ ${snap.y}年${snap.m+1}月已完成（唯讀），無法${verb}`,'warn');return true;}
+  if(_lockedMonths.has(key)){showToast(`🔒 ${snap.y}年${snap.m+1}月班表已鎖定，無法${verb}`,'warn');return true;}
+  return false;
+}
+// dateStr 可選：day-modal 之類針對特定日期的編輯，用該日期所屬月份做快照
+function pushUndo(dateStr){
+  let y=state.year,m=state.month;
+  if(typeof dateStr==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(dateStr)){ y=+dateStr.slice(0,4); m=+dateStr.slice(5,7)-1; }
+  _undoStack.push(_monthSnapshot(y,m));
   if(_undoStack.length>10) _undoStack.shift();
   _redoStack=[];  // 新操作打斷重做鏈
   updateUndoBtn(); updateRedoBtn();
@@ -1065,11 +1096,13 @@ function undoLast(){
   if(blockIfCompleted()) return;
   if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法還原','warn');return;}
   if(!_undoStack.length){showToast('沒有可還原的操作','warn');return;}
-  if(!confirm('確定還原到上一個狀態？')) return;
-  _redoStack.push(JSON.stringify({schedule:state.schedule,preRequests:state.preRequests}));
+  const snap=JSON.parse(_undoStack[_undoStack.length-1]);
+  if(_snapBlocked(snap,'還原')) return;
+  if(!confirm(`確定還原 ${snap.y}年${snap.m+1}月 到上一個狀態？`)) return;
+  _undoStack.pop();
+  _redoStack.push(_monthSnapshot(snap.y,snap.m));
   if(_redoStack.length>10) _redoStack.shift();
-  const snap=JSON.parse(_undoStack.pop());
-  state.schedule=snap.schedule; state.preRequests=snap.preRequests;
+  _restoreSnapshot(snap);
   autoSave(); renderCalendar(); renderPRList();
   showToast('✅ 已還原','ok'); updateUndoBtn(); updateRedoBtn();
 }
@@ -1077,11 +1110,13 @@ function redoLast(){
   if(blockIfCompleted()) return;
   if(isCurrentMonthLocked()){showToast('🔒 本月班表已鎖定，無法重做','warn');return;}
   if(!_redoStack.length){showToast('沒有可重做的操作','warn');return;}
-  if(!confirm('確定重做？')) return;
-  _undoStack.push(JSON.stringify({schedule:state.schedule,preRequests:state.preRequests}));
+  const snap=JSON.parse(_redoStack[_redoStack.length-1]);
+  if(_snapBlocked(snap,'重做')) return;
+  if(!confirm(`確定重做 ${snap.y}年${snap.m+1}月？`)) return;
+  _redoStack.pop();
+  _undoStack.push(_monthSnapshot(snap.y,snap.m));
   if(_undoStack.length>10) _undoStack.shift();
-  const snap=JSON.parse(_redoStack.pop());
-  state.schedule=snap.schedule; state.preRequests=snap.preRequests;
+  _restoreSnapshot(snap);
   autoSave(); renderCalendar(); renderPRList();
   showToast('✅ 已重做','ok'); updateUndoBtn(); updateRedoBtn();
 }
@@ -1258,20 +1293,8 @@ function calcSlotPoints(slot, split, startDate){
   return Math.round(pts*10)/10;
 }
 
-function zoneHours(slot, split, startDate){
-  const {s,e}=slotRange(slot,split);
-  const nextDate=addDays(startDate,1);
-  let bai=0,sn=0,bn=0;
-  for(let h=s;h<e;h++){
-    const ah=h%24;
-    const d=h>=24?nextDate:startDate;
-    const hol=isHoliday(d);
-    if(ah>=2&&ah<8)       {if(hol)bn++;}
-    else if(ah>=8&&ah<16) {if(hol)bai++;}
-    else                   {if(hol)sn++;}
-  }
-  return {bai,sn,bn};
-}
+// （已移除 dead code：zoneHours()。全檔無任何呼叫，且其假日判定與正式使用的
+//   _zoneIsHol/_addZone 不一致——大夜跨日的歸屬算法不同，留著日後誤用會算錯時數。）
 
 // Clamp split to allowed manual range (custom pre-requests may exceed this)
 function clampSplit(v){ return Math.min(20,Math.max(16,v||20)); }
@@ -1280,6 +1303,26 @@ function clampSplit(v){ return Math.min(20,Math.max(16,v||20)); }
 function _syncSplitSelects(){
   const a=document.getElementById('default-split'); if(a) a.value=state.defaultSplit;
   const b=document.getElementById('holiday-split'); if(b) b.value=state.holidaySplit;
+}
+// 工具列「預設切割點」有守門的變更入口。
+// 這兩個設定是「全域」的（跨所有月份），會改變已完成月份的時數與點值 → 影響薪資 CSV，
+// 所以不是用 blockIfCompleted() 單擋當月，而是「只要存在任何已完成月份」就列出並要求確認。
+function changeSplitSetting(which,val){
+  if(blockIfViewOnly()){ _syncSplitSelects(); return; }
+  const v=clampSplit(parseInt(val,10));
+  if(_completedMonths.size){
+    const list=[..._completedMonths].map(k=>{
+      const p=k.split('-'); return `${p[0]}年${(parseInt(p[1],10)+1)}月`;
+    }).sort().join('、');
+    const ok=confirm(
+      '⚠️ 「預設切割點」是全域設定，會一併改變已完成（唯讀）月份的時數與點值計算，\n'+
+      '匯出的醫師時數 CSV／薪資試算也會跟著變動。\n\n'+
+      '目前已完成的月份：'+list+'\n\n確定要修改嗎？'
+    );
+    if(!ok){ _syncSplitSelects(); return; }
+  }
+  if(which==='holiday') state.holidaySplit=v; else state.defaultSplit=v;
+  autoSave(); renderCalendar();
 }
 // 預設切割點：平日 20:00、假日 17:00（可於工具列調整）
 function defaultSplitFor(dateStr){
@@ -1373,7 +1416,7 @@ function canWork(docId, date, slot, sched){
   if(consec>=(doc.prefs.maxConsec||6)) return false;
   if(doc.prefs.wkNight&&slot==='大夜'){
     const dow=getDOW(date);
-    if(![4,5,6].includes(dow)) return false; // 周一到周四絕對不排大夜(20-08)
+    if(![4,5].includes(dow)) return false; // 僅周五六可排大夜(20-08)
   }
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
   // ===== ABSOLUTE PROHIBITIONS (both backward and forward) =====
@@ -1442,7 +1485,7 @@ function canWorkRelaxed(docId, date, slot, sched){
     else break;
   }
   if(consec>=(doc.prefs.maxConsec||6)+3) return false;
-  if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
+  if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5].includes(dow)) return false;}
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
   // ===== ABSOLUTE PROHIBITIONS (same as canWork, never relaxed) =====
   if(slot==='主白'||slot==='早班'){
@@ -1475,6 +1518,16 @@ function canWorkForce(docId, date, slot, sched){
   if(!doc||doc.type==='part') return false;
   const split=getDaySplit(date);
   if(SLOTS.some(s=>(sched[date]||{})[s]===docId)) return false;
+  // 強制補班刻意不套用個人 maxConsec，但仍保留一道硬上限，
+  // 否則 force 是唯一沒有連班天花板的路徑，可能排出十幾天連班。
+  {
+    let _c=0, _cur=addDays(date,-1);
+    for(let i=0;i<25;i++){
+      if(SLOTS.some(s=>(sched[_cur]||{})[s]===docId)){_c++;_cur=addDays(_cur,-1);}
+      else break;
+    }
+    if(_c>=(doc.prefs.maxConsec||6)+2) return false;
+  }
   const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
   for(const pr of prs){if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;}
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
@@ -1483,7 +1536,7 @@ function canWorkForce(docId, date, slot, sched){
     if(pr.type==='OFF_NO_NIGHT'&&slot==='小夜') return false;
   }
   if(doc.prefs.noDay&&(slot==='主白'||slot==='早班')) return false;
-  if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5,6].includes(dow)) return false;}
+  if(doc.prefs.wkNight&&slot==='大夜'){const dow=getDOW(date);if(![4,5].includes(dow)) return false;}
   // 12h rest from last shift
   const last=getLastAssigned(docId,date,sched);
   if(last){
@@ -1616,14 +1669,28 @@ function countDocOffDays(docId,y=state.year,m=state.month){
   return cnt;
 }
 
-function scoreDoc(docId, date, slot, sched){
+// 一批候選人共用的時數/點值快取。
+// 同一個 (日期,班別) 的所有候選人在評分當下看到的 sched 完全相同
+//（scoreDoc 內部的暫排會立即還原），因此把 calcDocHours/calcDocPoints/avgHours/avgPoints
+// 這組 O(整月×醫師) 的掃描抽出來一次算完，數值與逐一重算完全相同，排班結果不變。
+function _preScore(sched){
+  const full=state.doctors.filter(d=>d.type==='full');
+  const hours={},points={};
+  let sh=0,sp=0;
+  for(const d of full){
+    const h=calcDocHours(d.id,sched), p=calcDocPoints(d.id,sched);
+    hours[d.id]=h; points[d.id]=p; sh+=h; sp+=p;
+  }
+  return {hours,points,avg:full.length?sh/full.length:0,avgPts:full.length?sp/full.length:0};
+}
+function scoreDoc(docId, date, slot, sched, _pre){
   const doc=state.doctors.find(d=>d.id===docId);
   const split=getDaySplit(date);
   // 隨機擾動：足以在「分數相近」的候選人間洗牌，產生不同版本；
   // 但遠小於硬規則罰分(轉班-2000/交替大夜-400/超時-30每小時)，不會破壞規則
   let score=Math.random()*RANDOM_JITTER;
-  const myH=calcDocHours(docId,sched);
-  const avg=avgHours(sched);
+  const myH=(_pre&&_pre.hours[docId]!=null)?_pre.hours[docId]:calcDocHours(docId,sched);
+  const avg=_pre?_pre.avg:avgHours(sched);
   const offDays=countDocOffDays(docId);
   // 相對值縮放：預假多的醫師可上班天數少，拉力與偏好目標同步縮小
   const availScale=Math.max(0.25, 1-offDays/30);
@@ -1635,8 +1702,8 @@ function scoreDoc(docId, date, slot, sched){
   // 深度不足加壓：缺超過10h後每小時再+3，確保能突破他人固定偏好加分
   if(myH<targetH0-10) score+=(targetH0-10-myH)*3;
   // 點值均衡降為次要（僅微調，不得蓋過時數偏好）
-  const myPts=calcDocPoints(docId,sched);
-  const avgPts=avgPoints(sched);
+  const myPts=(_pre&&_pre.points[docId]!=null)?_pre.points[docId]:calcDocPoints(docId,sched);
+  const avgPts=_pre?_pre.avgPts:avgPoints(sched);
   score+=(avgPts-myPts)*0.8;
   // 班別偏好：大夜 −1 者 150（壓過時數拉力，寧可時數少也不上大夜）、其他大夜 60、一般班別 36
   score+=(doc.prefs[slotPrefKey(slot)]||0)*(slot==='大夜'?(((doc.prefs['大夜']||0)<0)?150:60):36);
@@ -1715,7 +1782,7 @@ function computeNightQuotas(y,m,dates){
   for(const doc of group){
     let elig=0;
     for(const d of dates){
-      if(doc.prefs.wkNight&&![4,5,6].includes(getDOW(d))) continue;
+      if(doc.prefs.wkNight&&![4,5].includes(getDOW(d))) continue;
       const prs=(state.preRequests[d]||[]).filter(r=>r.docId===doc.id);
       if(prs.some(pr=>['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type))) continue;
       // 隔天有「OFF+前天不大夜/不夜班」的預假 → 當天大夜也被封，不算可上日
@@ -1926,7 +1993,8 @@ function _generateOnce(y,m,dates){
           if(nonAverse.length) candidates=nonAverse;
         }
         if(candidates.length){
-          const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
+          const _pre=_preScore(newSched);
+          const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched,_pre)}));
           scored.sort((a,b)=>b.sc-a.sc);
           newSched[d][slot]=scored[0].id;
         }
@@ -2050,8 +2118,13 @@ function _generateOnce(y,m,dates){
       // 收集所有可行選項（含轉班數），優先挑轉班≤3且最小者；會議是鐵律，真沒有才硬排
       const options=[];
       const tryOpt=(thu,slot,occ)=>{
-        newSched[thu][slot]=doc.id;
-        if(canWorkForce(doc.id,thu,slot,fullSched)){
+        // 順序很重要：canWorkForce 開頭就會擋掉「當日已排班」的醫師，
+        // 若先把 doc 填進格子再檢查，永遠回傳 false → 整個強制簽到 pass 變 no-op。
+        // 比照 Pass A 的正確寫法：先在「未填入」狀態檢查，通過後才暫填算轉班數。
+        if(occ) newSched[thu][slot]=null;   // 擠人情境：先清空占用者再檢查
+        const ok=canWorkForce(doc.id,thu,slot,fullSched);
+        if(ok){
+          newSched[thu][slot]=doc.id;
           const t=countTurnovers(doc.id,newSched);
           options.push({thu,slot,occ,t});
         }
@@ -2110,7 +2183,8 @@ function _fillEmpties(newSched,fullSched,dates){
         if(nonAverse.length) candidates=nonAverse;
       }
       if(candidates.length){
-        const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched)}));
+        const _pre=_preScore(newSched);
+        const scored=candidates.map(doc=>({id:doc.id,sc:scoreDoc(doc.id,d,slot,newSched,_pre)}));
         scored.sort((a,b)=>b.sc-a.sc);
         newSched[d][slot]=scored[0].id;
       }
@@ -2333,7 +2407,7 @@ function evaluateSchedule(sched,dates){
   score-=nightDev*20;    // 夜班均衡：偏好≥0者偏離配額的總量
   score-=turnExcess*200; // 轉班>3：鐵律級
   score-=turnTotal*1.5;
-  score-=consecViol*8;
+  score-=consecViol*120; // 連班超標：原本僅 8，10 次重排幾乎不會為此換版本；提高到僅次於空缺(300)
   score-=under135*0.4;
   // 分數僅供內部挑最佳比較，可為負值（勿再夾0：會讓所有候選同分、挑選退化成亂數）
   score=Math.round(score);
@@ -2819,7 +2893,7 @@ function confirmDayModal(){
     const ks=document.getElementById('ek-'+ex.id); if(ks) ex.kind=ks.value||'';
   });
   const noteEl=document.getElementById('day-note'); if(noteEl) _dayDraft.note=noteEl.value;
-  pushUndo();
+  pushUndo(_dayDraftDate); // 快照鎖定被編輯日期所屬月份
   if(!state.schedule[_dayDraftDate]) state.schedule[_dayDraftDate]={};
   const ds=state.schedule[_dayDraftDate];
   ds.split=_dayDraft.split;
@@ -3016,7 +3090,7 @@ function renderDoctorTable(){
       <td>${levelStr(p.hol)}</td>
       <td>${levelStr(p.htPref)} <span style="font-size:10px;color:#999">${p.htPref?((p.htPref>0?'+':'-')+Math.abs(p.htPref*10)+'h'):''}</span></td>
       <td>${p.maxConsec}天</td>
-      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'不平夜':'',p.cluster?'夜集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'僅五六夜':'',p.cluster?'夜集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
         <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
         <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
@@ -3112,10 +3186,34 @@ function saveDoc(){
 }
 
 function delDoc(docId){
+  const _doc=state.doctors.find(d=>d.id===docId);
+  const _nm=_doc?_doc.name:'此醫師';
   const pwd=prompt('請輸入刪除密碼：');
   if(pwd===null) return;
   if(pwd!=='22511'){alert('密碼錯誤'); return;}
-  if(!confirm('確定刪除？')) return;
+  // 刪除醫師會清空「所有月份」（含已完成／唯讀月份）的班次與預假。
+  // 先掃出受影響的已完成月份，明確列出後要求二次確認，不再無聲改動已完成月。
+  const _aff=[];
+  for(const key of _completedMonths){
+    const p=key.split('-'); const yy=parseInt(p[0],10), mm=parseInt(p[1],10);
+    if(isNaN(yy)||isNaN(mm)) continue;
+    let cnt=0;
+    for(const d of monthDates(yy,mm)){
+      const ds=state.schedule[d]; if(!ds) continue;
+      for(const sl of SLOTS) if(ds[sl]===docId) cnt++;
+      for(const ex of (ds.extras||[])) if(ex.docId===docId) cnt++;
+    }
+    if(cnt) _aff.push({key,txt:`${yy}年${mm+1}月（${cnt} 班）`});
+  }
+  if(_aff.length){
+    _aff.sort((a,b)=>a.txt<b.txt?-1:1);
+    if(!confirm(
+      `⚠️ ${_nm} 在下列「已完成（唯讀）」月份仍有班次，刪除後這些月份的班表會被一併清空，且無法復原：\n\n`+
+      _aff.map(a=>'　• '+a.txt).join('\n')+
+      '\n\n這會改變已完成月份的班表與薪資統計。確定仍要刪除嗎？'
+    )) return;
+  }
+  if(!confirm(`確定刪除 ${_nm}？將清除其所有月份的班次、加班與預假/預班紀錄。`)) return;
   state.doctors=state.doctors.filter(d=>d.id!==docId);
   state.avoidPairs=(state.avoidPairs||[]).filter(p=>!p.includes(docId));
   for(const ds of Object.values(state.schedule)){
@@ -3195,11 +3293,10 @@ function renderPRCal(){
 
   for(let d=1;d<=days;d++){
     const ds=fmtDate(year,month,d);
-    const dow=getDOW(ds);
-    const isWknd=dow>=5;
+    const isHol=isHoliday(ds);
     const isToday=ds===todayStr;
     const isSel=selected.has(ds);
-    let cls='pr-cal-cell'+(isWknd?' wknd':'')+(isToday?' today':'')+(isSel?' range-single':'');
+    let cls='pr-cal-cell'+(isHol?' wknd':'')+(isToday?' today':'')+(isSel?' range-single':'');
     html+=`<div class="${cls}" onclick="prCellClick('${ds}')">${d}</div>`;
   }
   gridEl.innerHTML=html;
@@ -3327,7 +3424,8 @@ function renderPRList(){
     if(!date.startsWith(monthPrefix)) continue;
     for(const pr of prs){
       if(!grouped[pr.docId]) grouped[pr.docId]={};
-      const key=pr.type+'|'+(pr.custom||'');
+      // key 需含 note：同醫師同型別但備註不同的兩段原本會被併成一組、只顯示第一筆備註
+      const key=pr.type+'|'+(pr.custom||'')+'|'+(pr.note||'');
       if(!grouped[pr.docId][key]) grouped[pr.docId][key]={type:pr.type,custom:pr.custom||'',note:pr.note||'',dates:[]};
       grouped[pr.docId][key].dates.push(date);
     }
@@ -3593,10 +3691,12 @@ function renderStats(){
   </tr>`;
   document.getElementById('stats-tbody').innerHTML=rows.join('')+totRow;
 
-  // Compute overall average points for target reference
   const fullDocs=state.doctors.filter(d=>d.type==='full');
-  const allPts=fullDocs.map(d=>st[d.id].pts);
-  const overallAvgPts=allPts.length?allPts.reduce((a,b)=>a+b,0)/allPts.length:0;
+  // （已移除 dead code：overallAvgPts——算完從未被使用。）
+  // 全體平均時數：原本寫在下方醫師迴圈內，每位醫師都重算一次；移到迴圈外只算一次。
+  const avgHrs=fullDocs.reduce((acc,d2)=>{
+    const z=st[d2.id]; return acc+z.w816+z.h816+z.w1602+z.h1602+z.w028+z.h028;
+  },0)/(fullDocs.length||1);
 
   // 分兩級：hard=違反鐵律(紅)、soft=需留意但非違規(黃)
   const hard=[], soft=[];
@@ -3620,7 +3720,6 @@ function renderStats(){
     }
     const offDays=countDocOffDays(doc.id,_statsYear,_statsMonth);
     if(totalH<135) soft.push(`${doc.name} 時數不足135h（實際${totalH}h，預假${offDays}天）`);
-    const avgHrs=fullDocs.reduce((acc,d2)=>{const z=st[d2.id];return acc+z.w816+z.h816+z.w1602+z.h1602+z.w028+z.h028;},0)/(fullDocs.length||1);
     const availScale2=Math.max(0.25,1-offDays/30);
     const tgtH=avgHrs+(doc.prefs.htPref||0)*availScale2*10;
     if(offDays<=15&&Math.abs(totalH-tgtH)>20) soft.push(`${doc.name} 時數偏離目標(實際${totalH}h vs 目標${Math.round(tgtH)}h)`);
@@ -3834,6 +3933,11 @@ function importDoctorData(){
       try{
         const d=JSON.parse(ev.target.result);
         if(d._type!=='doctor_export') throw new Error('格式不符');
+        // 目標月份若已「完成本月」（唯讀）則拒絕匯入：匯入會覆寫該月該醫師的預假/預班
+        if(d.year!=null&&d.month!=null&&_completedMonths.has(`${d.year}-${d.month}`)){
+          showToast(`✅ ${d.year}年${d.month+1}月 已完成（唯讀），無法匯入。如需修改請先取消「完成本月」。`,'warn');
+          return;
+        }
         // Find or match doctor
         let doc=state.doctors.find(x=>x.id===d.docId);
         if(!doc) doc=state.doctors.find(x=>x.name===d.name);
@@ -3961,7 +4065,7 @@ function initPersonalView(encoded){
       <div style="background:#f8f9fa;padding:10px;border-radius:6px">
         <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:4px">特殊選項</div>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-long" ${pvState.prefs.long?'checked':''}> 偏好長班(&gt;10h)</label>
-        ${pvState.name==='陳孝綱'?`<label style="font-size:11px;display:block"><input type="checkbox" id="pvp-wkNight" ${pvState.prefs.wkNight?'checked':''}> 周一至四不排大夜</label>`:''}
+        ${pvState.name==='陳孝綱'?`<label style="font-size:11px;display:block"><input type="checkbox" id="pvp-wkNight" ${pvState.prefs.wkNight?'checked':''}> 僅周五六可夜班</label>`:''}
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-cluster" ${pvState.prefs.cluster?'checked':''}> 大夜班集中</label>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-medMeeting" ${pvState.prefs.medMeeting?'checked':''}> 醫務會議</label>
         <label style="font-size:11px;display:block"><input type="checkbox" id="pvp-morningReport" ${pvState.prefs.morningReport?'checked':''}> 晨會報告</label>
@@ -4141,10 +4245,12 @@ function _gotoMonth(y,m){
   setViewMonth(y,m);
 }
 function switchTab(name){
-  const names=['schedule','doctors','prereq','stats','manual','personal'];
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
+  // 改用 data-tab 明確對應，不再靠 .tab 的 DOM 索引去對一個手寫的 names 陣列
+  //（原陣列含 'personal' 但頁面沒有第 6 個 .tab 按鈕，日後增刪分頁即錯位）
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
-  document.getElementById('tab-'+name).classList.add('active');
+  const _pane=document.getElementById('tab-'+name);
+  if(_pane) _pane.classList.add('active');
   if(name==='doctors'){renderDoctorTable();}
   if(name==='prereq'){_prListYear=state.year;_prListMonth=state.month;prCal.year=state.year;prCal.month=state.month;renderPRTab();}
   if(name==='stats'){_statsYear=state.year;_statsMonth=state.month;renderStats();}
@@ -4213,6 +4319,15 @@ const CLOUD_URL_KEY='tienSheng_cloudUrl';
 let _fbApp=null,_fbRef=null;
 // 本裝置識別碼：雲端寫入時附上，收到自己的回音就略過（不再用時間盲區，避免漏收別台裝置的更新）
 const _clientId=Math.random().toString(36).slice(2)+Date.now().toString(36);
+// ===== 雲端寫入安全閥 =====
+// _cloudReady：在收到第一個雲端 snapshot（或確認雲端確實是空的）之前，一律禁止 cloudSave()。
+//   否則新裝置/localStorage 損毀時 state 停在「空白預設班表」，此時任何 autoSave()
+//   （例如動一下切割點下拉、按設假）就會把空白資料整份 set 上雲，摧毀所有月份。
+// _lastKnownTs：本機已知的雲端 _ts。cloudSave() 前若發現雲端 _ts 比它新，
+//   代表別台裝置在我們之後寫過 → 中止寫入並警告，不做整份覆蓋。
+let _cloudReady=false;
+let _lastKnownTs=0;
+let _cloudConflict=false;
 
 // 內建共用雲端網址：每台裝置（含手機 App）開啟即自動連線，不需手動設定
 const DEFAULT_CLOUD_URL='https://tenchener-488d2-default-rtdb.firebaseio.com/';
@@ -4224,19 +4339,34 @@ async function initCloud(url){
   try{
     if(_fbRef){ _fbRef.off(); _fbRef=null; }
     if(_fbApp){ try{ await firebase.app('erSched').delete(); }catch(e){} _fbApp=null; }
+    _cloudReady=false; _lastKnownTs=0; _cloudConflict=false;
     _fbApp=firebase.initializeApp({databaseURL:url.trim()},'erSched');
     _fbRef=firebase.database(_fbApp).ref('erScheduleData');
+    updateCloudStatus(false,'雲端載入中…');   // 先設，避免 snapshot 早到時被蓋回「載入中」
     _fbRef.on('value', snap=>{
       const data=snap.val();
-      if(!data) return;
-      if(data._client===_clientId) return; // 自己寫入的回音，略過
+      if(!data){
+        // 雲端節點確實不存在／為空 → 明確確認過了，允許本機資料上傳
+        _cloudReady=true; _lastKnownTs=0; _cloudConflict=false;
+        updateCloudStatus(true);
+        return;
+      }
+      if(typeof data._ts==='number') _lastKnownTs=data._ts;
+      _cloudReady=true;                       // 收到第一個 snapshot 才開放寫入
+      updateCloudStatus(true);                // 真正拿到資料才顯示「已連線」
+      if(data._client===_clientId) return;    // 自己寫入的回音，略過
+      _cloudConflict=false;                   // 已收到對方最新資料，衝突解除
       applyCloudData(data);
+    }, err=>{
+      // 原本沒有 error callback：權限被拒/斷線時會完全無聲
+      _cloudReady=false;
+      updateCloudStatus(false,'讀取失敗');
+      showToast('☁️ 雲端讀取失敗: '+((err&&err.message)||err),'warn');
     });
-    updateCloudStatus(true);
     localStorage.setItem(CLOUD_URL_KEY,url.trim());
-    showToast('☁️ 雲端同步已連線','ok');
+    showToast('☁️ 雲端連線中，資料載入前不會上傳','ok');
   }catch(e){
-    _fbRef=null; _fbApp=null;
+    _fbRef=null; _fbApp=null; _cloudReady=false;
     updateCloudStatus(false,'連線失敗');
     showToast('☁️ 連線失敗: '+e.message,'warn');
   }
@@ -4244,6 +4374,9 @@ async function initCloud(url){
 
 function applyCloudData(data){
   migrateData(data);
+  // 套用遠端資料後，舊的 undo/redo 快照已對應不到現況：
+  // 若不清空，按還原會把別台裝置剛寫入的班表整段蓋回去。
+  _undoStack=[]; _redoStack=[];
   if(data.doctors) state.doctors=data.doctors;
   if(data.schedule) state.schedule=data.schedule;
   state.preRequests=data.preRequests||{};
@@ -4273,14 +4406,30 @@ function applyCloudData(data){
 
 function cloudSave(){
   if(!_fbRef) return;
+  // 尚未收到第一個 snapshot：本機 state 可能只是「空白預設」，絕不可整份覆蓋雲端
+  if(!_cloudReady){ updateCloudStatus(false,'雲端載入中，尚未同步'); return; }
+  if(_cloudConflict){ updateCloudStatus(false,'偵測到衝突，未同步'); return; }
   const data={
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],year:state.year,month:state.month,
     defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],
     idCnt:_idCnt,lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths],_ts:Date.now(),_client:_clientId
   };
-  _fbRef.set(data)
-    .catch(e=>{ showToast('☁️ 雲端儲存失敗: '+e.message,'warn'); });
+  const myTs=data._ts;
+  // 寫入前比對雲端 _ts：比「本機已知」新 → 別台裝置在我們之後寫過，中止本次整份覆蓋
+  _fbRef.child('_ts').once('value').then(s=>{
+    const remoteTs=s.val();
+    if(typeof remoteTs==='number' && remoteTs>_lastKnownTs){
+      _cloudConflict=true;
+      updateCloudStatus(false,'偵測到衝突，未同步');
+      showToast('⚠️ 偵測到其他裝置已更新資料，本次變更「未」上傳雲端。請重新整理後再修改，以免蓋掉對方的班表。','warn');
+      alert('⚠️ 偵測到其他裝置已更新資料\n\n為避免蓋掉對方的班表，本次變更沒有上傳到雲端（本機仍有暫存）。\n請重新整理頁面取得最新班表後再修改。');
+      return;
+    }
+    // 樂觀更新：先推進 _lastKnownTs，避免自己連續存檔時把自己的寫入誤判為衝突
+    _lastKnownTs=myTs;
+    return _fbRef.set(data);
+  }).catch(e=>{ showToast('☁️ 雲端儲存失敗: '+e.message,'warn'); });
 }
 
 function updateCloudStatus(ok,msg=''){
@@ -4406,7 +4555,9 @@ function loadData(){
         const d=migrateData(JSON.parse(ev.target.result));
         if(!d||!Array.isArray(d.doctors)||!d.schedule) throw new Error('檔案格式不正確');
         if(!confirm('⚠ 還原備份會以檔案內容「覆蓋」目前所有資料（含各月份班表、醫師設定、預假預班），並同步到雲端。\n\n確定要還原？')) return;
-        pushUndo();
+        // 整份資料被換掉，舊快照已對應不到現況（undo 現在是單月範圍，回滾只會製造混合狀態）
+        // → 清空 undo/redo，而不是壓一筆會誤導人的快照
+        _undoStack=[]; _redoStack=[];
         state.doctors=d.doctors; state.schedule=d.schedule;
         state.preRequests=d.preRequests||{};
         state.holidays=new Set(d.holidays||[]);
@@ -4515,7 +4666,9 @@ function exportDoctorHoursCSV(){
     const totalH=wDay+wEve+wNight;
     rows.push([doc.name,wDay,wEve,wNight,totalH,s.pts.toFixed(1),s.cnt]);
   }
-  const csv='﻿'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  // 換行改用 \r\n，與班表 CSV 一致。
+  // 薪資系統（急診\程式\醫師薪資\index.html 的 parsePointsCSV）以 /\r?\n/ 分行，吃得下 \r\n。
+  const csv='﻿'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\r\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`醫師時數_${_statsYear}_${_statsMonth+1}.csv`;
@@ -4640,7 +4793,8 @@ function generatePDF(){
     if(!date.startsWith(monthPrefix)) continue;
     for(const pr of prs){
       if(!grouped[pr.docId]) grouped[pr.docId]={};
-      const key=pr.type+'|'+(pr.custom||'');
+      // key 需含 note：同醫師同型別但備註不同的兩段原本會被併成一組、只顯示第一筆備註
+      const key=pr.type+'|'+(pr.custom||'')+'|'+(pr.note||'');
       if(!grouped[pr.docId][key]) grouped[pr.docId][key]={type:pr.type,custom:pr.custom||'',note:pr.note||'',dates:[]};
       grouped[pr.docId][key].dates.push(date);
     }
