@@ -14,6 +14,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <style>
 :root{
   --bg:#f4f6f9; --card:#ffffff; --ink:#1e293b; --muted:#64748b; --line:#e6eaf0;
@@ -990,11 +991,12 @@ function setCloud(cls,txt){
   el.className='cloud'+(cls?(' '+cls):'');
   document.getElementById('cloud-txt').textContent=txt;
 }
-function initCloud(){
+async function initCloud(){
   if(NOCLOUD){setCloud('','離線測試');return;}
   if(!window.firebase){setCloud('err','SDK未載入');return;}
   try{
-    _fbApp=firebase.initializeApp({databaseURL:CFG.CLOUD_URL},'chenCal');
+    _fbApp=firebase.initializeApp({apiKey:'AIzaSyB6w2D8gaqSBHoDmtWsWGWGY-DQtDEcyFY',authDomain:'tenchener-488d2.firebaseapp.com',databaseURL:CFG.CLOUD_URL},'chenCal');
+    await firebase.auth(_fbApp).signInAnonymously();
     const db=firebase.database(_fbApp);
     // 班表（只讀）
     db.ref(CFG.SCHED_REF).on('value',snap=>{

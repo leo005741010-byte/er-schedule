@@ -352,6 +352,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
 <body>
 
@@ -4340,7 +4341,8 @@ async function initCloud(url){
     if(_fbRef){ _fbRef.off(); _fbRef=null; }
     if(_fbApp){ try{ await firebase.app('erSched').delete(); }catch(e){} _fbApp=null; }
     _cloudReady=false; _lastKnownTs=0; _cloudConflict=false;
-    _fbApp=firebase.initializeApp({databaseURL:url.trim()},'erSched');
+    _fbApp=firebase.initializeApp({apiKey:'AIzaSyB6w2D8gaqSBHoDmtWsWGWGY-DQtDEcyFY',authDomain:'tenchener-488d2.firebaseapp.com',databaseURL:url.trim()},'erSched');
+    await firebase.auth(_fbApp).signInAnonymously();
     _fbRef=firebase.database(_fbApp).ref('erScheduleData');
     updateCloudStatus(false,'雲端載入中…');   // 先設，避免 snapshot 早到時被蓋回「載入中」
     _fbRef.on('value', snap=>{
