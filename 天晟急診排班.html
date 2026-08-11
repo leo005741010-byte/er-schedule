@@ -721,8 +721,8 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點可選 16:00 / 17:00 / 18:00 / 20:00（已取消 19:00）。</p>
     <h4>📌 當日備註</h4>
     <p>在「當日排班」視窗最下方有「📌 當日備註」欄，可填當日行政事務（例：晨會、器材檢查、教學活動）。填寫後月曆該日會顯示黃色備註列，滑鼠移上去可看完整內容。</p>
-    <h4>🏥 楊天 / ICU（額外項目）</h4>
-    <p>在「當日排班」視窗的「額外醫師」區，點「＋ 新增醫師」後，最左「類型」欄可選 <strong>一般加班 / 楊天 / ICU</strong>，再從右邊「指派醫師」選<strong>哪位醫師</strong>上這個班。選「楊天／ICU」者<strong>只能手動加入、不計入點值與總時數</strong>，會在統計報表下方「📋 特殊項目統計」依醫師分別列出班次數與時數。</p>
+    <h4>🏥 楊天 / ICU / 病房（額外項目）</h4>
+    <p>在「當日排班」視窗的「額外醫師」區，點「＋ 新增醫師」後，最左「類型」欄可選 <strong>一般加班 / 楊天 / ICU / 病房</strong>，再從右邊「指派醫師」選<strong>哪位醫師</strong>上這個班。選「楊天／ICU／病房」者<strong>只能手動加入、不計入點值與總時數</strong>，會在統計報表下方「📋 特殊項目統計」依醫師分別列出班次數與時數。</p>
     <h4>🔒 鎖定單日</h4>
     <p>點月曆某天開啟「當日排班」視窗，左上角有「🔓 鎖定此日」按鈕，點一下即鎖定當日排班，按鈕變為「🔒 已鎖定（點擊解鎖）」。按「✔ 確認」後生效，該日在月曆會顯示金色外框與「🔒鎖定」標記。之後按「⚡ 自動排班」時<strong>該日內容完全不會被更動</strong>（包含班別、切割點、加班）。適合已喬好的特定日子（例如某醫師指定當天的班）先鎖住，再讓系統排其餘日子。</p>
     <div class="man-step"><div class="man-sn">1</div><div class="man-sb">點該日 → 視窗左上角點「🔓 鎖定此日」→「✔ 確認」，該日出現金框與「🔒鎖定」。</div></div>
@@ -1244,15 +1244,16 @@ function getFirstThirdThursdays(y,m){
 const SLOTS = ['主白','早班','小夜','大夜'];
 const SPLIT_OPTS = [16,17,18,20]; // 可選切割點（取消 19:00）
 const RANDOM_JITTER = 35; // 自動排班隨機擾動幅度：讓每次按都產生不同版本
-// 額外醫師的類型：一般加班 vs 特殊(楊天/ICU)。特殊類型仍要選醫師，但不計點值/總時數，另外統計。
+// 額外醫師的類型：一般加班 vs 特殊(楊天/ICU/病房)。特殊類型仍要選醫師，但不計點值/總時數，另外統計。
 const EXTRA_KINDS = [
   {v:'',name:'中天',color:'#78909c'},          // 計入點值/時數
   {v:'yangtian',name:'楊天',color:'#546e7a'},  // 獨立統計，不計點值/時數
   {v:'icu',name:'ICU',color:'#00838f'},        // 獨立統計，不計點值/時數
+  {v:'ward',name:'病房',color:'#6d4c41'},      // 獨立統計，不計點值/時數
 ];
 function kindInfo(v){ return EXTRA_KINDS.find(k=>k.v===(v||''))||EXTRA_KINDS[0]; }
-function isSpecialKind(v){ return v==='yangtian'||v==='icu'; }
-// 僅特殊類型（楊天/ICU）供統計用
+function isSpecialKind(v){ return v==='yangtian'||v==='icu'||v==='ward'; }
+// 僅特殊類型（楊天/ICU/病房）供統計用
 const SPECIAL_KINDS = EXTRA_KINDS.filter(k=>k.v);
 
 function slotRange(slot, split){
@@ -2828,7 +2829,7 @@ function _renderDayDraft(){
       </tr>`;
     }
     html+=`</tbody></table>
-    <div style="font-size:10px;color:#999;margin-top:3px">※ 類型選「楊天／ICU」者不計入點值與總時數，另於統計報表單獨列出。</div>`;
+    <div style="font-size:10px;color:#999;margin-top:3px">※ 類型選「楊天／ICU／病房」者不計入點值與總時數，另於統計報表單獨列出。</div>`;
   } else {
     html+=`<div style="color:#999;font-size:11px;padding:4px 0">無額外醫師</div>`;
   }
@@ -3840,7 +3841,7 @@ function renderSpecialTally(dates){
     const perDoc=Object.entries(t.byDoc).map(([id,v])=>`${getDocName(id)} ${v.cnt}班/${v.hrs}h`).join('、');
     return `<div style="margin-top:4px"><strong style="color:${s.color}">${s.name}</strong>（共 ${t.cnt} 班 / ${t.hrs} 小時）：${perDoc}</div>`;
   }).join('');
-  el.innerHTML=`<div class="alert" style="background:#eceff1;border:1px solid #b0bec5;color:#37474f;padding:8px 12px;border-radius:6px;font-size:13px"><strong>📋 特殊項目統計（楊天／ICU，不計點值/總時數）：</strong>${blocks}</div>`;
+  el.innerHTML=`<div class="alert" style="background:#eceff1;border:1px solid #b0bec5;color:#37474f;padding:8px 12px;border-radius:6px;font-size:13px"><strong>📋 特殊項目統計（楊天／ICU／病房，不計點值/總時數）：</strong>${blocks}</div>`;
 }
 
 // ============================================================
