@@ -2698,12 +2698,20 @@ function renderMobileSchedule(){
                    doc: docId?state.doctors.find(x=>x.id===docId):null };
     }
     let bodyHtml='';
+    let exHtml='';
     if(filt){
-      // 個人班表：只列該醫師的班，單欄
+      // 個人班表：只列該醫師的班，單欄；中天加班/楊天/ICU 也併入同一欄用框格顯示，
+      // 個人視角下這些都是「當天要做的一件事」，混用列狀樣式反而不易一眼看出
       let flat='';
       for(const slot of SLOTS){
         if(!info[slot].doc||info[slot].doc.id!==filt) continue;
         flat+=cell(slot,info[slot].time,info[slot].doc);
+      }
+      for(const ex of (ds.extras||[])){
+        if(!ex.docId||ex.docId!==filt) continue;
+        const disp=extraDisplay(ex); if(!disp) continue;
+        const chip=`<span class="ex-chip" style="background:${disp.special?disp.kindColor:'#78909c'}">${disp.kindName}</span>`;
+        flat+=`<div class="ms-cell" style="background:${disp.color}14;border-color:${disp.color}50"><span class="t">${ex.timeRange||''}</span><span class="n" style="color:${disp.color}">${chip}${disp.name}</span></div>`;
       }
       if(flat) bodyHtml=`<div class="ms-flat">${flat}</div>`;
     } else {
@@ -2712,15 +2720,13 @@ function renderMobileSchedule(){
         <div class="ms-col">${cell('主白',info['主白'].time,info['主白'].doc)}${cell('早班',info['早班'].time,info['早班'].doc)}</div>
         <div class="ms-col">${cell('小夜',info['小夜'].time,info['小夜'].doc)}${cell('大夜',info['大夜'].time,info['大夜'].doc)}</div>
       </div>`;
-    }
-    // 加班／楊天／ICU：整列顯示（這些標籤有意義，保留）
-    let exHtml='';
-    for(const ex of (ds.extras||[])){
-      if(!ex.docId) continue;
-      if(filt&&ex.docId!==filt) continue;
-      const disp=extraDisplay(ex); if(!disp) continue;
-      const label=disp.kindName;
-      exHtml+=`<div class="ms-ex"><span class="k" style="background:${disp.special?disp.kindColor:'#78909c'}">${label}</span><span class="t">${ex.timeRange||''}</span><span class="n" style="color:${disp.color}">${disp.name}</span></div>`;
+      // 加班／楊天／ICU：整列顯示（多位醫師可能同天都有，列狀較清楚）
+      for(const ex of (ds.extras||[])){
+        if(!ex.docId) continue;
+        const disp=extraDisplay(ex); if(!disp) continue;
+        const label=disp.kindName;
+        exHtml+=`<div class="ms-ex"><span class="k" style="background:${disp.special?disp.kindColor:'#78909c'}">${label}</span><span class="t">${ex.timeRange||''}</span><span class="n" style="color:${disp.color}">${disp.name}</span></div>`;
+      }
     }
     if(filt&&!bodyHtml&&!exHtml) continue; // 篩選模式：該醫師當天無班
     shown++;
@@ -4941,7 +4947,7 @@ function generateMedPDF(){
   const contactRows=[
     ['賴雨濃','320206'],['鄧世達','320327'],['陳孝綱','320409'],
     ['許景棠','320133'],['謝見杰','320012'],['張豐圃','360621'],
-    ['楊尚衡','320156'],['方智鴻','320881'],['急診室值班室','21109'],
+    ['楊尚衡','320156'],['方智鴻','320881'],['左華韋','320161'],['永曜嘉','320165'],['急診室值班室','21109'],
   ].map(([n,p])=>`<tr><td class="cn">${n}</td><td class="cp">${p}</td></tr>`).join('');
 
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
