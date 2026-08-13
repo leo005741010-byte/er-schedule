@@ -410,7 +410,7 @@ const _clientId=Math.random().toString(36).slice(2)+Date.now().toString(36);
    班別 / 日期 輔助函式（與排班系統邏輯完全一致）
    ============================================================ */
 const SLOTS=['主白','早班','小夜','大夜'];
-const EXTRA_KINDS=[{v:'',name:'中天',color:'#78909c'},{v:'yangtian',name:'楊天',color:'#546e7a'},{v:'icu',name:'ICU',color:'#00838f'}];
+const EXTRA_KINDS=[{v:'',name:'中天',color:'#78909c'},{v:'yangtian',name:'楊天',color:'#546e7a'},{v:'icu',name:'ICU',color:'#00838f'},{v:'ward',name:'病房',color:'#6d4c41'}];
 function kindInfo(v){return EXTRA_KINDS.find(k=>k.v===(v||''))||EXTRA_KINDS[0];}
 function fmtDate(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
 function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
@@ -449,7 +449,8 @@ function myShiftsForDate(ds){
     if(ex.docId!==state.myId||!ex.timeRange) continue;
     const m=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/);if(!m)continue;
     let s=+m[1],e=+m[2];if(e<=s)e+=24;
-    out.push({type:'extra',name:kindInfo(ex.kind).name,s,e,time:hhmm(s)+'–'+hhmm(e),range:rng(s,e),cls:'sh-extra'});
+    const ki=kindInfo(ex.kind);
+    out.push({type:'extra',name:ki.name,color:ki.color,s,e,time:hhmm(s)+'–'+hhmm(e),range:rng(s,e),cls:'sh-extra'});
   }
   out.sort((a,b)=>a.s-b.s);
   return out;
@@ -603,7 +604,9 @@ function renderTodayCard(){
   const dow=getDOW(ds), hol=isHoliday(ds);
   let rows='';
   if(shifts.length){
-    rows+=shifts.map(s=>`<span class="chip ${s.cls}">${s.range}</span>`).join('');
+    rows+=shifts.map(s=>s.type==='extra'
+      ?`<span class="chip" style="background:${s.color}1a;color:${s.color}">${esc(s.name)} ${s.range}</span>`
+      :`<span class="chip ${s.cls}">${s.range}</span>`).join('');
   }
   evs.forEach(e=>{const c=catInfo(e.category);rows+=`<span class="chip ev" style="background:${c.color}1a;color:${c.color}">${c.icon} ${esc(e.title)}${e.allDay?'':`<span class="t">${e.start||''}</span>`}</span>`;});
   if(!shifts.length&&!evs.length) rows=`<span class="tc-empty">今天沒有班，也沒有安排的行程 🌤️</span>`;
@@ -635,7 +638,9 @@ function renderGrid(){
     let inner='';
     // 至多顯示：班次(合併成一條 mini + color bars) + 事件
     const items=[];
-    shifts.forEach(s=>items.push(`<div class="mini ${s.cls}">${s.range}</div>`));
+    shifts.forEach(s=>items.push(s.type==='extra'
+      ?`<div class="mini" style="background:${s.color}1a;color:${s.color}">${esc(s.name)} ${s.range}</div>`
+      :`<div class="mini ${s.cls}">${s.range}</div>`));
     evs.forEach(e=>{const c=catInfo(e.category);const tm=e.allDay?'':(e.start||'');
       items.push(`<div class="mini ev" style="background:${c.color}1a;color:${c.color}">${tm?`<b>${tm}</b> `:''}${esc(e.title)}</div>`);});
     const shown=items.slice(0,3).join('');
@@ -704,7 +709,9 @@ function openDay(ds){
   let html='';
   html+=`<div class="sec-title">我的班</div>`;
   if(shifts.length){
-    html+=shifts.map(s=>`<div class="shift-line ${s.cls}"><span class="sl-name">${s.range}</span><span class="sl-time">${s.time}</span></div>`).join('');
+    html+=shifts.map(s=>s.type==='extra'
+      ?`<div class="shift-line" style="background:${s.color}1a"><span class="sl-name" style="color:${s.color}">${esc(s.name)}</span><span class="sl-time">${s.time}</span></div>`
+      :`<div class="shift-line ${s.cls}"><span class="sl-name">${s.range}</span><span class="sl-time">${s.time}</span></div>`).join('');
   }else{
     html+=`<div class="noshift">這天沒有排班</div>`;
   }
@@ -1128,7 +1135,7 @@ function buildMonthICS(y,m){
     for(const s of myShiftsForDate(ds)){
       L.push('BEGIN:VEVENT',`UID:${ds}-${s.name}-${s.s}@chencal`,'DTSTAMP:'+stamp,
         'DTSTART:'+_icsDT(ds,s.s),'DTEND:'+_icsDT(ds,s.e),
-        'SUMMARY:'+_icsEsc(`急診 ${s.range}`),'LOCATION:天晟醫院急診部',
+        'SUMMARY:'+_icsEsc(`急診 ${s.type==='extra'?s.name+' ':''}${s.range}`),'LOCATION:天晟醫院急診部',
         'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:上班提醒','TRIGGER:-PT60M','END:VALARM','END:VEVENT');
       cnt++;
     }
