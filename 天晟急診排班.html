@@ -1985,7 +1985,9 @@ function _generateOnce(y,m,dates){
     for(const pr of (state.preRequests[d]||[])){
       if(!pr.type.startsWith('WORK_')) continue;
       const slKey=pr.type.replace('WORK_','');
-      // 同一位醫師當日已被排入其他格（例如同日有兩筆不同班別的預班）則跳過，避免一天兩班
+      // 同一位醫師當日已被排入其他格（例如同日有兩筆不同班別的預班）則跳過，避免一天兩班。
+      // 額外班次(楊天/ICU/病房)不在此檔——那是「指定上班」，即使與預班同日也照樣套用，
+      // 只有真正跑自動排班演算法選人時(canWork/canWorkRelaxed/canWorkForce)才需要擋衝突。
       const alreadyToday=SLOTS.some(s=>newSched[d][s]===pr.docId);
       if(slKey==='CUSTOM'){
         const parsed=parseCustomShift(pr.custom);
