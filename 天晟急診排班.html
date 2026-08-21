@@ -417,18 +417,23 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="split-control" data-pwa-hide>
           <label>預設切割點：</label>
-          <span style="font-size:11px;color:#555">平日</span>
+          <span id="split-wk-lbl" style="font-size:11px;color:#555">平日</span>
           <select id="default-split" onchange="changeSplitSetting('weekday',this.value)">
             <option value="16">16:00</option><option value="17">17:00</option>
             <option value="18">18:00</option>
             <option value="20" selected>20:00</option>
           </select>
-          <span style="font-size:11px;color:#c0392b">假日</span>
+          <span id="split-hol-lbl" style="font-size:11px;color:#c0392b">假日</span>
           <select id="holiday-split" onchange="changeSplitSetting('holiday',this.value)">
             <option value="16">16:00</option><option value="17" selected>17:00</option>
             <option value="18">18:00</option>
             <option value="20">20:00</option>
           </select>
+          <label id="split-bal-lbl" style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 8px;border:1px solid #b39ddb;border-radius:12px;background:#f3e9ff;cursor:pointer;font-size:11px;color:#5e35b1;font-weight:700"
+                 title="勾選後不分平假日：每天的切割點由系統在 16/17/18/20 之間，依各醫師時數自動挑選最均衡的一個（自動排班時套用）。">
+            <input type="checkbox" id="split-balance" onchange="toggleSplitBalance(this.checked)" style="margin:0;cursor:pointer">
+            ⚖ 平均
+          </label>
         </div>
       </div>
       <div id="doc-legend"></div>
@@ -706,6 +711,11 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     </table>
     <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間。預設<strong>平日 20:00、假日 17:00</strong>（含週六日與自訂假日），可在排班表上方兩個下拉選單分別調整。單日可在「當日排班」視窗個別覆寫。
     <br>※ 唯一例外：若某人前一天上大夜、隔天接小夜，為滿足 12 小時休息，該日切割點會自動改為 20:00。</div>
+    <div class="man-note" style="border-left-color:#5e35b1"><strong>⚖ 平均（切割點自動均衡）</strong> 排班表上方切割點旁的勾選框。勾選後<strong>不分平日／假日</strong>，兩個預設下拉會變灰停用，改由系統<strong>逐日</strong>在 <strong>16:00 / 17:00 / 18:00 / 20:00</strong> 四個切點中挑一個。
+    <br>挑選依據是<strong>時數</strong>：早班＋小夜合計固定 18 小時，切割點等於把這 18 小時在兩人之間重新分配，所以系統會把切點往「離個人目標時數還差比較多的那位」偏，讓全科時數盡量拉平（個人目標＝全科平均＋時數偏好×10，仍尊重醫師設定裡的時數偏好）。
+    <br>套用時機：按「⚡ 自動排班」時計算，會連跑 3 輪讓月初、月底一起收斂。<strong>已鎖定的日子／班別、預班指定的自訂時段一律不動</strong>；「大夜隔天接小夜必須 20:00」的 12 小時休息鐵律仍優先於均衡。
+    <br>勾選後月曆每一天都會標出當天實際切點（例：<span class="badge-split">17:00切</span>），方便核對。取消勾選即恢復平日 20:00／假日 17:00 的原本規則。
+    <br>※ 與兩個下拉一樣是<strong>全域設定</strong>（跨所有月份），若已有「已完成」月份，切換時會跳出確認視窗提醒時數／點值與薪資試算會跟著變動。</div>
     <h4>月曆顏色說明</h4>
     <table class="man-tbl">
       <thead><tr><th>顏色</th><th>意義</th></tr></thead>
@@ -721,7 +731,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <div class="man-step"><div class="man-sn">2</div><div class="man-sb">在下拉選單中選擇各班別對應的醫師，或留空。</div></div>
     <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 新增醫師」填入時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）並選醫師。</div></div>
     <div class="man-step"><div class="man-sn">4</div><div class="man-sb">點「確認」儲存，系統自動存檔。</div></div>
-    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點可選 16:00 / 17:00 / 18:00 / 20:00（已取消 19:00）。</p>
+    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點可選 16:00 / 17:00 / 18:00 / 20:00（已取消 19:00）；勾選「⚖ 平均」則由系統依時數自動在這四個切點之間逐日挑選。</p>
     <h4>📌 當日備註</h4>
     <p>在「當日排班」視窗最下方有「📌 當日備註」欄，可填當日行政事務（例：晨會、器材檢查、教學活動）。填寫後月曆該日會顯示黃色備註列，滑鼠移上去可看完整內容。</p>
     <h4>🏥 楊天 / ICU / 病房（額外項目）</h4>
@@ -983,6 +993,7 @@ let state = {
   lockedSlots: new Set(), // 個別班別鎖定，key="YYYY-MM-DD|班別"，自動排班不更動該格（含保留空缺）
   defaultSplit: 20,   // 平日切割點
   holidaySplit: 17,   // 假日切割點
+  splitBalance: false, // 「平均」模式：不分平假日，切割點由 16/17/18/20 中依時數均衡自動選
   schedule: {},
   preRequests: {},
   avoidPairs: [],
@@ -1323,33 +1334,60 @@ function calcSlotPoints(slot, split, startDate){
 // Clamp split to allowed manual range (custom pre-requests may exceed this)
 function clampSplit(v){ return Math.min(20,Math.max(16,v||20)); }
 
-// 工具列兩個切割點下拉與 state 同步
+// 「平均」模式下，尚未指定切割點的日子拿來顯示/試算的中性基準（16~20 的中間值）。
+// 平均模式沒有「平日/假日預設」的概念，真正的切割點由 bestSplitForPair() 依時數逐日挑選。
+const SPLIT_BAL_BASE = 18;
+function isSplitBalance(){ return !!state.splitBalance; }
+
+// 工具列兩個切割點下拉、「平均」勾選與 state 同步
 function _syncSplitSelects(){
-  const a=document.getElementById('default-split'); if(a) a.value=state.defaultSplit;
-  const b=document.getElementById('holiday-split'); if(b) b.value=state.holidaySplit;
+  const bal=isSplitBalance();
+  const a=document.getElementById('default-split'); if(a){ a.value=state.defaultSplit; a.disabled=bal; a.style.opacity=bal?'.4':''; }
+  const b=document.getElementById('holiday-split'); if(b){ b.value=state.holidaySplit; b.disabled=bal; b.style.opacity=bal?'.4':''; }
+  const c=document.getElementById('split-balance'); if(c) c.checked=bal;
+  for(const id of ['split-wk-lbl','split-hol-lbl']){
+    const e=document.getElementById(id); if(e) e.style.opacity=bal?'.4':'';
+  }
+  const l=document.getElementById('split-bal-lbl');
+  if(l){ l.style.background=bal?'#5e35b1':'#f3e9ff'; l.style.color=bal?'#fff':'#5e35b1'; }
 }
-// 工具列「預設切割點」有守門的變更入口。
-// 這兩個設定是「全域」的（跨所有月份），會改變已完成月份的時數與點值 → 影響薪資 CSV，
+// 工具列「預設切割點」有守門的變更入口（兩個下拉 + 「平均」勾選共用）。
+// 這幾個設定都是「全域」的（跨所有月份），會改變已完成月份的時數與點值 → 影響薪資 CSV，
 // 所以不是用 blockIfCompleted() 單擋當月，而是「只要存在任何已完成月份」就列出並要求確認。
-function changeSplitSetting(which,val){
-  if(blockIfViewOnly()){ _syncSplitSelects(); return; }
-  const v=clampSplit(parseInt(val,10));
-  if(_completedMonths.size){
-    const list=[..._completedMonths].map(k=>{
-      const p=k.split('-'); return `${p[0]}年${(parseInt(p[1],10)+1)}月`;
-    }).sort().join('、');
-    const ok=confirm(
+function _splitSettingGuard(){
+  if(!_completedMonths.size) return true;
+  const list=[..._completedMonths].map(k=>{
+    const p=k.split('-'); return `${p[0]}年${(parseInt(p[1],10)+1)}月`;
+  }).sort().join('、');
+  return confirm(
       '⚠️ 「預設切割點」是全域設定，會一併改變已完成（唯讀）月份的時數與點值計算，\n'+
       '匯出的醫師時數 CSV／薪資試算也會跟著變動。\n\n'+
       '目前已完成的月份：'+list+'\n\n確定要修改嗎？'
-    );
-    if(!ok){ _syncSplitSelects(); return; }
-  }
+  );
+}
+function changeSplitSetting(which,val){
+  if(blockIfViewOnly()){ _syncSplitSelects(); return; }
+  const v=clampSplit(parseInt(val,10));
+  if(!_splitSettingGuard()){ _syncSplitSelects(); return; }
   if(which==='holiday') state.holidaySplit=v; else state.defaultSplit=v;
+  _syncSplitSelects();
   autoSave(); renderCalendar();
 }
-// 預設切割點：平日 20:00、假日 17:00（可於工具列調整）
+// 「⚖ 平均」勾選：不分平假日，每天的切割點由系統在 16/17/18/20 之間依各醫師時數均衡挑選。
+// 只影響「自動排班」與尚未指定切割點的日子；已存檔的 ds.split（含手動指定、鎖定日）不會被動到。
+function toggleSplitBalance(checked){
+  if(blockIfViewOnly()){ _syncSplitSelects(); return; }
+  if(!_splitSettingGuard()){ _syncSplitSelects(); return; }
+  state.splitBalance=!!checked;
+  _syncSplitSelects();
+  autoSave(); renderCalendar();
+  showToast(checked
+    ? '⚖ 已開啟「平均」切割點：不分平假日，下次自動排班會在 16/17/18/20 之間依時數均衡挑選。'
+    : '已關閉「平均」切割點，恢復平日／假日預設值。');
+}
+// 預設切割點：平日 20:00、假日 17:00（可於工具列調整）；平均模式不分平假日，統一用中性基準
 function defaultSplitFor(dateStr){
+  if(isSplitBalance()) return SPLIT_BAL_BASE;
   return clampSplit(isHoliday(dateStr) ? (state.holidaySplit||17) : (state.defaultSplit||20));
 }
 function getDaySplit(dateStr){
@@ -1893,7 +1931,8 @@ function computeNightQuotas(y,m,dates){
 function bestSplitForPair(earlyId, lateId, date, sched){
   const earlyDoc = earlyId ? state.doctors.find(d=>d.id===earlyId) : null;
   const lateDoc  = lateId  ? state.doctors.find(d=>d.id===lateId)  : null;
-  const dayDefault = defaultSplitFor(date); // 平日20:00 / 假日17:00
+  const bal = isSplitBalance();            // 「平均」模式：不分平假日，純靠時數決定
+  const dayDefault = defaultSplitFor(date); // 平日20:00 / 假日17:00（平均模式為中性基準 18:00）
   if(!earlyDoc && !lateDoc) return dayDefault;
 
   // Pre-check: rest constraints that depend on split
@@ -1905,6 +1944,24 @@ function bestSplitForPair(earlyId, lateId, date, sched){
   // 早班(D) starts at 08:00. If early doctor worked 小夜(D-1) ending 02:00 → rest=6h always blocked.
   // (already handled by canWork absolute prohibition — not split-dependent)
 
+  // 以下這些量與候選 sp 無關，提到迴圈外算一次（原本每個候選切點都重跑一次 avgHours/calcDocHours）
+  const avg   = avgHours(sched);
+  const dsNow = sched[date] || {};
+  const curSp = dsNow.split || dayDefault;          // 與 calcDocHours 的取法一致，勿 clamp
+  const ctE   = dsNow.customTimes && dsNow.customTimes['早班'];
+  const ctL   = dsNow.customTimes && dsNow.customTimes['小夜'];
+  const eTgt  = earlyId ? avg+(earlyDoc?.prefs.htPref||0)*10 : 0;
+  const lTgt  = lateId  ? avg+(lateDoc?.prefs.htPref||0)*10  : 0;
+  const eNow  = earlyId ? calcDocHours(earlyId,sched) : 0;   // 已含當天這一格
+  const lNow  = lateId  ? calcDocHours(lateId,sched)  : 0;
+  // 扣掉「當天這一格」目前計入的時數 → 可用候選 sp 重新投影出「排完之後」的總時數
+  const eBase = eNow - (earlyId ? (ctE?customTimeHours(ctE):slotHours('早班',curSp)) : 0);
+  const lBase = lNow - (lateId  ? (ctL?customTimeHours(ctL):slotHours('小夜',curSp)) : 0);
+
+  const longBonus = bal?20:40;  // 平均模式下減半，避免蓋過時數均衡
+  const fairW = bal?4:0.35;     // 平均模式把時數項當主角（bal 算的是「小時差距」，尺度不同）
+  const overPen = 60;
+
   let bestSp = dayDefault, bestSc = -Infinity;
   for(const sp of SPLIT_OPTS){
     const earlyH = sp - 8;   // 早班 hours
@@ -1912,15 +1969,27 @@ function bestSplitForPair(earlyId, lateId, date, sched){
     let sc = 0;
     // REST CONSTRAINT: iron rule — block splits that violate 12h rest
     if(lateNeedsMinSp20 && sp < 20){ sc -= 99999; } // 大夜→小夜 with sp<20: rest=(sp-8)<12h
-    if(sp===dayDefault) sc += 200; // 當日預設切割點(平日20/假日17)為原則，僅休息硬規則可推翻
-    // Long-shift preference
-    if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += 40;
-    if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += 40;
+    // 一般模式：當日預設切割點(平日20/假日17)為原則，僅休息硬規則可推翻。
+    // 平均模式：刻意不給預設值加分，讓 16/17/18/20 站在同一起跑線，完全由時數均衡挑選；
+    //           只留 +1 當「兩案同分」時的破平手（否則全月會一律落在最小的 16:00）。
+    if(!bal && sp===dayDefault) sc += 200;
+    if(bal && sp===SPLIT_BAL_BASE) sc += 1;
+    // Long-shift preference（平均模式下減半，避免蓋過時數均衡）
+    if(earlyDoc && earlyDoc.prefs.long && earlyH>10) sc += longBonus;
+    if(lateDoc  && lateDoc.prefs.long  && lateH>10)  sc += longBonus;
     // Hours fairness: choose split to give more hours to under-target doctor
-    const avg = avgHours(sched);
+    // （早班+小夜合計固定 18h，切割點等於把這 18h 在兩人之間重新分配 → 天生就是時數調節鈕）
     // 時數偏好說了算：切割點也朝個人目標(平均+htPref×10)分配
-    if(earlyId){ const mh=calcDocHours(earlyId,sched); const tg=avg+(earlyDoc?.prefs.htPref||0)*10; sc += (tg-mh) * earlyH * 0.35; if(mh+earlyH>tg+10) sc-=60; }
-    if(lateId) { const mh=calcDocHours(lateId,sched);  const tg=avg+(lateDoc?.prefs.htPref||0)*10;  sc += (tg-mh) * lateH  * 0.35; if(mh+lateH>tg+10)  sc-=60; }
+    if(bal){
+      // 平均模式：直接最小化「排完這一格後距離個人目標的差距」。
+      // 用絕對值而非線性加權很關鍵——線性分數對 sp 是一次函數，最佳解永遠落在 16 或 20 兩端，
+      // 中間的 17/18 幾乎選不到；改成距離後，差距小的日子就會停在 17/18。
+      if(earlyId){ const proj=eBase+(ctE?customTimeHours(ctE):earlyH); sc -= Math.abs(eTgt-proj)*fairW; }
+      if(lateId) { const proj=lBase+(ctL?customTimeHours(ctL):lateH);  sc -= Math.abs(lTgt-proj)*fairW; }
+    }else{
+      if(earlyId){ sc += (eTgt-eNow) * earlyH * fairW; if(eNow+earlyH>eTgt+10) sc-=overPen; }
+      if(lateId) { sc += (lTgt-lNow) * lateH  * fairW; if(lNow+lateH>lTgt+10)  sc-=overPen; }
+    }
     if(sc>bestSc){ bestSc=sc; bestSp=sp; }
   }
   return bestSp;
@@ -2181,17 +2250,22 @@ function _generateOnce(y,m,dates){
   _rebalanceHours(newSched,fullSched,dates);
 
   // Auto-optimize split for each day based on assigned 早班/小夜 doctors
-  for(const d of dates){
-    // Only auto-optimize if split wasn't locked by a WORK_CUSTOM pre-request
-    const hasCustomPR = (state.preRequests[d]||[]).some(pr=>{
-      if(pr.type!=='WORK_CUSTOM'||!pr.custom) return false;
-      const p=parseCustomShift(pr.custom);
-      return p&&p.split!==null;
-    });
-    // 有鎖定班別的日子也不動切割點——切割點會改變早班/小夜/大夜的起訖時間，
-    // 使用者鎖住某一格是要保住「那個人那個時段」，時間跟著被改就失去意義。
-    if(!hasCustomPR&&!LK.has(d)&&!dayHasSlotLock(d)){
-      newSched[d].split = bestSplitForPair(newSched[d]['早班'], newSched[d]['小夜'], d, newSched);
+  // 「平均」模式多跑幾輪：單輪是由前往後的貪婪，決定 1 號時月底各天還停在基準切割點，
+  // 讀到的累計時數不完整；多跑兩輪讓前段依「全月實際時數」再修一次，收斂得比較平。
+  const _splitPasses = isSplitBalance() ? 3 : 1;
+  for(let _p=0;_p<_splitPasses;_p++){
+    for(const d of dates){
+      // Only auto-optimize if split wasn't locked by a WORK_CUSTOM pre-request
+      const hasCustomPR = (state.preRequests[d]||[]).some(pr=>{
+        if(pr.type!=='WORK_CUSTOM'||!pr.custom) return false;
+        const p=parseCustomShift(pr.custom);
+        return p&&p.split!==null;
+      });
+      // 有鎖定班別的日子也不動切割點——切割點會改變早班/小夜/大夜的起訖時間，
+      // 使用者鎖住某一格是要保住「那個人那個時段」，時間跟著被改就失去意義。
+      if(!hasCustomPR&&!LK.has(d)&&!dayHasSlotLock(d)){
+        newSched[d].split = bestSplitForPair(newSched[d]['早班'], newSched[d]['小夜'], d, newSched);
+      }
     }
   }
 
@@ -2584,7 +2658,8 @@ function renderCalendar(){
     if(isManHol) badges+=`<span class="badge-hol" onclick="toggleHol('${dateStr}',event)" title="取消假日">假</span>`;
     else if(!isWknd) badges+=`<span class="badge-sethol" onclick="toggleHol('${dateStr}',event)" title="設為假日">設假</span>`;
     else badges+=`<span style="font-size:9px;color:#c0392b">${dowNames[dow]}</span>`;
-    if(split!==defaultSplitFor(dateStr)) badges+=` <span class="badge-split">${split}:00切</span>`;
+    // 平均模式沒有「當日預設」可比，每天的切割點都不一樣 → 一律標出來，主任才看得到系統怎麼切的
+    if(isSplitBalance()||split!==defaultSplitFor(dateStr)) badges+=` <span class="badge-split">${split}:00切</span>`;
     if(isDayLocked) badges+=` <span class="badge-daylock" title="當日已鎖定，自動排班不會更動（點日期格於視窗內解鎖）">🔒鎖定</span>`;
 
     cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}">${day}</span><div class="day-badges">${badges}</div></div>`;
@@ -4555,6 +4630,7 @@ function applyCloudData(data){
   // 不套用 data.year/month：檢視月份是本機視圖狀態，不隨其他裝置跳動
   state.defaultSplit=clampSplit(data.defaultSplit||20);
   state.holidaySplit=clampSplit(data.holidaySplit||17);
+  state.splitBalance=!!data.splitBalance;
   state.avoidPairs=data.avoidPairs||[];
   if(data.idCnt) _idCnt=data.idCnt;
   _lockedMonths.clear(); (data.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -4569,7 +4645,7 @@ function applyCloudData(data){
   try{ localStorage.setItem(LS_KEY,JSON.stringify({
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]
   }));}catch(e){}
 }
@@ -4582,7 +4658,7 @@ function cloudSave(){
   const data={
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,avoidPairs:state.avoidPairs||[],
     idCnt:_idCnt,lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths],_ts:Date.now(),_client:_clientId
   };
   const myTs=data._ts;
@@ -4671,7 +4747,7 @@ function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
       holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
       lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
     localStorage.setItem(LS_KEY,JSON.stringify(data));
     const ind=document.getElementById('_autosave_ind');
@@ -4694,6 +4770,7 @@ function autoLoad(){
     // 刻意不還原 d.year/d.month：開啟時一律顯示「當月」（見 window.onload 的 gotoCurrentMonth）
     state.defaultSplit=clampSplit(d.defaultSplit||20);
     state.holidaySplit=clampSplit(d.holidaySplit||17);
+    state.splitBalance=!!d.splitBalance;
     state.avoidPairs=d.avoidPairs||[];
     if(d.idCnt) _idCnt=d.idCnt;
     _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -4705,7 +4782,7 @@ function autoLoad(){
 function saveData(){
   const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -4738,6 +4815,7 @@ function loadData(){
         if(d.month!=null) state.month=d.month;
         state.defaultSplit=clampSplit(d.defaultSplit||20);
         state.holidaySplit=clampSplit(d.holidaySplit||17);
+        state.splitBalance=!!d.splitBalance;
         state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
         _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
