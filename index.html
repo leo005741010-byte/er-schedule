@@ -797,7 +797,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>總時數</td><td>六個時段總和</td></tr>
         <tr><td>點值</td><td>依時段與假日加權計算的總點數</td></tr>
         <tr><td>班數</td><td>本月上班次數（含加班）</td></tr>
-        <tr><td>轉班次</td><td>大夜↔白班轉換次數（目標 ≤ 3 次）</td></tr>
+        <tr><td>轉班次</td><td>大夜↔白班轉換次數（目標 ≤ 3 次）。<strong>中間隔了 5 天以上完全沒上班的長假就不計</strong>（例：大夜→放 5 天→白班，作息已調回來，不算轉班）</td></tr>
         <tr><td>最長連班</td><td>連續上班最多幾天</td></tr>
         <tr><td>📊 當月合計</td><td>所有醫師時數與點值加總</td></tr>
       </tbody>
@@ -1768,7 +1768,9 @@ function avgPoints(sched){
   return full.reduce((s,d)=>s+calcDocPoints(d.id,sched),0)/full.length;
 }
 
-// 取得 firstDate 之前（即上個月以前）該醫師最後上的班別，作為跨月轉班的起點
+// 取得 firstDate 之前（即上個月以前）該醫師最後上的班別，作為跨月轉班的起點。
+// 註：轉班判定 2026-08-25 起還要知道「最後出勤日」（長假不算轉班），各計算點已改為
+// 直接呼叫 getLastAssigned 取 {slot,date}，此函式暫留備用（目前無呼叫點）。
 function lastSlotBefore(docId, firstDate){
   // 改走 getLastAssigned 的 45 天回掃（原寫法掃整份歷史，且此函式位於轉班數模擬的熱路徑）。
   // 45 天以上沒上班者視為無前班，跨這麼久也不該算轉班。
@@ -1776,20 +1778,40 @@ function lastSlotBefore(docId, firstDate){
   return last?last.slot:null;
 }
 
+// 轉班＝大夜↔白班（主白/早班）的班別翻轉。**但中間隔了一段長假就不算**（2026-08-25 使用者定義）：
+// 例如大夜之後連放 5 天以上再上白班，作息早就調回來了，不該再計為一次轉班。
+// LONG_BREAK_DAYS=5 → 前後兩次「出勤日」的日期差 > 5（中間至少 5 個整天完全沒班）即視為長假。
+// 出勤日含手動指定的額外班次(楊天/ICU/病房)——那天人有來，長假就被打斷。
+const LONG_BREAK_DAYS=5;
+function _dayGap(fromDate,toDate){
+  const p=x=>{const[y,m,d]=x.split('-').map(Number);return Date.UTC(y,m-1,d);};
+  return Math.round((p(toDate)-p(fromDate))/86400000);
+}
+function isTurnover(prevSlot,prevWorkDate,curSlot,curDate){
+  if(!prevSlot) return false;
+  const flip=(prevSlot==='大夜'&&(curSlot==='主白'||curSlot==='早班'))||
+             ((prevSlot==='主白'||prevSlot==='早班')&&curSlot==='大夜');
+  if(!flip) return false;
+  if(prevWorkDate&&curDate&&_dayGap(prevWorkDate,curDate)>LONG_BREAK_DAYS) return false; // 長假隔開 → 不算
+  return true;
+}
+
 function countTurnovers(docId, sched){
   const keys=Object.keys(sched).sort();
-  let count=0, lastSlot=keys.length?lastSlotBefore(docId,keys[0]):null; // 含上月月底的班
+  // 含上月月底的班：slot 為最後一次「主要班別」，date 為最後一次出勤日（可能是額外班次）
+  const prev=keys.length?getLastAssigned(docId,keys[0],state.schedule):null;
+  let count=0, lastSlot=prev?prev.slot:null, lastWork=prev?prev.date:null;
   for(const d of keys){
     const ds=sched[d]||{};
+    let worked=false;
     for(const sl of SLOTS){
       if(ds[sl]===docId){
-        if(lastSlot&&(
-          (lastSlot==='大夜'&&(sl==='主白'||sl==='早班'))||
-          ((lastSlot==='主白'||lastSlot==='早班')&&sl==='大夜')
-        )) count++;
-        lastSlot=sl;
+        if(isTurnover(lastSlot,lastWork,sl,d)) count++;
+        lastSlot=sl; lastWork=d; worked=true;
       }
     }
+    // 額外班次不是主要班別、不參與轉班判定，但那天有出勤 → 打斷長假
+    if(!worked&&(ds.extras||[]).some(e=>e.docId===docId)) lastWork=d;
   }
   return count;
 }
@@ -2502,7 +2524,10 @@ function evaluateSchedule(sched,dates){
   let empty=0;
   for(const d of dates){const ds=sched[d]||{};for(const sl of SLOTS)if(!ds[sl])empty++;}
   const perDoc={};
-  for(const doc of full) perDoc[doc.id]={h:0,p:0,turn:0,lastSlot:lastSlotBefore(doc.id,dates[0]),consec:0,consecMax:0};
+  for(const doc of full){
+    const prev=getLastAssigned(doc.id,dates[0],state.schedule); // 跨月起點：上月最後的班與出勤日
+    perDoc[doc.id]={h:0,p:0,turn:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consec:0,consecMax:0};
+  }
   for(const d of dates){
     const ds=sched[d]||{};
     const sp=ds.split||defaultSplitFor(d);
@@ -2515,9 +2540,11 @@ function evaluateSchedule(sched,dates){
         const ct=ds.customTimes&&ds.customTimes[sl];
         rec.h+=ct?customTimeHours(ct):slotHours(sl,sp);
         rec.p+=ct?calcCustomPoints(ct,d):calcSlotPoints(sl,sp,d);
-        if(rec.lastSlot&&((rec.lastSlot==='大夜'&&(sl==='主白'||sl==='早班'))||((rec.lastSlot==='主白'||rec.lastSlot==='早班')&&sl==='大夜'))) rec.turn++;
-        rec.lastSlot=sl;
+        if(isTurnover(rec.lastSlot,rec.lastWork,sl,d)) rec.turn++;
+        rec.lastSlot=sl; rec.lastWork=d;
       }
+      // 額外班次不計連班天數(worked 不動)，但算出勤日 → 打斷長假
+      if(!worked&&(ds.extras||[]).some(e=>e.docId===doc.id)) rec.lastWork=d;
       if(worked){rec.consec++;rec.consecMax=Math.max(rec.consecMax,rec.consec);}
       else rec.consec=0;
     }
@@ -3831,7 +3858,8 @@ function renderStats(){
   const dates=monthDates(_statsYear,_statsMonth);
   const st={};
   for(const doc of state.doctors){
-    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:lastSlotBefore(doc.id,dates[0]),consecMax:0};
+    const prev=getLastAssigned(doc.id,dates[0],state.schedule);
+    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
   }
 
   for(const dateStr of dates){
@@ -3854,16 +3882,14 @@ function renderStats(){
         _addZone(s,sh,eh,dateStr);
         s.pts+=calcSlotPoints(slot,sp,dateStr);
       }
-      // 轉班: 大夜→白班 或 白班→大夜
-      if(s.lastSlot){
-        if((s.lastSlot==='大夜'&&(slot==='主白'||slot==='早班'))||
-           ((s.lastSlot==='主白'||s.lastSlot==='早班')&&slot==='大夜')) s.shifts++;
-      }
-      s.lastSlot=slot;
+      // 轉班: 大夜→白班 或 白班→大夜（中間放 5 天以上長假者不計）
+      if(isTurnover(s.lastSlot,s.lastWork,slot,dateStr)) s.shifts++;
+      s.lastSlot=slot; s.lastWork=dateStr;
     }
     // Extra doctors
     for(const ex of (ds.extras||[])){
       if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
+      st[ex.docId].lastWork=dateStr; // 額外班次也是出勤日，會打斷「長假」（轉班判定用）
       if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計點值與總時數
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
@@ -4983,7 +5009,10 @@ function generatePDF(){
 
   // --- 統計報表（複製 renderStats 計算邏輯）---
   const st={};
-  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:lastSlotBefore(doc.id,dates[0]),consecMax:0};
+  for(const doc of state.doctors){
+    const prev=getLastAssigned(doc.id,dates[0],state.schedule);
+    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
+  }
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
     const sp=ds.split||defaultSplitFor(dateStr);
@@ -5000,11 +5029,12 @@ function generatePDF(){
         const{s:sh,e:eh}=slotRange(slot,sp);
         _addZone(s,sh,eh,dateStr); s.pts+=calcSlotPoints(slot,sp,dateStr);
       }
-      if(s.lastSlot&&((s.lastSlot==='大夜'&&(slot==='主白'||slot==='早班'))||((s.lastSlot==='主白'||s.lastSlot==='早班')&&slot==='大夜'))) s.shifts++;
-      s.lastSlot=slot;
+      if(isTurnover(s.lastSlot,s.lastWork,slot,dateStr)) s.shifts++;
+      s.lastSlot=slot; s.lastWork=dateStr;
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
+      st[ex.docId].lastWork=dateStr; // 額外班次也是出勤日，會打斷「長假」（轉班判定用）
       if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計點值與總時數
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
