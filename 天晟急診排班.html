@@ -709,12 +709,12 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td><span class="man-badge mb-大夜">大夜</span></td><td>20:00 – 08:00</td><td>12 小時（固定）</td></tr>
       </tbody>
     </table>
-    <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間。預設<strong>平日 20:00、假日 17:00</strong>（含週六日與自訂假日），可在排班表上方兩個下拉選單分別調整。單日可在「當日排班」視窗個別覆寫。
+    <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間。預設<strong>平日 20:00、假日 17:00</strong>（含週六日與自訂假日），可在排班表上方兩個下拉選單分別調整（全域）。單日若要調整，請在「當日排班」視窗直接修改該班別的<strong>時間欄（HH-HH）</strong>覆寫起訖時間。
     <br>※ 唯一例外：若某人前一天上大夜、隔天接小夜，為滿足 12 小時休息，該日切割點會自動改為 20:00。</div>
     <div class="man-note" style="border-left-color:#5e35b1"><strong>⚖ 平均（切割點自動均衡）</strong> 排班表上方切割點旁的勾選框。勾選後<strong>不分平日／假日</strong>，兩個預設下拉會變灰停用，改由系統<strong>逐日</strong>在 <strong>16:00 / 17:00 / 18:00 / 20:00</strong> 四個切點中挑一個。
     <br>挑選依據是<strong>時數</strong>：早班＋小夜合計固定 18 小時，切割點等於把這 18 小時在兩人之間重新分配，所以系統會把切點往「離個人目標時數還差比較多的那位」偏，讓全科時數盡量拉平（個人目標＝全科平均＋時數偏好×10，仍尊重醫師設定裡的時數偏好）。
     <br>套用時機：按「⚡ 自動排班」時計算，會連跑 3 輪讓月初、月底一起收斂。<strong>已鎖定的日子／班別、預班指定的自訂時段一律不動</strong>；「大夜隔天接小夜必須 20:00」的 12 小時休息鐵律仍優先於均衡。
-    <br>每天實際的切點不再標在月曆格上（畫面較清爽），要核對或修改請點進「當日排班」視窗，內有「當日切割點」下拉；切點造成的時間變化仍會直接反映在月曆每格顯示的班別起訖時間。取消勾選即恢復平日 20:00／假日 17:00 的原本規則。
+    <br>每天實際的切點不會另外標示（畫面較清爽），要核對請直接看月曆每格顯示的班別起訖時間（例：早班 08:00-17:00 即代表當天切在 17:00）。取消勾選即恢復平日 20:00／假日 17:00 的原本規則。
     <br>※ 與兩個下拉一樣是<strong>全域設定</strong>（跨所有月份），若已有「已完成」月份，切換時會跳出確認視窗提醒時數／點值與薪資試算會跟著變動。</div>
     <h4>月曆顏色說明</h4>
     <table class="man-tbl">
@@ -2970,12 +2970,6 @@ function _renderDayDraft(){
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
     <button onclick="_draftToggleLock()" style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:12px;font-weight:700;color:#fff;background:${ds.locked?'#d4a017':'#8a9199'}">${ds.locked?'🔒 已鎖定（點擊解鎖）':'🔓 鎖定此日'}</button>
   </div>
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px">
-    <strong>當日切割點：</strong>
-    <select onchange="_draftSplit(parseInt(this.value))" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px">
-      ${SPLIT_OPTS.map(h=>`<option value="${h}"${h===sp?' selected':''}>${h}:00</option>`).join('')}
-    </select>
-  </div>
   <table class="day-slot-table">
   <thead><tr><th>班別</th><th>時間 <span style="font-size:10px;color:#999">(HH-HH)</span></th><th>時數</th><th>點值</th><th>指派醫師</th><th title="鎖定單一班別：自動排班不會更動這一格">鎖定</th></tr></thead><tbody>`;
 
@@ -3058,6 +3052,7 @@ function _draftToggleSlotLock(slot){
   b.title=on?`${slot} 已鎖定，自動排班不會更動這一格（點擊解鎖）`:`鎖定 ${slot}，自動排班不會更動這一格`;
 }
 function _draftNote(val){ if(_dayDraft) _dayDraft.note=val; }
+// 註：當日排班視窗的「當日切割點」下拉已於 2026-08-25 應要求移除，此函式暫留備用（目前無呼叫點）。
 function _draftSplit(val){ _dayDraft.split=val; _renderDayDraft(); }
 function _draftSlot(slot,docId){ _dayDraft[slot]=docId||null; }
 function _draftSlotTime(slot,val){
