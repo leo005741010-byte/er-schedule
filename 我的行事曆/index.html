@@ -289,7 +289,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   <div id="monthview">
     <div class="cal">
       <div class="dowrow">
-        <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div class="we">六</div><div class="we">日</div>
+        <div class="we">日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div class="we">六</div>
       </div>
       <div class="grid" id="grid"></div>
     </div>
@@ -626,7 +626,7 @@ function renderGrid(){
   document.getElementById('listview').classList.remove('show');
   const grid=document.getElementById('grid');
   const dates=[];for(let d=1;d<=daysInMonth(viewY,viewM);d++)dates.push(fmtDate(viewY,viewM,d));
-  const firstDow=getDOW(dates[0]);
+  const firstDow=(getDOW(dates[0])+1)%7; // 週日起始：Mon=0..Sun=6 → 週日排第一格
   const today=todayStr();
   let html='';
   for(let i=0;i<firstDow;i++) html+='<div class="cell pad"></div>';
