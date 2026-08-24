@@ -714,7 +714,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <div class="man-note" style="border-left-color:#5e35b1"><strong>⚖ 平均（切割點自動均衡）</strong> 排班表上方切割點旁的勾選框。勾選後<strong>不分平日／假日</strong>，兩個預設下拉會變灰停用，改由系統<strong>逐日</strong>在 <strong>16:00 / 17:00 / 18:00 / 20:00</strong> 四個切點中挑一個。
     <br>挑選依據是<strong>時數</strong>：早班＋小夜合計固定 18 小時，切割點等於把這 18 小時在兩人之間重新分配，所以系統會把切點往「離個人目標時數還差比較多的那位」偏，讓全科時數盡量拉平（個人目標＝全科平均＋時數偏好×10，仍尊重醫師設定裡的時數偏好）。
     <br>套用時機：按「⚡ 自動排班」時計算，會連跑 3 輪讓月初、月底一起收斂。<strong>已鎖定的日子／班別、預班指定的自訂時段一律不動</strong>；「大夜隔天接小夜必須 20:00」的 12 小時休息鐵律仍優先於均衡。
-    <br>勾選後月曆每一天都會標出當天實際切點（例：<span class="badge-split">17:00切</span>），方便核對。取消勾選即恢復平日 20:00／假日 17:00 的原本規則。
+    <br>每天實際的切點不再標在月曆格上（畫面較清爽），要核對或修改請點進「當日排班」視窗，內有「當日切割點」下拉；切點造成的時間變化仍會直接反映在月曆每格顯示的班別起訖時間。取消勾選即恢復平日 20:00／假日 17:00 的原本規則。
     <br>※ 與兩個下拉一樣是<strong>全域設定</strong>（跨所有月份），若已有「已完成」月份，切換時會跳出確認視窗提醒時數／點值與薪資試算會跟著變動。</div>
     <h4>月曆顏色說明</h4>
     <table class="man-tbl">
@@ -1245,6 +1245,12 @@ function getDOW(dateStr){
   const raw=new Date(Date.UTC(y,mo-1,d)).getUTCDay();
   return (raw+6)%7; // Mon=0 ... Sun=6
 }
+// 月曆「顯示層」的一週起始＝週日（常見月曆格式）。
+// getDOW 仍維持 Mon=0…Sun=6（排班邏輯、假日判斷 dow>=5 全都依賴它，勿改）；
+// 這裡只把畫格子的欄位順序往後推一格，週日排到第 0 欄。
+const CAL_WEEK_LABELS=['日','一','二','三','四','五','六'];
+const calIsWeekendCol=i=>(i===0||i===6);          // 第 0 欄=週日、第 6 欄=週六
+function calLeadBlanks(dateStr){ return (getDOW(dateStr)+1)%7; } // 月初前面要留幾個空格
 function addDays(dateStr,n){
   const[y,mo,d]=dateStr.split('-').map(Number);
   const dt=new Date(Date.UTC(y,mo-1,d));
@@ -2625,16 +2631,15 @@ function renderCalendar(){
   const grid=document.getElementById('calendar-grid');
   grid.innerHTML='';
 
-  const weekLabels=['一','二','三','四','五','六','日'];
-  weekLabels.forEach((w,i)=>{
+  CAL_WEEK_LABELS.forEach((w,i)=>{
     const h=document.createElement('div');
-    h.className='cal-weekday'+(i>=5?' weekend':'');
+    h.className='cal-weekday'+(calIsWeekendCol(i)?' weekend':'');
     h.textContent=w;
     grid.appendChild(h);
   });
 
-  const firstDOW=getDOW(fmtDate(y,m,1));
-  for(let i=0;i<firstDOW;i++){
+  const lead=calLeadBlanks(fmtDate(y,m,1));
+  for(let i=0;i<lead;i++){
     const e=document.createElement('div');e.className='cal-day empty';grid.appendChild(e);
   }
 
@@ -2651,15 +2656,13 @@ function renderCalendar(){
     const cell=document.createElement('div');
     cell.className='cal-day'+(isHol?' holiday':'')+(isToday?' today':'')+(isDayLocked?' day-locked':'');
 
-    const split=getDaySplit(dateStr);
     const dowNames=['一','二','三','四','五','六','日'];
     let badges='';
     if(isToday) badges+=`<span class="badge-today">今天</span>`;
     if(isManHol) badges+=`<span class="badge-hol" onclick="toggleHol('${dateStr}',event)" title="取消假日">假</span>`;
     else if(!isWknd) badges+=`<span class="badge-sethol" onclick="toggleHol('${dateStr}',event)" title="設為假日">設假</span>`;
     else badges+=`<span style="font-size:9px;color:#c0392b">${dowNames[dow]}</span>`;
-    // 平均模式沒有「當日預設」可比，每天的切割點都不一樣 → 一律標出來，主任才看得到系統怎麼切的
-    if(isSplitBalance()||split!==defaultSplitFor(dateStr)) badges+=` <span class="badge-split">${split}:00切</span>`;
+    // （切割點徽章已應使用者要求不在月曆格上顯示，改到「當日排班」視窗內查看／修改）
     if(isDayLocked) badges+=` <span class="badge-daylock" title="當日已鎖定，自動排班不會更動（點日期格於視窗內解鎖）">🔒鎖定</span>`;
 
     cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}">${day}</span><div class="day-badges">${badges}</div></div>`;
@@ -3514,9 +3517,8 @@ function renderPRCal(){
   const days=daysInMonth(year,month);
   const firstDOW=getDOW(fmtDate(year,month,1));
 
-  const hdrs=['一','二','三','四','五','六','日'];
-  let html=hdrs.map((h,i)=>`<div class="pr-cal-hd${i>=5?' wknd':''}">${h}</div>`).join('');
-  for(let i=0;i<firstDOW;i++) html+='<div></div>';
+  let html=CAL_WEEK_LABELS.map((h,i)=>`<div class="pr-cal-hd${calIsWeekendCol(i)?' wknd':''}">${h}</div>`).join('');
+  for(let i=0;i<(firstDOW+1)%7;i++) html+='<div></div>';
 
   for(let d=1;d<=days;d++){
     const ds=fmtDate(year,month,d);
@@ -4941,11 +4943,10 @@ function generatePDF(){
     {slot:'小夜',label:'晚',ts:'background:#e3f2fd;color:#1565c0;border:1px solid #90caf9'},
     {slot:'大夜',label:'大',ts:'background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8'},
   ];
-  const wdHeaders=['一','二','三','四','五','六','日'].map((d,i)=>
-    `<div style="background:${i>=5?'#c0392b':'#1a4a7a'};color:#fff;text-align:center;padding:4px 2px;font-weight:700;font-size:10px;border-radius:2px;">${d}</div>`
+  const wdHeaders=CAL_WEEK_LABELS.map((d,i)=>
+    `<div style="background:${calIsWeekendCol(i)?'#c0392b':'#1a4a7a'};color:#fff;text-align:center;padding:4px 2px;font-weight:700;font-size:10px;border-radius:2px;">${d}</div>`
   ).join('');
-  const firstDow=getDOW(dates[0]);
-  let calCells=Array(firstDow).fill('<div></div>').join('');
+  let calCells=Array(calLeadBlanks(dates[0])).fill('<div></div>').join('');
   for(const d of dates){
     const ds=state.schedule[d]||{};
     const sp=ds.split||defaultSplitFor(d);
@@ -5149,11 +5150,9 @@ function generateMedPDF(){
   };
 
   // 假日顏色：週六日用淡青色 (同原始文件 D7FFFF)
-  const DOW_LABEL=['一','二','三','四','五','六','日'];
-  const wdHdr=DOW_LABEL.map((d,i)=>`<div class="wh${i>=5?' wknd':''}">${d}</div>`).join('');
+  const wdHdr=CAL_WEEK_LABELS.map((d,i)=>`<div class="wh${calIsWeekendCol(i)?' wknd':''}">${d}</div>`).join('');
 
-  const firstDow=getDOW(dates[0]);
-  let cells=Array(firstDow).fill('<div class="dc empty"></div>').join('');
+  let cells=Array(calLeadBlanks(dates[0])).fill('<div class="dc empty"></div>').join('');
 
   for(const d of dates){
     const ds=state.schedule[d]||{};
