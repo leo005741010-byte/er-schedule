@@ -571,7 +571,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
             <th rowspan="2" style="background:#00838f">ICU點值</th>
             <th rowspan="2">急診總時數</th>
             <th rowspan="2">總點值</th>
-            <th rowspan="2">班數</th>
+            <th rowspan="2">急診總班數</th>
             <th rowspan="2">轉班次</th>
             <th rowspan="2">最長連班</th>
           </tr>
@@ -800,7 +800,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>ICU點值</td><td><strong>2026 年 10 月起</strong>，額外班次類型選「ICU」者每班固定 2 點，本欄為當月 ICU 點數小計（9 月以前一律 0）</td></tr>
         <tr><td>急診總時數</td><td>左邊六個時段總和（ICU／楊天／病房的時數不計入）</td></tr>
         <tr><td>總點值</td><td>依時段與假日加權計算的點數，<strong>已含左欄 ICU 點值</strong>。匯出的醫師時數 CSV 的「點值」欄同樣已含 ICU，另有一欄「其中ICU點」可對帳。</td></tr>
-        <tr><td>班數</td><td>本月上班次數（含加班）</td></tr>
+        <tr><td>急診總班數</td><td>本月急診上班次數：四個主要班別＋「一般加班（中天）」；<strong>ICU／楊天／病房不計入</strong></td></tr>
         <tr><td>轉班次</td><td>大夜↔白班轉換次數（目標 ≤ 3 次）。<strong>中間隔了 5 天以上完全沒上班的長假就不計</strong>（例：大夜→放 5 天→白班，作息已調回來，不算轉班）</td></tr>
         <tr><td>最長連班</td><td>連續上班最多幾天</td></tr>
         <tr><td>📊 當月合計</td><td>所有醫師時數與點值加總（含 ICU 點值合計）</td></tr>
@@ -5180,7 +5180,7 @@ function generatePDF(){
       <th colspan="2" style="background:#1565c0">08:00–16:00</th>
       <th colspan="2" style="background:#00695c">16:00–02:00</th>
       <th colspan="2" style="background:#4527a0">02:00–08:00</th>
-      <th rowspan="2">ICU點值</th><th rowspan="2">急診總時數</th><th rowspan="2">總點值</th><th rowspan="2">班數</th><th rowspan="2">轉班次</th><th rowspan="2">最長連班</th>
+      <th rowspan="2">ICU點值</th><th rowspan="2">急診總時數</th><th rowspan="2">總點值</th><th rowspan="2">急診總班數</th><th rowspan="2">轉班次</th><th rowspan="2">最長連班</th>
     </tr>
     <tr>
       <th class="sub-th" style="background:#bbdefb;color:#0d47a1">平日H</th><th class="sub-th" style="background:#ffe0b2;color:#bf360c">假日H</th>
