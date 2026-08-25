@@ -589,6 +589,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <div style="margin-top:8px;background:#f8fafc;border:1px solid #e3e8ef;border-radius:6px;padding:8px 12px;font-size:12px;color:#445">
       <strong style="color:#1a4a7a">點值說明（每小時）：</strong>
       08-16 平日 <b>1</b> ／ 假日 <b>1.2</b>　｜　16-02 平日 <b>1.2</b> ／ 假日 <b>1.4</b>　｜　02-08 平日 <b>1.6</b> ／ 假日 <b>1.8</b>
+      <div style="margin-top:4px;color:#00838f"><strong>ICU 加點：</strong>2026 年 10 月起，額外班次類型選「ICU」者每班固定 <b>2 點</b>（時數仍不計入總時數，點值已併入上表「點值」欄與匯出的醫師時數 CSV）。</div>
     </div>
     <div id="stats-special" style="margin-top:10px;"></div>
     <div id="stats-violations" style="margin-top:10px;"></div>
@@ -761,6 +762,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>時數偏好</td><td><strong>僅 +1 / 0 / -1</strong>（每級 10 小時），目標＝全體平均 ± 10h；避免醫師間時數差距過大</td></tr>
         <tr><td>連班上限</td><td>連續上班天數最大值，超過觸發違規警告</td></tr>
         <tr><td>不排白班</td><td>勾選後僅排小夜或大夜</td></tr>
+        <tr><td>可 N OFF D</td><td>解除該醫師的「大夜 → 休一天 → 白班」禁令。<strong>不勾（預設）</strong>＝維持鐵律，自動排班不會排、手動排到會列入違規事項；<strong>勾選</strong>＝允許這樣接班，也不再報違規。12 小時休息與其他規則不受影響。</td></tr>
         <tr><td>醫務會議</td><td><strong>強制</strong>每月至少排一個週四主白/早班供簽到（僅在整月週四皆預假/鎖定時例外，統計會警告）</td></tr>
         <tr><td>晨會報告</td><td>系統確認報告週四當天有主白/早班，或前天有大夜</td></tr>
       </tbody>
@@ -775,7 +777,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
       <li><strong>預假</strong>：選擇醫師、假別（特休/事假/病假…）、日期 → 新增預假</li>
       <li><strong>預班</strong>：選擇醫師、指定班別、日期 → 新增預班</li>
     </ul>
-    <div class="man-note warn"><strong>⚠ 注意</strong> 預假與預班只在「自動排班」時自動套用，手動修改不受限制。</div>
+    <div class="man-note warn"><strong>⚠ 注意</strong> 預假與預班只在「自動排班」時自動套用；手動改班仍然改得動（不會被擋），但只要把有預假的醫師排上去，存檔時會跳提示，統計報表的紅色「違規事項」也會列出來。</div>
   </div>
 
   <!-- 6 假日設定 -->
@@ -795,14 +797,14 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>16-02 平/假</td><td>16:00–02:00 時段的平日/假日時數</td></tr>
         <tr><td>02-08 平/假</td><td>02:00–08:00 時段的平日/假日時數</td></tr>
         <tr><td>總時數</td><td>六個時段總和</td></tr>
-        <tr><td>點值</td><td>依時段與假日加權計算的總點數</td></tr>
+        <tr><td>點值</td><td>依時段與假日加權計算的總點數。<strong>2026 年 10 月起另含 ICU 加點</strong>：額外班次類型選「ICU」者每班固定 2 點（時數仍不計入總時數），該欄下方會標「含ICU ○」，匯出的醫師時數 CSV 也已含在點值內、並多一欄「其中ICU點」。</td></tr>
         <tr><td>班數</td><td>本月上班次數（含加班）</td></tr>
         <tr><td>轉班次</td><td>大夜↔白班轉換次數（目標 ≤ 3 次）。<strong>中間隔了 5 天以上完全沒上班的長假就不計</strong>（例：大夜→放 5 天→白班，作息已調回來，不算轉班）</td></tr>
         <tr><td>最長連班</td><td>連續上班最多幾天</td></tr>
         <tr><td>📊 當月合計</td><td>所有醫師時數與點值加總</td></tr>
       </tbody>
     </table>
-    <p>統計頁下方顯示違規事項（連班超標、時數不足、醫務會議無法出席等）。</p>
+    <p>統計頁下方顯示違規事項（連班超標、時數不足、醫務會議無法出席等）。<strong>手動改班若把有預假的醫師排上去，也會列在紅色「違規事項」</strong>（存檔當下也會跳提示）。</p>
   </div>
 
   <!-- 8 自動排班 -->
@@ -955,6 +957,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <div class="check-row"><input type="checkbox" id="pref-noday"><label for="pref-noday">不排白班 (不排主白/早班，僅排小夜/大夜)</label></div>
     <div class="check-row" id="wknight-row" style="display:none"><input type="checkbox" id="pref-wknight"><label for="pref-wknight">僅周五六可夜班 (20-08大夜嚴格鎖定，其餘日子不排) ─ 僅陳孝綱適用</label></div>
     <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">大夜班集中 (大夜盡量連上，避免上1休1上1)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-noffd"><label for="pref-noffd">可 N OFF D (大夜休一天即可接白班；不勾＝維持「大夜→OFF→白班」禁令)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-morningReport"><label for="pref-morningReport">晨會報告 (第1、3週四08:00，需排主白/早班或週三大夜)</label></div>
     <div class="modal-actions">
@@ -1226,7 +1229,8 @@ function changeStatsMonth(delta){ setViewMonth(_statsYear, _statsMonth+delta); }
 
 function defPrefs(){
   return {'白班':0,'小夜':0,'大夜':0,hol:0,htPref:0,maxConsec:6,
-          long:false,wkNight:false,cluster:false,noDay:false,noNight:false,medMeeting:false,morningReport:false};
+          long:false,wkNight:false,cluster:false,noDay:false,noNight:false,medMeeting:false,morningReport:false,
+          nOffD:false}; // nOffD=可 N-OFF-D（大夜休一天就能接白班），預設 false＝維持原禁令
 }
 // Map a slot to its preference category
 function slotPrefKey(slot){
@@ -1294,6 +1298,13 @@ function kindInfo(v){ return EXTRA_KINDS.find(k=>k.v===(v||''))||EXTRA_KINDS[0];
 function isSpecialKind(v){ return v==='yangtian'||v==='icu'||v==='ward'; }
 // 僅特殊類型（楊天/ICU/病房）供統計用
 const SPECIAL_KINDS = EXTRA_KINDS.filter(k=>k.v);
+// ICU 班點值（2026-08-25 新增）：2026-10 起，額外班次類型選「ICU」者每班固定給 2 點。
+// 時數仍不計入總時數（維持原設計），但點值「併入」統計報表的點值欄與醫師時數 CSV（薪資系統直接吃）。
+// 日期字串為 YYYY-MM-DD，字典序比較即等同時間先後。
+const ICU_POINT_START='2026-10-01', ICU_SHIFT_POINTS=2;
+function icuPointsFor(ex,dateStr){
+  return (ex&&ex.kind==='icu'&&ex.docId&&dateStr>=ICU_POINT_START)?ICU_SHIFT_POINTS:0;
+}
 
 function slotRange(slot, split){
   switch(slot){
@@ -1523,7 +1534,7 @@ function canWork(docId, date, slot, sched){
     const endDate2=endH<=24?date:addDays(date,1);
     if(hoursBetween(endDate2,endH%24,nextExtra.date,nextExtra.startHour)<12) return false;
   }
-  if(slot==='主白'||slot==='早班'){
+  if((slot==='主白'||slot==='早班')&&!doc.prefs.nOffD){ // 勾「可 N OFF D」者解除此限制
     const d2=addDays(date,-2), d1=addDays(date,-1);
     const s2=sched[d2]||{}, s1=sched[d1]||{};
     if(s2['大夜']===docId && !SLOTS.some(s=>s1[s]===docId)) return false;
@@ -1555,10 +1566,10 @@ function canWork(docId, date, slot, sched){
     if(tds['主白']===docId||tds['早班']===docId) return false;
     // 大夜(D)→小夜(D+1): rest = nextSp-8. Need ≥12 → nextSp≥20.
     if(tds['小夜']===docId&&clampSplit(tds.split||defaultSplitFor(td))<20) return false;
-    // N-OFF-D forward: 大夜→OFF→主白/早班 two days later
+    // N-OFF-D forward: 大夜→OFF→主白/早班 two days later（勾「可 N OFF D」者解除）
     const d2=addDays(date,2);
     const td1Worked=SLOTS.some(s=>tds[s]===docId);
-    if(!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+    if(!doc.prefs.nOffD&&!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
   // 小夜 ends at 02:00 next day — must not have 主白/早班(starts 08:00) next day (6h rest)
   if(slot==='小夜'){
@@ -1627,7 +1638,7 @@ function canWorkRelaxed(docId, date, slot, sched){
     if(tds['小夜']===docId&&clampSplit(tds.split||defaultSplitFor(td))<20) return false;
     const d2=addDays(date,2);
     const td1Worked=SLOTS.some(s=>tds[s]===docId);
-    if(!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+    if(!doc.prefs.nOffD&&!td1Worked&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
   if(slot==='小夜'){
     const td=addDays(date,1);
@@ -1688,7 +1699,7 @@ function canWorkForce(docId, date, slot, sched){
     if(tds['主白']===docId||tds['早班']===docId) return false;
     if(tds['小夜']===docId&&clampSplit(tds.split||defaultSplitFor(td))<20) return false;
     const d2=addDays(date,2);
-    if(!SLOTS.some(s=>tds[s]===docId)&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
+    if(!doc.prefs.nOffD&&!SLOTS.some(s=>tds[s]===docId)&&((sched[d2]||{})['主白']===docId||(sched[d2]||{})['早班']===docId)) return false;
   }
   if(slot==='小夜'){
     const td=addDays(date,1); const tds=sched[td]||{};
@@ -2416,7 +2427,9 @@ function _removeRestViolations(newSched,dates){
         if(ds1['主白']===did&&!isSlotLocked(d1,'主白')){newSched[d1]['主白']=null;removed++;}
         if(ds1['早班']===did&&!isSlotLocked(d1,'早班')){newSched[d1]['早班']=null;removed++;}
       }
-      if(!SLOTS.some(s=>ds1[s]===did)){
+      // N-OFF-D：勾「可 N OFF D」的醫師不算違規，別把他隔天休完接的白班拆掉
+      const _ndDoc=state.doctors.find(x=>x.id===did);
+      if(!(_ndDoc&&_ndDoc.prefs.nOffD)&&!SLOTS.some(s=>ds1[s]===did)){
         const d2=addDays(d,2); const ds2=newSched[d2]||{};
         if(!LK.has(d2)){
           if(ds2['主白']===did&&!isSlotLocked(d2,'主白')){newSched[d2]['主白']=null;removed++;}
@@ -2998,7 +3011,7 @@ function _renderDayDraft(){
     <button onclick="_draftToggleLock()" style="padding:5px 14px;border-radius:5px;border:none;cursor:pointer;font-size:12px;font-weight:700;color:#fff;background:${ds.locked?'#d4a017':'#8a9199'}">${ds.locked?'🔒 已鎖定（點擊解鎖）':'🔓 鎖定此日'}</button>
   </div>
   <table class="day-slot-table">
-  <thead><tr><th>班別</th><th>時間 <span style="font-size:10px;color:#999">(HH-HH)</span></th><th>時數</th><th>點值</th><th>指派醫師</th><th title="鎖定單一班別：自動排班不會更動這一格">鎖定</th></tr></thead><tbody>`;
+  <thead><tr><th>時間 <span style="font-size:10px;color:#999">(HH-HH)</span></th><th>時數</th><th>點值</th><th>指派醫師</th><th title="鎖定單一班別：自動排班不會更動這一格">鎖定</th></tr></thead><tbody>`;
 
   for(const slot of SLOTS){
     const ct=customTimes[slot];
@@ -3008,18 +3021,16 @@ function _renderDayDraft(){
     const docId=ds[slot];
     const opts=`<option value=""${!docId?' selected':''}>-- 空缺 --</option>`+
       docsOrdered().map(doc=>`<option value="${doc.id}"${doc.id===docId?' selected':''}>${doc.name}${doc.type==='part'?'(兼)':''}</option>`).join('');
-    const barColor={'主白':'#e65100','早班':'#2e7d32','小夜':'#1565c0','大夜':'#6a1b9a'}[slot];
     const slotLk=ds.lockedSlots&&ds.lockedSlots.has(slot);
+    // 2026-08-25 使用者要求：不顯示班別欄與色塊，也不因自訂時間而變色，只留時間本身
     html+=`<tr>
-      <td><span style="display:inline-block;width:22px;height:16px;border-radius:4px;background:${barColor}"></span></td>
-      <td><input id="ti-${slot}" type="text" value="${editVal}" style="width:72px;font-size:11px;padding:2px 5px;border:1px solid ${ct?'#e65100':'#ddd'};border-radius:3px;color:${ct?'#e65100':'#555'}" title="格式 HH-HH，清空還原預設" onblur="_draftSlotTime('${slot}',this.value)"></td>
+      <td><input id="ti-${slot}" type="text" value="${editVal}" style="width:72px;font-size:11px;padding:2px 5px;border:1px solid #ddd;border-radius:3px;color:#555" title="格式 HH-HH，清空還原預設" onblur="_draftSlotTime('${slot}',this.value)"></td>
       <td id="hrs-${slot}">${hrs}h</td><td id="pts-${slot}">${pts}</td>
       <td><select id="ds-${slot}" style="padding:3px 7px;font-size:12px;border:1px solid #ddd;border-radius:3px" onchange="_draftSlot('${slot}',this.value)">${opts}</select></td>
       <td style="text-align:center"><button id="sl-${slot}" onclick="_draftToggleSlotLock('${slot}')" style="cursor:pointer;border-radius:4px;padding:2px 7px;font-size:12px;line-height:1.3;border:1px solid ${slotLk?'#d4a017':'#cfd8dc'};background:${slotLk?'#d4a017':'#eceff1'};color:${slotLk?'#fff':'#90a4ae'}" title="${slotLk?slot+' 已鎖定，自動排班不會更動這一格（點擊解鎖）':'鎖定 '+slot+'，自動排班不會更動這一格'}">${slotLk?'🔒':'🔓'}</button></td>
     </tr>`;
   }
-  html+=`</tbody></table>
-  <div style="font-size:10px;color:#999;margin:-6px 0 8px">※ 🔒 單格鎖定：自動排班不會更動該班別（連「空缺」也會保持空著）；整日鎖定則涵蓋全部四班與切割點。</div>`;
+  html+=`</tbody></table>`; // 2026-08-25：底下「※ 單格鎖定…」說明文字應要求移除
 
   html+=`<div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -3091,9 +3102,9 @@ function _draftSlotTime(slot,val){
   const sp=_dayDraft.split; const ct=_dayDraft.customTimes[slot];
   const hrs=ct?customTimeHours(ct):slotHours(slot,sp);
   const pts=ct?calcCustomPoints(ct,_dayDraftDate):calcSlotPoints(slot,sp,_dayDraftDate);
-  const h=document.getElementById('hrs-'+slot); const p=document.getElementById('pts-'+slot); const i=document.getElementById('ti-'+slot);
+  const h=document.getElementById('hrs-'+slot); const p=document.getElementById('pts-'+slot);
   if(h) h.textContent=hrs+'h'; if(p) p.textContent=pts;
-  if(i){i.style.borderColor=ct?'#e65100':'#ddd';i.style.color=ct?'#e65100':'#555';}
+  // 自訂時間不再變更輸入框顏色（2026-08-25 使用者要求）
 }
 function _draftAddExtra(){ _dayDraft.extras.push({id:'ex_'+Date.now(),docId:'',timeRange:'',kind:''}); _renderDayDraft(); }
 function _draftRemoveExtra(id){ _dayDraft.extras=_dayDraft.extras.filter(e=>e.id!==id); _renderDayDraft(); }
@@ -3277,7 +3288,9 @@ function checkConstraints(dateStr){
         if(rest2<12) issues.push(`${getDocName(docId)} 與 ${nextExtra.date} 額外班次間休息不足12h (${rest2}h)`);
       }
     }
-    if(slot==='主白'||slot==='早班'){
+    const _cnDoc=state.doctors.find(x=>x.id===docId); // 勾「可 N OFF D」者不報 N-OFF-D
+    const _cnND=!!(_cnDoc&&_cnDoc.prefs&&_cnDoc.prefs.nOffD);
+    if((slot==='主白'||slot==='早班')&&!_cnND){
       const d2=addDays(dateStr,-2),d1=addDays(dateStr,-1);
       const s2=state.schedule[d2]||{},s1=state.schedule[d1]||{};
       if(s2['大夜']===docId&&!SLOTS.some(s=>s1[s]===docId))
@@ -3295,7 +3308,7 @@ function checkConstraints(dateStr){
         }
       }
     }
-    if(slot==='大夜'){
+    if(slot==='大夜'&&!_cnND){
       const d1=addDays(dateStr,1),d2=addDays(dateStr,2);
       const s1=state.schedule[d1]||{},s2=state.schedule[d2]||{};
       if(!SLOTS.some(s=>s1[s]===docId)&&(s2['主白']===docId||s2['早班']===docId))
@@ -3305,6 +3318,13 @@ function checkConstraints(dateStr){
   const assigned=SLOTS.map(s=>ds[s]).filter(Boolean);
   const dupes=assigned.filter((x,i)=>assigned.indexOf(x)!==i);
   if(dupes.length) issues.push(`重複排班: ${[...new Set(dupes)].map(getDocName).join(',')}`);
+  // 手動改班踩到預假：當天有 OFF 類預假卻被排了班（統計報表「違規事項」也會列出同一筆）
+  for(const pr of (state.preRequests[dateStr]||[])){
+    if(!['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) continue;
+    const nm=getDocName(pr.docId);
+    for(const sl of SLOTS) if(ds[sl]===pr.docId) issues.push(`${nm} 當天已預假（${prLabel(pr)}）卻排了${sl}`);
+    for(const ex of (ds.extras||[])) if(ex.docId===pr.docId) issues.push(`${nm} 當天已預假（${prLabel(pr)}）卻排了額外班次${kindInfo(ex.kind).name}`);
+  }
   return issues;
 }
 
@@ -3342,7 +3362,7 @@ function renderDoctorTable(){
       <td>${levelStr(p.hol)}</td>
       <td>${levelStr(p.htPref)} <span style="font-size:10px;color:#999">${p.htPref?((p.htPref>0?'+':'-')+Math.abs(p.htPref*10)+'h'):''}</span></td>
       <td>${p.maxConsec}天</td>
-      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'僅五六夜':'',p.cluster?'夜集中':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
+      <td>${[p.long?'長班':'',p.noDay?'不白班':'',p.wkNight?'僅五六夜':'',p.cluster?'夜集中':'',p.nOffD?'可NOFFD':'',p.medMeeting?'醫務會':'',p.morningReport?'晨報':''].filter(Boolean).join(' ')||'-'}</td>
       <td>
         <button class="btn-sm btn-edit" onclick="openDocModal('${doc.id}')">編輯</button>
         <button class="btn-sm btn-del" onclick="delDoc('${doc.id}')">刪除</button>
@@ -3375,6 +3395,7 @@ function openDocModal(docId){
     document.getElementById('wknight-row').style.display=isCheng?'':'none';
     document.getElementById('pref-wknight').checked=isCheng&&!!p.wkNight;
     document.getElementById('pref-cluster').checked=!!p.cluster;
+    document.getElementById('pref-noffd').checked=!!p.nOffD;
     document.getElementById('pref-medMeeting').checked=!!p.medMeeting;
     document.getElementById('pref-morningReport').checked=!!p.morningReport;
   } else {
@@ -3388,6 +3409,7 @@ function openDocModal(docId){
     document.getElementById('wknight-row').style.display='none';
     document.getElementById('pref-wknight').checked=false;
     document.getElementById('pref-cluster').checked=false;
+    document.getElementById('pref-noffd').checked=false;
     document.getElementById('pref-medMeeting').checked=false;
     document.getElementById('pref-morningReport').checked=false;
   }
@@ -3423,6 +3445,7 @@ function saveDoc(){
   prefs.noDay=document.getElementById('pref-noday').checked;
   prefs.wkNight=name==='陳孝綱'&&document.getElementById('pref-wknight').checked;
   prefs.cluster=document.getElementById('pref-cluster').checked;
+  prefs.nOffD=document.getElementById('pref-noffd').checked;
   prefs.medMeeting=document.getElementById('pref-medMeeting').checked;
   prefs.morningReport=document.getElementById('pref-morningReport').checked;
   if(id){
@@ -3859,7 +3882,7 @@ function renderStats(){
   const st={};
   for(const doc of state.doctors){
     const prev=getLastAssigned(doc.id,dates[0],state.schedule);
-    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
+    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
   }
 
   for(const dateStr of dates){
@@ -3890,7 +3913,8 @@ function renderStats(){
     for(const ex of (ds.extras||[])){
       if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
       st[ex.docId].lastWork=dateStr; // 額外班次也是出勤日，會打斷「長假」（轉班判定用）
-      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計點值與總時數
+      { const _ip=icuPointsFor(ex,dateStr); if(_ip){ st[ex.docId].pts+=_ip; st[ex.docId].icuPts+=_ip; } } // ICU 班 2026-10 起每班 2 點
+      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計時數（ICU 點值已於上一行併入）
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
@@ -3912,18 +3936,19 @@ function renderStats(){
 
   const WD='background:#dbeafe', HD='background:#fef9c3';
   let totW816=0,totH816=0,totW1602=0,totH1602=0,totW028=0,totH028=0,totPts=0;
+  let totIcuPts=0;
   const rows=docsOrdered().map(doc=>{
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     totW816+=s.w816; totH816+=s.h816; totW1602+=s.w1602; totH1602+=s.h1602;
-    totW028+=s.w028; totH028+=s.h028; totPts+=s.pts;
+    totW028+=s.w028; totH028+=s.h028; totPts+=s.pts; totIcuPts+=s.icuPts;
     return `<tr>
       <td style="text-align:left"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
       <td style="${WD}">${s.w816||'-'}</td><td style="${HD}">${s.h816||'-'}</td>
       <td style="${WD}">${s.w1602||'-'}</td><td style="${HD}">${s.h1602||'-'}</td>
       <td style="${WD}">${s.w028||'-'}</td><td style="${HD}">${s.h028||'-'}</td>
       <td><strong>${totalH}</strong></td>
-      <td><strong>${s.pts.toFixed(1)}</strong></td>
+      <td><strong>${s.pts.toFixed(1)}</strong>${s.icuPts?`<div style="font-size:10px;color:#00838f;font-weight:400">含ICU ${s.icuPts}</div>`:''}</td>
       <td>${s.cnt}</td>
       <td>${s.shifts}</td>
       <td>${s.consecMax}天</td>
@@ -3936,7 +3961,7 @@ function renderStats(){
     <td style="${WD}">${totW1602||'-'}</td><td style="${HD}">${totH1602||'-'}</td>
     <td style="${WD}">${totW028||'-'}</td><td style="${HD}">${totH028||'-'}</td>
     <td><strong>${totH}</strong></td>
-    <td><strong>${totPts.toFixed(1)}</strong></td>
+    <td><strong>${totPts.toFixed(1)}</strong>${totIcuPts?`<div style="font-size:10px;color:#00838f;font-weight:400">含ICU ${totIcuPts}</div>`:''}</td>
     <td>-</td><td>-</td><td>-</td>
   </tr>`;
   document.getElementById('stats-tbody').innerHTML=rows.join('')+totRow;
@@ -3993,6 +4018,23 @@ function renderStats(){
       }
     }
   }
+  // 手動改班違反預假：該醫師當天有預假(OFF／OFF+前天不大夜／OFF+前天不夜班)卻被排了班。
+  // 自動排班一定會避開，這裡專抓人工調班踩到的；兼任醫師也一起檢查（他們只會被手動排）。
+  for(const d of dates){
+    const offPrs=(state.preRequests[d]||[]).filter(pr=>['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type));
+    if(!offPrs.length) continue;
+    const ds=state.schedule[d]||{};
+    for(const pr of offPrs){
+      const nm=getDocName(pr.docId);
+      const lbl=prLabel(pr)+(pr.note?`／${pr.note}`:'');
+      for(const sl of SLOTS){
+        if(ds[sl]===pr.docId) hard.push(`${nm} ${d} 排了${sl}，但當天已預假（${lbl}）`);
+      }
+      for(const ex of (ds.extras||[])){
+        if(ex.docId===pr.docId) hard.push(`${nm} ${d} 排了額外班次${kindInfo(ex.kind).name}，但當天已預假（${lbl}）`);
+      }
+    }
+  }
   // 手動排班把關：休息不足12h／N-OFF-D／同日重複（自動排班不會產生，人工調班可能）
   // 額外班次(楊天/ICU/病房)也算進 prev 時間軸——同一人不可能同時分身，也不能無視休息時間銜接。
   for(const doc of state.doctors){
@@ -4005,7 +4047,7 @@ function renderStats(){
       const ex=getExtraForDoc(ds,doc.id);
       if(dayShifts.length>1) hard.push(`${doc.name} ${d} 同日重複排班（${dayShifts.join('、')}）`);
       if(ex&&dayShifts.length) hard.push(`${doc.name} ${d} 同日重複排班（${dayShifts.join('、')}與額外班次${kindInfo(ex.kind).name}重疊）`);
-      if(ds['大夜']===doc.id){
+      if(ds['大夜']===doc.id&&!doc.prefs.nOffD){ // 勾「可 N OFF D」者允許大夜→休一天→白班
         const s1=state.schedule[addDays(d,1)]||{}, s2=state.schedule[addDays(d,2)]||{};
         if(!SLOTS.some(s=>s1[s]===doc.id)&&(s2['主白']===doc.id||s2['早班']===doc.id))
           hard.push(`${doc.name} ${d} 大夜休一天接白班（違反 N-OFF-D）`);
@@ -4080,25 +4122,26 @@ function renderSpecialTally(dates){
   const el=document.getElementById('stats-special'); if(!el) return;
   // tally[kind] = { total:{cnt,hrs}, byDoc:{docId:{cnt,hrs}} }
   const tally={};
-  for(const s of SPECIAL_KINDS) tally[s.v]={cnt:0,hrs:0,byDoc:{}};
+  for(const s of SPECIAL_KINDS) tally[s.v]={cnt:0,hrs:0,pts:0,byDoc:{}};
   for(const d of dates){
     const ds=state.schedule[d]||{};
     for(const ex of (ds.extras||[])){
       if(!isSpecialKind(ex.kind)||!ex.docId) continue;
-      const t=tally[ex.kind]; const h=customTimeHours(ex.timeRange||'');
-      t.cnt++; t.hrs+=h;
-      if(!t.byDoc[ex.docId]) t.byDoc[ex.docId]={cnt:0,hrs:0};
-      t.byDoc[ex.docId].cnt++; t.byDoc[ex.docId].hrs+=h;
+      const t=tally[ex.kind]; const h=customTimeHours(ex.timeRange||''); const p=icuPointsFor(ex,d);
+      t.cnt++; t.hrs+=h; t.pts+=p;
+      if(!t.byDoc[ex.docId]) t.byDoc[ex.docId]={cnt:0,hrs:0,pts:0};
+      t.byDoc[ex.docId].cnt++; t.byDoc[ex.docId].hrs+=h; t.byDoc[ex.docId].pts+=p;
     }
   }
   const anyData=SPECIAL_KINDS.some(s=>tally[s.v].cnt>0);
   if(!anyData){ el.innerHTML=''; return; }
   const blocks=SPECIAL_KINDS.filter(s=>tally[s.v].cnt>0).map(s=>{
     const t=tally[s.v];
-    const perDoc=Object.entries(t.byDoc).map(([id,v])=>`${getDocName(id)} ${v.cnt}班/${v.hrs}h`).join('、');
-    return `<div style="margin-top:4px"><strong style="color:${s.color}">${s.name}</strong>（共 ${t.cnt} 班 / ${t.hrs} 小時）：${perDoc}</div>`;
+    // ICU 從 2026-10 起每班 2 點，這些點值「已」併入上表點值欄；此處只是明細對帳
+    const perDoc=Object.entries(t.byDoc).map(([id,v])=>`${getDocName(id)} ${v.cnt}班/${v.hrs}h${v.pts?`/${v.pts}點`:''}`).join('、');
+    return `<div style="margin-top:4px"><strong style="color:${s.color}">${s.name}</strong>（共 ${t.cnt} 班 / ${t.hrs} 小時${t.pts?` / ${t.pts} 點`:''}）：${perDoc}</div>`;
   }).join('');
-  el.innerHTML=`<div class="alert" style="background:#eceff1;border:1px solid #b0bec5;color:#37474f;padding:8px 12px;border-radius:6px;font-size:13px"><strong>📋 特殊項目統計（楊天／ICU／病房，不計點值/總時數）：</strong>${blocks}</div>`;
+  el.innerHTML=`<div class="alert" style="background:#eceff1;border:1px solid #b0bec5;color:#37474f;padding:8px 12px;border-radius:6px;font-size:13px"><strong>📋 特殊項目統計（楊天／ICU／病房，時數不計入總時數；ICU 2026-10 起每班 2 點，已計入上表點值）：</strong>${blocks}</div>`;
 }
 
 // ============================================================
@@ -4905,7 +4948,7 @@ function exportShiftCSV(){
 function exportDoctorHoursCSV(){
   const dates=monthDates(_statsYear,_statsMonth);
   const st={};
-  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0};
+  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,cnt:0};
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
     const sp=ds.split||defaultSplitFor(dateStr);
@@ -4925,19 +4968,21 @@ function exportDoctorHoursCSV(){
     }
     for(const ex of (ds.extras||[])){
       if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
-      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計點值與總時數
+      { const _ip=icuPointsFor(ex,dateStr); if(_ip){ st[ex.docId].pts+=_ip; st[ex.docId].icuPts+=_ip; } } // ICU 班 2026-10 起每班 2 點
+      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計時數（ICU 點值已於上一行併入）
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
       _addZone(s,sh,eh,dateStr); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
     }
   }
-  const rows=[['醫師','白班(8-16)','小夜(16-02)','大夜(02-08)','總時數','點值','班次數']];
+  // 點值欄已含 ICU 加點；另開一欄「其中ICU點」方便對帳（薪資系統只讀「點值」欄，多一欄不影響）
+  const rows=[['醫師','白班(8-16)','小夜(16-02)','大夜(02-08)','總時數','點值','班次數','其中ICU點']];
   for(const doc of docsOrdered()){
     const s=st[doc.id];
     const wDay=s.w816+s.h816, wEve=s.w1602+s.h1602, wNight=s.w028+s.h028;
     const totalH=wDay+wEve+wNight;
-    rows.push([doc.name,wDay,wEve,wNight,totalH,s.pts.toFixed(1),s.cnt]);
+    rows.push([doc.name,wDay,wEve,wNight,totalH,s.pts.toFixed(1),s.cnt,s.icuPts||0]);
   }
   // 換行改用 \r\n，與班表 CSV 一致。
   // 薪資系統（急診\程式\醫師薪資\index.html 的 parsePointsCSV）以 /\r?\n/ 分行，吃得下 \r\n。
@@ -5011,7 +5056,7 @@ function generatePDF(){
   const st={};
   for(const doc of state.doctors){
     const prev=getLastAssigned(doc.id,dates[0],state.schedule);
-    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
+    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
   }
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
@@ -5035,7 +5080,8 @@ function generatePDF(){
     for(const ex of (ds.extras||[])){
       if(!ex.docId||!st[ex.docId]||!ex.timeRange) continue;
       st[ex.docId].lastWork=dateStr; // 額外班次也是出勤日，會打斷「長假」（轉班判定用）
-      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計點值與總時數
+      { const _ip=icuPointsFor(ex,dateStr); if(_ip){ st[ex.docId].pts+=_ip; st[ex.docId].icuPts+=_ip; } } // ICU 班 2026-10 起每班 2 點
+      if(isSpecialKind(ex.kind)) continue; // 楊天/ICU 不計時數（ICU 點值已於上一行併入）
       const s=st[ex.docId];
       const mm=ex.timeRange.match(/^(\d{1,2})-(\d{1,2})$/); if(!mm) continue;
       let sh=parseInt(mm[1]),eh=parseInt(mm[2]); if(eh<=sh) eh+=24;
@@ -5058,7 +5104,7 @@ function generatePDF(){
       <td style="background:#dbeafe">${s.w816||'-'}</td><td style="background:#fef9c3">${s.h816||'-'}</td>
       <td style="background:#dbeafe">${s.w1602||'-'}</td><td style="background:#fef9c3">${s.h1602||'-'}</td>
       <td style="background:#dbeafe">${s.w028||'-'}</td><td style="background:#fef9c3">${s.h028||'-'}</td>
-      <td><b>${totalH}</b></td><td><b>${s.pts.toFixed(1)}</b></td><td>${s.cnt}</td><td>${s.shifts}</td><td>${s.consecMax}天</td>
+      <td><b>${totalH}</b></td><td><b>${s.pts.toFixed(1)}</b>${s.icuPts?`<div style="font-size:9px;color:#00838f">含ICU ${s.icuPts}</div>`:''}</td><td>${s.cnt}</td><td>${s.shifts}</td><td>${s.consecMax}天</td>
     </tr>`;
   }).join('');
 
