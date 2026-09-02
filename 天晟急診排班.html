@@ -3979,7 +3979,7 @@ function renderStats(){
   const WD='background:#dbeafe', HD='background:#fef9c3';
   let totW816=0,totH816=0,totW1602=0,totH1602=0,totW028=0,totH028=0,totPts=0;
   let totIcuPts=0;
-  const rows=docsOrdered().map(doc=>{
+  const rows=statsDocsOrdered().map(doc=>{
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     totW816+=s.w816; totH816+=s.h816; totW1602+=s.w1602; totH1602+=s.h1602;
@@ -4515,6 +4515,16 @@ function getDocName(id){const d=state.doctors.find(x=>x.id===id);return d?d.name
 // 顯示排序：兼任醫師一律排在最後（不更動實際資料順序）
 function docsOrdered(){
   return [...state.doctors].sort((a,b)=>((a.type==='part')?1:0)-((b.type==='part')?1:0));
+}
+// 統計報表專用排序（依使用者指定的名字順序；名單外者排後面，再依兼任與否）
+const STATS_NAME_ORDER=['賴雨濃','鄧世達','陳孝綱','許景棠','楊尚衡','方智鴻','左華韋','永曜嘉','謝見杰','范揚達'];
+function statsDocsOrdered(){
+  return [...state.doctors].sort((a,b)=>{
+    const ia=STATS_NAME_ORDER.indexOf(a.name), ib=STATS_NAME_ORDER.indexOf(b.name);
+    const ra=ia<0?999:ia, rb=ib<0?999:ib;
+    if(ra!==rb) return ra-rb;
+    return ((a.type==='part')?1:0)-((b.type==='part')?1:0);
+  });
 }
 // 額外醫師顯示資訊：真實醫師 + 類型(一般/楊天/ICU)
 function extraDisplay(ex){
@@ -5142,7 +5152,7 @@ function generatePDF(){
       if(worked){cur++;s.consecMax=Math.max(s.consecMax,cur);}else cur=0;
     }
   }
-  const statsRows=docsOrdered().map(doc=>{
+  const statsRows=statsDocsOrdered().map(doc=>{
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     return `<tr>
