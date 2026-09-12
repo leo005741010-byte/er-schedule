@@ -1794,6 +1794,12 @@ function canWorkRelaxed(docId, date, slot, sched){
     const yd=addDays(date,-1);
     const yds=sched[yd]||{};
     if(yds['大夜']===docId||yds['小夜']===docId) return false;
+    // 大夜→休一天→白班：往前看兩天（勾「可 N OFF D」者解除）。
+    // 反方向（排大夜時往後看兩天）本來就有，這個方向漏掉會讓補空格/135h 補班排出違規。
+    if(!doc.prefs.nOffD){
+      const d2=addDays(date,-2), s2=sched[d2]||{};
+      if(s2['大夜']===docId && !SLOTS.some(s=>yds[s]===docId)) return false;
+    }
   }
   if(slot==='大夜'){
     const td=addDays(date,1);
@@ -1857,6 +1863,11 @@ function canWorkForce(docId, date, slot, sched){
   if(slot==='主白'||slot==='早班'){
     const yd=addDays(date,-1); const yds=sched[yd]||{};
     if(yds['大夜']===docId||yds['小夜']===docId) return false;
+    // 大夜→休一天→白班：往前看兩天（勾「可 N OFF D」者解除），與 canWork/canWorkRelaxed 一致
+    if(!doc.prefs.nOffD){
+      const d2=addDays(date,-2), s2=sched[d2]||{};
+      if(s2['大夜']===docId && !SLOTS.some(s=>yds[s]===docId)) return false;
+    }
   }
   if(slot==='大夜'){
     const td=addDays(date,1); const tds=sched[td]||{};
