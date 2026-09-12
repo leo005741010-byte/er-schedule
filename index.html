@@ -559,6 +559,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
       <button class="action-btn btn-blue" onclick="renderStats()">重新計算</button>
       <button class="action-btn btn-green" onclick="exportShiftCSV()" title="逐班一列（含醫師/開始/結束時間），業績報告產生器的建議格式">📤 匯出班表 CSV（業績報表用）</button>
       <button class="action-btn btn-blue" onclick="exportDoctorHoursCSV()" title="每位醫師一列的時數彙總">📥 匯出醫師時數 CSV</button>
+      <button class="action-btn" data-pwa-hide onclick="openPerfModal()" title="自訂績效項目與點值，勾選達成的專任醫師，點值併入下表的總點值" style="background:#6a1b9a;color:#fff">🏆 績效點值</button>
     </div>
     <div class="stats-wrap">
       <table id="stats-table">
@@ -569,6 +570,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
             <th colspan="2" style="background:#00695c">16:00–02:00</th>
             <th colspan="2" style="background:#4527a0">02:00–08:00</th>
             <th rowspan="2" style="background:#00838f">ICU點值</th>
+            <th rowspan="2" style="background:#6a1b9a">績效點值</th>
             <th rowspan="2">急診總時數</th>
             <th rowspan="2">總點值</th>
             <th rowspan="2">急診總班數</th>
@@ -591,7 +593,9 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
       <strong style="color:#1a4a7a">點值說明（每小時）：</strong>
       08-16 平日 <b>1</b> ／ 假日 <b>1.2</b>　｜　16-02 平日 <b>1.2</b> ／ 假日 <b>1.4</b>　｜　02-08 平日 <b>1.6</b> ／ 假日 <b>1.8</b>
       <div style="margin-top:4px;color:#00838f"><strong>ICU 加點：</strong>2026 年 10 月起，額外班次類型選「ICU」者每班固定 <b>2 點</b>，列在「ICU點值」欄；ICU 時數不計入「急診總時數」，但點值<b>已含</b>在「總點值」內（匯出的醫師時數 CSV 亦同）。</div>
+      <div style="margin-top:4px;color:#6a1b9a"><strong>績效加點：</strong>按上方「🏆 績效點值」自訂當月績效項目與點值、勾選達成的專任醫師，小計列在「績效點值」欄；<b>每月各自獨立</b>，不計時數與班數，但點值<b>已含</b>在「總點值」內（匯出的醫師時數 CSV 亦同）。</div>
     </div>
+    <div id="stats-perf" style="margin-top:10px;"></div>
     <div id="stats-special" style="margin-top:10px;"></div>
     <div id="stats-violations" style="margin-top:10px;"></div>
   </div>
@@ -713,6 +717,11 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     </table>
     <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間。預設<strong>平日 20:00、假日 17:00</strong>（含週六日與自訂假日），可在排班表上方兩個下拉選單分別調整。<strong style="color:#c0392b">切割點是「每個月各自」的設定</strong>——工具列會顯示目前月份（例如「9月切割點：」），改它只影響該月，其他月份（含已完成的月份、薪資已結算的月份）完全不受影響；還沒設定過的月份沿用出廠預設（平日 20:00／假日 17:00）。單日若要調整，請在「當日排班」視窗直接修改該班別的<strong>時間欄（HH-HH）</strong>覆寫起訖時間。
     <br>※ 唯一例外：若某人前一天上大夜、隔天接小夜，為滿足 12 小時休息，該日切割點會自動改為 20:00。</div>
+    <div class="man-note" style="border-left-color:#6a1b9a"><strong>🏆 績效點值</strong> 統計報表上方的「🏆 績效點值」按鈕。可自行輸入任意筆<strong>績效內容</strong>（例如教學查房、論文發表、品質專案）與該項目的<strong>點值</strong>，再勾選有達成的<strong>專任醫師</strong>；勾到的人該月各加該項目的點值（同一項目每人點值相同，要給不同點數就分成兩個項目）。
+    <br>・<strong>每個月各自獨立</strong>，切換統計月份就是在編輯那個月；項目清單空的時候會出現「⧉ 沿用上個月的項目」可一鍵帶入上月內容再修改。
+    <br>・點值<strong>併入統計報表的「總點值」</strong>與匯出的醫師時數 CSV（CSV 多一欄「其中績效點」對帳），<strong>不影響時數、班數與自動排班</strong>。
+    <br>・統計表下方會列出「績效點值明細」（哪個項目、幾點、誰達成），匯出的單檔 HTML 班表也會附上。
+    <br>・該月按過「完成本月」後，績效點值一併變成唯讀（要改請先取消完成）。</div>
     <div class="man-note" style="border-left-color:#5e35b1"><strong>⚖ 平均（切割點自動均衡）</strong> 排班表上方切割點旁的勾選框，<strong>同樣是逐月設定</strong>（可以 8 月用平均、9 月固定 20:00）。勾選後該月<strong>不分平日／假日</strong>，兩個預設下拉會變灰停用，改由系統<strong>逐日</strong>在 <strong>16:00 / 17:00 / 18:00 / 20:00</strong> 四個切點中挑一個。
     <br>挑選依據是<strong>時數</strong>：早班＋小夜合計固定 18 小時，切割點等於把這 18 小時在兩人之間重新分配，所以系統會把切點往「離個人目標時數還差比較多的那位」偏，讓全科時數盡量拉平（個人目標＝全科平均＋時數偏好×10，仍尊重醫師設定裡的時數偏好）。
     <br>套用時機：按「⚡ 自動排班」時計算，會連跑 3 輪讓月初、月底一起收斂。<strong>已鎖定的日子／班別、預班指定的自訂時段一律不動</strong>；「大夜隔天接小夜必須 20:00」的 12 小時休息鐵律仍優先於均衡。
@@ -798,8 +807,9 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>16-02 平/假</td><td>16:00–02:00 時段的平日/假日時數</td></tr>
         <tr><td>02-08 平/假</td><td>02:00–08:00 時段的平日/假日時數</td></tr>
         <tr><td>ICU點值</td><td><strong>2026 年 10 月起</strong>，額外班次類型選「ICU」者每班固定 2 點，本欄為當月 ICU 點數小計（9 月以前一律 0）</td></tr>
+        <tr><td>績效點值</td><td>按統計報表上方「🏆 績效點值」自訂的當月績效加點（人工輸入，<strong>每月各自獨立</strong>），不計時數與班數</td></tr>
         <tr><td>急診總時數</td><td>左邊六個時段總和（ICU／楊天／病房的時數不計入）</td></tr>
-        <tr><td>總點值</td><td>依時段與假日加權計算的點數，<strong>已含左欄 ICU 點值</strong>。匯出的醫師時數 CSV 的「點值」欄同樣已含 ICU，另有一欄「其中ICU點」可對帳。</td></tr>
+        <tr><td>總點值</td><td>依時段與假日加權計算的點數，<strong>已含左欄 ICU 點值與績效點值</strong>。匯出的醫師時數 CSV 的「點值」欄同樣已含這兩項，另有「其中ICU點」「其中績效點」兩欄可對帳。</td></tr>
         <tr><td>急診總班數</td><td>本月急診上班次數：四個主要班別＋「一般加班（中天）」；<strong>ICU／楊天／病房不計入</strong></td></tr>
         <tr><td>轉班次</td><td>大夜↔白班轉換次數（目標 ≤ 3 次）。<strong>中間隔了 5 天以上完全沒上班的長假就不計</strong>（例：大夜→放 5 天→白班，作息已調回來，不算轉班）</td></tr>
         <tr><td>最長連班</td><td>連續上班最多幾天</td></tr>
@@ -934,6 +944,30 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
 </div>
 
 <!-- ======= DOCTOR MODAL ======= -->
+<!-- ======= 績效點值（每月自訂項目 → 勾選達成的專任醫師 → 併入總點值）======= -->
+<div id="perf-modal" class="modal-overlay">
+  <div class="modal" style="max-width:760px">
+    <h2 id="perf-modal-title">🏆 績效點值</h2>
+    <div id="perf-ro-note" style="display:none;background:#fff3cd;border:1px solid #ffe08a;color:#8a6d00;border-radius:5px;padding:6px 10px;font-size:12px;margin-bottom:8px">
+      ✅ 本月已標記「完成」，績效點值為唯讀。要修改請先到排班表按「完成本月」取消。
+    </div>
+    <div style="font-size:11px;color:#667;margin-bottom:10px;line-height:1.6">
+      自行輸入績效內容與點值，再勾選有達成的<strong>專任醫師</strong>；勾到的人該月各加該項目的點值。<br>
+      績效點值會<strong>併入統計報表的「總點值」</strong>與匯出的醫師時數 CSV（另有「績效點值」欄可對帳），<strong>不影響時數與排班</strong>。此設定<strong>每個月各自獨立</strong>。
+    </div>
+    <div id="perf-list"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button id="perf-add-btn" class="action-btn btn-blue" onclick="_perfAddItem()">＋ 新增績效項目</button>
+      <button id="perf-copy-btn" class="action-btn" onclick="_perfCopyPrevMonth()" style="background:#eceff1;color:#37474f;border:1px solid #b0bec5;display:none">⧉ 沿用上個月的項目</button>
+    </div>
+    <div id="perf-summary" style="margin-top:12px"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closePerfModal()">取消</button>
+      <button id="perf-save-btn" class="btn-primary" onclick="savePerfModal()">✔ 確認</button>
+    </div>
+  </div>
+</div>
+
 <div id="doctor-modal" class="modal-overlay">
   <div class="modal">
     <h2 id="doc-modal-title">醫師設定</h2>
@@ -1002,6 +1036,9 @@ let state = {
   // 每月各自的切割點設定（2026-09-12）：key="YYYY-M"(月份 0-based)，值 {d:平日,h:假日,bal:平均模式}。
   // 上面三個全域值退居「沒有自己設定的月份」的預設值 → 改某月不會動到其他月份（尤其已完成月份）。
   monthSplit: {},
+  // 每月的「績效點值」項目（2026-09-12）：key="YYYY-M"(月份 0-based)，
+  // 值 = [{id,name,pts,docs:[醫師id]}]；勾到的醫師該月各加 pts 點，併入統計報表的總點值。
+  perfItems: {},
   schedule: {},
   preRequests: {},
   avoidPairs: [],
@@ -1346,6 +1383,60 @@ const SPECIAL_KINDS = EXTRA_KINDS.filter(k=>k.v);
 const ICU_POINT_START='2026-10-01', ICU_SHIFT_POINTS=2;
 function icuPointsFor(ex,dateStr){
   return (ex&&ex.kind==='icu'&&ex.docId&&dateStr>=ICU_POINT_START)?ICU_SHIFT_POINTS:0;
+}
+
+// ===== 績效點值（2026-09-12 新增）=====
+// 每個月可自訂任意筆「績效項目」：填績效內容＋點值，再勾選有達成的專任醫師，
+// 勾到的人該月各加該項目的點值（同項目同點值）。與班表無關、純人工輸入，
+// 逐月獨立存在 state.perfItems["YYYY-M"]，併入統計報表的「總點值」與醫師時數 CSV。
+function _perfMKey(y,m){ return `${y}-${m}`; }                       // m 為 0-based
+function perfItemsOf(y,m){
+  const a=state.perfItems&&state.perfItems[_perfMKey(y,m)];
+  return Array.isArray(a)?a:[];
+}
+// 回傳 {醫師id: 當月績效點數合計}
+function perfPointsMap(y,m){
+  const out={};
+  for(const it of perfItemsOf(y,m)){
+    const p=Number(it.pts)||0; if(!p) continue;
+    for(const id of (it.docs||[])) out[id]=(out[id]||0)+p;
+  }
+  return out;
+}
+// 把當月績效點數併進統計用的 st（三個統計計算點共用，避免算法漂移）
+function applyPerfPoints(st,y,m){
+  const map=perfPointsMap(y,m);
+  for(const id in map){ if(st[id]){ st[id].perfPts=(st[id].perfPts||0)+map[id]; st[id].pts+=map[id]; } }
+  return map;
+}
+// 明細顯示用：把某項目勾到的人依統計報表的醫師順序排好
+function perfDocNames(it){
+  const ids=new Set(it&&it.docs||[]);
+  const ordered=statsDocsOrdered().filter(d=>ids.has(d.id)).map(d=>d.name);
+  // 名單裡已被刪掉的醫師 id 也補在後面，避免點值有發、名字卻不見
+  const shown=new Set(statsDocsOrdered().filter(d=>ids.has(d.id)).map(d=>d.id));
+  for(const id of ids) if(!shown.has(id)) ordered.push(getDocName(id));
+  return ordered.join('、');
+}
+function _sanitizePerfItems(o){
+  const out={};
+  if(o&&typeof o==='object'){
+    for(const k in o){
+      const arr=o[k]; if(!Array.isArray(arr)) continue;
+      const list=[];
+      for(const it of arr){
+        if(!it||typeof it!=='object') continue;
+        list.push({
+          id: String(it.id||('p'+Math.random().toString(36).slice(2,9))),
+          name: String(it.name||''),
+          pts: Math.round((Number(it.pts)||0)*10)/10,
+          docs: Array.isArray(it.docs)?it.docs.filter(x=>typeof x==='string'):[]
+        });
+      }
+      if(list.length) out[k]=list;
+    }
+  }
+  return out;
 }
 
 function slotRange(slot, split){
@@ -3953,13 +4044,162 @@ function _addZone(stat, startH, endH, dateStr){
   }
 }
 
+// ============================================================
+// 績效點值 Modal（自訂項目 → 勾選達成的專任醫師 → 併入總點值）
+// ============================================================
+// 編輯採 draft：改的都是 _perfDraft，按「確認」才寫回 state.perfItems（跟當日排班視窗一致）。
+let _perfDraft=null, _perfReadonly=false;
+function _escHtml(v){ return String(v==null?'':v).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _perfNewId(){ return 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+function openPerfModal(){
+  if(blockIfViewOnly()) return;
+  // 注意：績效跟著「統計報表的月份」(_statsYear/_statsMonth) 走，不是排班表的檢視月份，
+  // 所以唯讀判斷不能用 blockIfCompleted()（那個看的是 state.year/month）。
+  _perfReadonly=_completedMonths.has(_perfMKey(_statsYear,_statsMonth));
+  _perfDraft=JSON.parse(JSON.stringify(perfItemsOf(_statsYear,_statsMonth)));
+  document.getElementById('perf-modal-title').textContent=`🏆 績效點值 — ${_statsYear}年${_statsMonth+1}月`;
+  document.getElementById('perf-ro-note').style.display=_perfReadonly?'block':'none';
+  document.getElementById('perf-add-btn').style.display=_perfReadonly?'none':'';
+  document.getElementById('perf-save-btn').style.display=_perfReadonly?'none':'';
+  _renderPerfDraft();
+  document.getElementById('perf-modal').classList.add('show');
+}
+function closePerfModal(){
+  document.getElementById('perf-modal').classList.remove('show');
+  _perfDraft=null;
+}
+// 勾選名單＝專任醫師；若某人已被勾但現在不是專任（例如改成兼任、或已離職未刪），
+// 仍要把他列出來，否則會變成「看不到卻算得到點值」。
+function _perfDocPool(it){
+  const pool=statsDocsOrdered().filter(d=>d.type==='full');
+  const seen=new Set(pool.map(d=>d.id));
+  for(const id of (it.docs||[])){
+    if(seen.has(id)) continue;
+    const d=state.doctors.find(x=>x.id===id);
+    if(d){ pool.push(d); seen.add(id); }
+  }
+  return pool;
+}
+function _renderPerfDraft(){
+  const box=document.getElementById('perf-list');
+  const ro=_perfReadonly?' disabled':'';
+  if(!_perfDraft.length){
+    box.innerHTML=`<div style="border:1px dashed #cfd8e3;border-radius:6px;padding:14px;text-align:center;color:#8a94a6;font-size:12px">
+      ${_statsMonth+1}月還沒有績效項目${_perfReadonly?'':'，按下方「＋ 新增績效項目」開始'}
+    </div>`;
+  } else {
+    box.innerHTML=_perfDraft.map(it=>{
+      const chips=_perfDocPool(it).map(d=>{
+        const on=(it.docs||[]).indexOf(d.id)>=0;
+        return `<label style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;margin:0 4px 4px 0;border:1px solid ${on?d.color:'#dde3ea'};border-radius:12px;background:${on?d.color+'22':'#fff'};font-size:12px;cursor:${_perfReadonly?'default':'pointer'};font-weight:${on?'700':'400'}">
+          <input type="checkbox"${on?' checked':''}${ro} onchange="_perfToggleDoc('${it.id}','${d.id}',this.checked)" style="margin:0;cursor:${_perfReadonly?'default':'pointer'}">
+          <span class="color-dot" style="background:${d.color}"></span>${_escHtml(d.name)}${d.type==='part'?'(兼)':''}
+        </label>`;
+      }).join('');
+      return `<div style="border:1px solid #e3e8ef;border-radius:6px;padding:9px 10px;margin-bottom:8px;background:#fbfcfe">
+        <div class="form-row" style="margin-bottom:6px">
+          <label style="min-width:56px">績效內容</label>
+          <input type="text" value="${_escHtml(it.name)}"${ro} placeholder="例：教學查房、論文發表、品質專案…" style="flex:1;min-width:180px"
+                 oninput="_perfSetName('${it.id}',this.value)">
+          <label style="min-width:32px;text-align:right">點值</label>
+          <input type="number" step="0.5" value="${it.pts}"${ro} style="width:76px" oninput="_perfSetPts('${it.id}',this.value)">
+          ${_perfReadonly?'':`<button onclick="_perfDelItem('${it.id}')" title="刪除此項目"
+             style="border:1px solid #e6b0aa;background:#fdeded;color:#c0392b;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:12px">🗑</button>`}
+        </div>
+        <div>${chips}</div>
+        ${_perfReadonly?'':`<div style="margin-top:4px">
+          <button onclick="_perfAllDocs('${it.id}',true)" style="border:1px solid #cfd8e3;background:#fff;border-radius:4px;padding:2px 7px;cursor:pointer;font-size:11px;color:#5b6675">全選</button>
+          <button onclick="_perfAllDocs('${it.id}',false)" style="border:1px solid #cfd8e3;background:#fff;border-radius:4px;padding:2px 7px;cursor:pointer;font-size:11px;color:#5b6675">全不選</button>
+        </div>`}
+      </div>`;
+    }).join('');
+  }
+  const cp=document.getElementById('perf-copy-btn');
+  if(cp){
+    const pm=_statsMonth===0?11:_statsMonth-1, py=_statsMonth===0?_statsYear-1:_statsYear;
+    cp.style.display=(!_perfReadonly && !_perfDraft.length && perfItemsOf(py,pm).length)?'':'none';
+    cp.textContent=`⧉ 沿用 ${py}年${pm+1}月 的項目`;
+  }
+  _renderPerfSummary();
+}
+// 名稱/點值用 oninput 直接改 draft，不整份重繪（重繪會讓輸入框失焦）
+function _perfFind(id){ return (_perfDraft||[]).find(x=>x.id===id); }
+function _perfSetName(id,v){ const it=_perfFind(id); if(it) it.name=v; }
+function _perfSetPts(id,v){ const it=_perfFind(id); if(it){ it.pts=Math.round((parseFloat(v)||0)*10)/10; _renderPerfSummary(); } }
+function _perfToggleDoc(id,docId,on){
+  const it=_perfFind(id); if(!it) return;
+  if(!Array.isArray(it.docs)) it.docs=[];
+  const i=it.docs.indexOf(docId);
+  if(on&&i<0) it.docs.push(docId);
+  if(!on&&i>=0) it.docs.splice(i,1);
+  _renderPerfDraft();
+}
+function _perfAllDocs(id,on){
+  const it=_perfFind(id); if(!it) return;
+  it.docs=on?_perfDocPool(it).map(d=>d.id):[];
+  _renderPerfDraft();
+}
+function _perfAddItem(){
+  if(_perfReadonly) return;
+  _perfDraft.push({id:_perfNewId(),name:'',pts:1,docs:[]});
+  _renderPerfDraft();
+}
+function _perfDelItem(id){
+  const i=(_perfDraft||[]).findIndex(x=>x.id===id);
+  if(i>=0){ _perfDraft.splice(i,1); _renderPerfDraft(); }
+}
+function _perfCopyPrevMonth(){
+  const pm=_statsMonth===0?11:_statsMonth-1, py=_statsMonth===0?_statsYear-1:_statsYear;
+  const prev=perfItemsOf(py,pm);
+  if(!prev.length) return;
+  // 連同勾選的醫師一起帶過來當底稿，使用者再自行增減
+  _perfDraft=prev.map(it=>({id:_perfNewId(),name:it.name,pts:it.pts,docs:[...(it.docs||[])]}));
+  _renderPerfDraft();
+  showToast(`已帶入 ${py}年${pm+1}月 的 ${prev.length} 個績效項目，請確認後按「確認」`);
+}
+function _renderPerfSummary(){
+  const map={};
+  for(const it of (_perfDraft||[])){
+    const p=Number(it.pts)||0; if(!p) continue;
+    for(const id of (it.docs||[])) map[id]=(map[id]||0)+p;
+  }
+  const list=statsDocsOrdered().filter(d=>map[d.id]);
+  const box=document.getElementById('perf-summary');
+  if(!list.length){ box.innerHTML=''; return; }
+  const total=Object.values(map).reduce((a,b)=>a+b,0);
+  box.innerHTML=`<div style="background:#f3e9ff;border:1px solid #d1c4e9;border-radius:6px;padding:8px 10px">
+    <strong style="font-size:12px;color:#5e35b1">本月績效點值小計（共 ${Math.round(total*10)/10} 點）</strong>
+    <div style="margin-top:5px">${list.map(d=>
+      `<span style="display:inline-block;margin:0 6px 4px 0;padding:2px 8px;border-radius:10px;background:#fff;border:1px solid ${d.color};font-size:12px">
+        <span class="color-dot" style="background:${d.color}"></span>${_escHtml(d.name)} <strong>+${Math.round(map[d.id]*10)/10}</strong></span>`
+    ).join('')}</div></div>`;
+}
+function savePerfModal(){
+  if(_perfReadonly){ closePerfModal(); return; }
+  const key=_perfMKey(_statsYear,_statsMonth);
+  // 完全空白（沒名稱、沒點值、沒勾人）的項目直接丟掉，不留垃圾資料
+  const list=(_perfDraft||[]).map(it=>({
+    id:it.id, name:String(it.name||'').trim(),
+    pts:Math.round((Number(it.pts)||0)*10)/10,
+    docs:Array.isArray(it.docs)?it.docs.slice():[]
+  })).filter(it=>it.name||it.docs.length);  // 沒名稱又沒勾人＝按了新增卻沒填，直接丟掉
+  if(!state.perfItems||typeof state.perfItems!=='object') state.perfItems={};
+  if(list.length) state.perfItems[key]=list; else delete state.perfItems[key];
+  autoSave();
+  closePerfModal();
+  renderStats();
+  const n=Object.keys(perfPointsMap(_statsYear,_statsMonth)).length;
+  showToast(`🏆 ${_statsYear}年${_statsMonth+1}月績效點值已儲存：${list.length} 個項目、${n} 位醫師有加點`);
+}
+
 function renderStats(){
   document.getElementById('stats-month').textContent=`${_statsYear}年${_statsMonth+1}月`;
   const dates=monthDates(_statsYear,_statsMonth);
   const st={};
   for(const doc of state.doctors){
     const prev=getLastAssigned(doc.id,dates[0],state.schedule);
-    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
+    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,perfPts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
   }
 
   for(const dateStr of dates){
@@ -4010,21 +4250,23 @@ function renderStats(){
       if(worked){cur++;s.consecMax=Math.max(s.consecMax,cur);}else cur=0;
     }
   }
+  applyPerfPoints(st,_statsYear,_statsMonth); // 人工輸入的績效點值：併入總點值（不影響時數/班數）
 
   const WD='background:#dbeafe', HD='background:#fef9c3';
   let totW816=0,totH816=0,totW1602=0,totH1602=0,totW028=0,totH028=0,totPts=0;
-  let totIcuPts=0;
+  let totIcuPts=0, totPerfPts=0;
   const rows=statsDocsOrdered().map(doc=>{
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     totW816+=s.w816; totH816+=s.h816; totW1602+=s.w1602; totH1602+=s.h1602;
-    totW028+=s.w028; totH028+=s.h028; totPts+=s.pts; totIcuPts+=s.icuPts;
+    totW028+=s.w028; totH028+=s.h028; totPts+=s.pts; totIcuPts+=s.icuPts; totPerfPts+=s.perfPts;
     return `<tr>
       <td style="text-align:left"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
       <td style="${WD}">${s.w816||'-'}</td><td style="${HD}">${s.h816||'-'}</td>
       <td style="${WD}">${s.w1602||'-'}</td><td style="${HD}">${s.h1602||'-'}</td>
       <td style="${WD}">${s.w028||'-'}</td><td style="${HD}">${s.h028||'-'}</td>
       <td style="color:#00838f">${s.icuPts||'-'}</td>
+      <td style="color:#6a1b9a">${s.perfPts?(Math.round(s.perfPts*10)/10):'-'}</td>
       <td><strong>${totalH}</strong></td>
       <td><strong>${s.pts.toFixed(1)}</strong></td>
       <td>${s.cnt}</td>
@@ -4039,6 +4281,7 @@ function renderStats(){
     <td style="${WD}">${totW1602||'-'}</td><td style="${HD}">${totH1602||'-'}</td>
     <td style="${WD}">${totW028||'-'}</td><td style="${HD}">${totH028||'-'}</td>
     <td style="color:#00838f">${totIcuPts||'-'}</td>
+    <td style="color:#6a1b9a">${totPerfPts?(Math.round(totPerfPts*10)/10):'-'}</td>
     <td><strong>${totH}</strong></td>
     <td><strong>${totPts.toFixed(1)}</strong></td>
     <td>-</td><td>-</td><td>-</td>
@@ -4193,7 +4436,24 @@ function renderStats(){
   document.getElementById('stats-violations').innerHTML=vHtml;
 
   // 特殊項目（楊天/ICU）另外統計：班次數與時數，不計入點值/總時數
+  renderPerfTally();
   renderSpecialTally(dates);
+}
+
+// 績效點值明細（哪個項目、幾點、誰達成）——上表只有小計，這裡列出組成
+function renderPerfTally(){
+  const el=document.getElementById('stats-perf'); if(!el) return;
+  const items=perfItemsOf(_statsYear,_statsMonth).filter(it=>(Number(it.pts)||0)&&(it.docs||[]).length);
+  if(!items.length){ el.innerHTML=''; return; }
+  const blocks=items.map(it=>{
+    const names=perfDocNames(it);
+    const pts=Math.round((Number(it.pts)||0)*10)/10;
+    return `<div style="margin-top:4px"><strong style="color:#6a1b9a">${_escHtml(it.name||'(未命名項目)')}</strong>（每人 ${pts} 點）：${_escHtml(names)}</div>`;
+  }).join('');
+  const map=perfPointsMap(_statsYear,_statsMonth);
+  const tot=Object.values(map).reduce((a,b)=>a+b,0);
+  el.innerHTML=`<div class="alert" style="background:#f6f0ff;border:1px solid #d1c4e9;color:#4a148c;padding:8px 12px;border-radius:6px;font-size:13px">
+    <strong>🏆 績效點值明細（共發出 ${Math.round(tot*10)/10} 點，已列在上表「績效點值」欄並計入總點值）：</strong>${blocks}</div>`;
 }
 
 // 特殊額外項目（楊天/ICU）獨立統計
@@ -4787,6 +5047,7 @@ function applyCloudData(data){
   state.holidaySplit=clampSplit(data.holidaySplit||17);
   state.splitBalance=!!data.splitBalance;
   state.monthSplit=_sanitizeMonthSplit(data.monthSplit);
+  state.perfItems=_sanitizePerfItems(data.perfItems);
   state.avoidPairs=data.avoidPairs||[];
   if(data.idCnt) _idCnt=data.idCnt;
   _lockedMonths.clear(); (data.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -4801,7 +5062,7 @@ function applyCloudData(data){
   try{ localStorage.setItem(LS_KEY,JSON.stringify({
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]
   }));}catch(e){}
 }
@@ -4814,7 +5075,7 @@ function cloudSave(){
   const data={
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},avoidPairs:state.avoidPairs||[],
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},avoidPairs:state.avoidPairs||[],
     idCnt:_idCnt,lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths],_ts:Date.now(),_client:_clientId
   };
   const myTs=data._ts;
@@ -4903,7 +5164,7 @@ function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
       holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
       lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
     localStorage.setItem(LS_KEY,JSON.stringify(data));
     const ind=document.getElementById('_autosave_ind');
@@ -4928,6 +5189,7 @@ function autoLoad(){
     state.holidaySplit=clampSplit(d.holidaySplit||17);
     state.splitBalance=!!d.splitBalance;
     state.monthSplit=_sanitizeMonthSplit(d.monthSplit);
+    state.perfItems=_sanitizePerfItems(d.perfItems);
     state.avoidPairs=d.avoidPairs||[];
     if(d.idCnt) _idCnt=d.idCnt;
     _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -4939,7 +5201,7 @@ function autoLoad(){
 function saveData(){
   const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -4974,6 +5236,7 @@ function loadData(){
         state.holidaySplit=clampSplit(d.holidaySplit||17);
         state.splitBalance=!!d.splitBalance;
         state.monthSplit=_sanitizeMonthSplit(d.monthSplit);
+        state.perfItems=_sanitizePerfItems(d.perfItems);
         state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
         _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -5040,7 +5303,7 @@ function exportShiftCSV(){
 function exportDoctorHoursCSV(){
   const dates=monthDates(_statsYear,_statsMonth);
   const st={};
-  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,cnt:0};
+  for(const doc of state.doctors) st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,perfPts:0,cnt:0};
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
     const sp=ds.split||defaultSplitFor(dateStr);
@@ -5068,14 +5331,15 @@ function exportDoctorHoursCSV(){
       _addZone(s,sh,eh,dateStr); s.pts+=calcCustomPoints(ex.timeRange,dateStr); s.cnt++;
     }
   }
-  // 「點值」欄已含 ICU 加點；另開一欄「其中ICU點」方便對帳。
+  applyPerfPoints(st,_statsYear,_statsMonth); // 績效點值：與統計報表同一支算法
+  // 「點值」欄已含 ICU 加點與績效加點；另開「其中ICU點」「其中績效點」兩欄方便對帳。
   // ⚠ 欄名「總時數」「點值」刻意不改：薪資系統 parsePointsCSV 用 /^點值$/、/^總時數$/ 找欄，改了會讀不到。
-  const rows=[['醫師','白班(8-16)','小夜(16-02)','大夜(02-08)','總時數','點值','班次數','其中ICU點']];
+  const rows=[['醫師','白班(8-16)','小夜(16-02)','大夜(02-08)','總時數','點值','班次數','其中ICU點','其中績效點']];
   for(const doc of docsOrdered()){
     const s=st[doc.id];
     const wDay=s.w816+s.h816, wEve=s.w1602+s.h1602, wNight=s.w028+s.h028;
     const totalH=wDay+wEve+wNight;
-    rows.push([doc.name,wDay,wEve,wNight,totalH,s.pts.toFixed(1),s.cnt,s.icuPts||0]);
+    rows.push([doc.name,wDay,wEve,wNight,totalH,s.pts.toFixed(1),s.cnt,s.icuPts||0,s.perfPts||0]);
   }
   // 換行改用 \r\n，與班表 CSV 一致。
   // 薪資系統（急診\程式\醫師薪資\index.html 的 parsePointsCSV）以 /\r?\n/ 分行，吃得下 \r\n。
@@ -5150,7 +5414,7 @@ function generatePDF(){
   const st={};
   for(const doc of state.doctors){
     const prev=getLastAssigned(doc.id,dates[0],state.schedule);
-    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
+    st[doc.id]={w816:0,h816:0,w1602:0,h1602:0,w028:0,h028:0,pts:0,icuPts:0,perfPts:0,cnt:0,shifts:0,lastSlot:prev?prev.slot:null,lastWork:prev?prev.date:null,consecMax:0};
   }
   for(const dateStr of dates){
     const ds=state.schedule[dateStr]||{};
@@ -5190,6 +5454,15 @@ function generatePDF(){
       if(worked){cur++;s.consecMax=Math.max(s.consecMax,cur);}else cur=0;
     }
   }
+  applyPerfPoints(st,y,m); // 人工輸入的績效點值：併入總點值（與統計報表同一支算法）
+  // 績效明細（單檔 HTML 也附上，才知道點值怎麼來的）
+  const _perfItems=perfItemsOf(y,m).filter(it=>(Number(it.pts)||0)&&(it.docs||[]).length);
+  const perfHTML=_perfItems.length
+    ? `<div style="margin-top:8px;border:1px solid #d1c4e9;border-radius:5px;padding:7px 10px;font-size:11px;color:#4a148c">
+        <strong>🏆 績效點值明細</strong>${_perfItems.map(it=>
+          `<div style="margin-top:3px">・${_escHtml(it.name||'(未命名項目)')}（每人 ${Math.round((Number(it.pts)||0)*10)/10} 點）：${_escHtml(perfDocNames(it))}</div>`
+        ).join('')}</div>`
+    : '';
   const statsRows=statsDocsOrdered().map(doc=>{
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
@@ -5198,7 +5471,7 @@ function generatePDF(){
       <td style="background:#dbeafe">${s.w816||'-'}</td><td style="background:#fef9c3">${s.h816||'-'}</td>
       <td style="background:#dbeafe">${s.w1602||'-'}</td><td style="background:#fef9c3">${s.h1602||'-'}</td>
       <td style="background:#dbeafe">${s.w028||'-'}</td><td style="background:#fef9c3">${s.h028||'-'}</td>
-      <td>${s.icuPts||'-'}</td><td><b>${totalH}</b></td><td><b>${s.pts.toFixed(1)}</b></td><td>${s.cnt}</td><td>${s.shifts}</td><td>${s.consecMax}天</td>
+      <td>${s.icuPts||'-'}</td><td>${s.perfPts?(Math.round(s.perfPts*10)/10):'-'}</td><td><b>${totalH}</b></td><td><b>${s.pts.toFixed(1)}</b></td><td>${s.cnt}</td><td>${s.shifts}</td><td>${s.consecMax}天</td>
     </tr>`;
   }).join('');
 
@@ -5269,7 +5542,7 @@ function generatePDF(){
       <th colspan="2" style="background:#1565c0">08:00–16:00</th>
       <th colspan="2" style="background:#00695c">16:00–02:00</th>
       <th colspan="2" style="background:#4527a0">02:00–08:00</th>
-      <th rowspan="2">ICU點值</th><th rowspan="2">急診總時數</th><th rowspan="2">總點值</th><th rowspan="2">急診總班數</th><th rowspan="2">轉班次</th><th rowspan="2">最長連班</th>
+      <th rowspan="2">ICU點值</th><th rowspan="2">績效點值</th><th rowspan="2">急診總時數</th><th rowspan="2">總點值</th><th rowspan="2">急診總班數</th><th rowspan="2">轉班次</th><th rowspan="2">最長連班</th>
     </tr>
     <tr>
       <th class="sub-th" style="background:#bbdefb;color:#0d47a1">平日H</th><th class="sub-th" style="background:#ffe0b2;color:#bf360c">假日H</th>
@@ -5277,6 +5550,7 @@ function generatePDF(){
       <th class="sub-th" style="background:#ce93d8;color:#4a148c">平日H</th><th class="sub-th" style="background:#ffe0b2;color:#bf360c">假日H</th>
     </tr>
   </thead><tbody>${statsRows}</tbody></table>
+  ${perfHTML}
   </div>
 
   <div class="pb">
