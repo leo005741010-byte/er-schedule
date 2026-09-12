@@ -416,7 +416,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <div id="cal-header">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="split-control" data-pwa-hide>
-          <label>預設切割點：</label>
+          <label id="split-title" title="切割點是「每個月各自」的設定：改這裡只會影響目前檢視的月份，其他月份（含已完成月份）不受影響。">本月切割點：</label>
           <span id="split-wk-lbl" style="font-size:11px;color:#555">平日</span>
           <select id="default-split" onchange="changeSplitSetting('weekday',this.value)">
             <option value="16">16:00</option><option value="17">17:00</option>
@@ -711,9 +711,9 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td><span class="man-badge mb-大夜">大夜</span></td><td>20:00 – 08:00</td><td>12 小時（固定）</td></tr>
       </tbody>
     </table>
-    <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間。預設<strong>平日 20:00、假日 17:00</strong>（含週六日與自訂假日），可在排班表上方兩個下拉選單分別調整（全域）。單日若要調整，請在「當日排班」視窗直接修改該班別的<strong>時間欄（HH-HH）</strong>覆寫起訖時間。
+    <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間。預設<strong>平日 20:00、假日 17:00</strong>（含週六日與自訂假日），可在排班表上方兩個下拉選單分別調整。<strong style="color:#c0392b">切割點是「每個月各自」的設定</strong>——工具列會顯示目前月份（例如「9月切割點：」），改它只影響該月，其他月份（含已完成的月份、薪資已結算的月份）完全不受影響；還沒設定過的月份沿用出廠預設（平日 20:00／假日 17:00）。單日若要調整，請在「當日排班」視窗直接修改該班別的<strong>時間欄（HH-HH）</strong>覆寫起訖時間。
     <br>※ 唯一例外：若某人前一天上大夜、隔天接小夜，為滿足 12 小時休息，該日切割點會自動改為 20:00。</div>
-    <div class="man-note" style="border-left-color:#5e35b1"><strong>⚖ 平均（切割點自動均衡）</strong> 排班表上方切割點旁的勾選框。勾選後<strong>不分平日／假日</strong>，兩個預設下拉會變灰停用，改由系統<strong>逐日</strong>在 <strong>16:00 / 17:00 / 18:00 / 20:00</strong> 四個切點中挑一個。
+    <div class="man-note" style="border-left-color:#5e35b1"><strong>⚖ 平均（切割點自動均衡）</strong> 排班表上方切割點旁的勾選框，<strong>同樣是逐月設定</strong>（可以 8 月用平均、9 月固定 20:00）。勾選後該月<strong>不分平日／假日</strong>，兩個預設下拉會變灰停用，改由系統<strong>逐日</strong>在 <strong>16:00 / 17:00 / 18:00 / 20:00</strong> 四個切點中挑一個。
     <br>挑選依據是<strong>時數</strong>：早班＋小夜合計固定 18 小時，切割點等於把這 18 小時在兩人之間重新分配，所以系統會把切點往「離個人目標時數還差比較多的那位」偏，讓全科時數盡量拉平（個人目標＝全科平均＋時數偏好×10，仍尊重醫師設定裡的時數偏好）。
     <br>套用時機：按「⚡ 自動排班」時計算，會連跑 3 輪讓月初、月底一起收斂。<strong>已鎖定的日子／班別、預班指定的自訂時段一律不動</strong>；「大夜隔天接小夜必須 20:00」的 12 小時休息鐵律仍優先於均衡。
     <br>每天實際的切點不會另外標示（畫面較清爽），要核對請直接看月曆每格顯示的班別起訖時間（例：早班 08:00-17:00 即代表當天切在 17:00）。取消勾選即恢復平日 20:00／假日 17:00 的原本規則。
@@ -733,7 +733,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <div class="man-step"><div class="man-sn">2</div><div class="man-sb">在下拉選單中選擇各班別對應的醫師，或留空。</div></div>
     <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 新增醫師」填入時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）並選醫師。</div></div>
     <div class="man-step"><div class="man-sn">4</div><div class="man-sb">點「確認」儲存，系統自動存檔。</div></div>
-    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點可選 16:00 / 17:00 / 18:00 / 20:00（已取消 19:00）；勾選「⚖ 平均」則由系統依時數自動在這四個切點之間逐日挑選。</p>
+    <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點可選 16:00 / 17:00 / 18:00 / 20:00（已取消 19:00）；勾選「⚖ 平均」則由系統依時數自動在這四個切點之間逐日挑選。切割點與「⚖ 平均」都是<strong>每月獨立</strong>，切換月份時工具列會自動顯示該月的設定。</p>
     <h4>📌 當日備註</h4>
     <p>在「當日排班」視窗最下方有「📌 當日備註」欄，可填當日行政事務（例：晨會、器材檢查、教學活動）。填寫後月曆該日會顯示黃色備註列，滑鼠移上去可看完整內容。</p>
     <h4>🏥 楊天 / ICU / 病房（額外項目）</h4>
@@ -999,6 +999,9 @@ let state = {
   defaultSplit: 20,   // 平日切割點
   holidaySplit: 17,   // 假日切割點
   splitBalance: false, // 「平均」模式：不分平假日，切割點由 16/17/18/20 中依時數均衡自動選
+  // 每月各自的切割點設定（2026-09-12）：key="YYYY-M"(月份 0-based)，值 {d:平日,h:假日,bal:平均模式}。
+  // 上面三個全域值退居「沒有自己設定的月份」的預設值 → 改某月不會動到其他月份（尤其已完成月份）。
+  monthSplit: {},
   schedule: {},
   preRequests: {},
   avoidPairs: [],
@@ -1393,13 +1396,51 @@ function clampSplit(v){ return Math.min(20,Math.max(16,v||20)); }
 // 「平均」模式下，尚未指定切割點的日子拿來顯示/試算的中性基準（16~20 的中間值）。
 // 平均模式沒有「平日/假日預設」的概念，真正的切割點由 bestSplitForPair() 依時數逐日挑選。
 const SPLIT_BAL_BASE = 18;
-function isSplitBalance(){ return !!state.splitBalance; }
+// ===== 每月獨立的切割點設定 =====
+// 切割點（平日／假日／平均）是「逐月」的：8 月可以用平均、9 月用固定 20:00，互不影響。
+// state.monthSplit["YYYY-M"] = {d,h,bal}；沒有紀錄的月份沿用 state.defaultSplit/holidaySplit/splitBalance
+// 這組全域值（＝改版前的行為，所以舊資料升級後結果完全不變）。
+function _splitMKey(y,m){ return `${y}-${m}`; }           // m 為 0-based，與 _lockedMonths/_completedMonths 同格式
+function _curSplitMKey(){ return _splitMKey(state.year,state.month); }
+function _splitMKeyOf(dateStr){                            // 'YYYY-MM-DD' → 該日期所屬月份的 key
+  const p=String(dateStr||'').split('-');
+  if(p.length<2) return _curSplitMKey();
+  return _splitMKey(parseInt(p[0],10), parseInt(p[1],10)-1);
+}
+function splitCfgByKey(key){
+  const c=state.monthSplit&&state.monthSplit[key];
+  if(c) return {d:clampSplit(c.d||20), h:clampSplit(c.h||17), bal:!!c.bal, own:true};
+  return {d:clampSplit(state.defaultSplit||20), h:clampSplit(state.holidaySplit||17), bal:!!state.splitBalance, own:false};
+}
+function splitCfgForDate(dateStr){ return splitCfgByKey(_splitMKeyOf(dateStr)); }
+function curSplitCfg(){ return splitCfgByKey(_curSplitMKey()); }
+// 把目前檢視月份的設定寫進 monthSplit（第一次寫入時以現行值為基底，只改 patch 指定的欄位）
+function setCurMonthSplit(patch){
+  if(!state.monthSplit||typeof state.monthSplit!=='object') state.monthSplit={};
+  const c=curSplitCfg();
+  state.monthSplit[_curSplitMKey()]=Object.assign({d:c.d,h:c.h,bal:c.bal},patch);
+}
+// 從雲端／備份讀進來時把 monthSplit 洗乾淨，避免壞資料讓整份設定爆掉
+function _sanitizeMonthSplit(o){
+  const out={};
+  if(o&&typeof o==='object'){
+    for(const k in o){
+      const c=o[k]; if(!c||typeof c!=='object') continue;
+      out[k]={d:clampSplit(parseInt(c.d,10)||20), h:clampSplit(parseInt(c.h,10)||17), bal:!!c.bal};
+    }
+  }
+  return out;
+}
+// 帶日期 → 該日所屬月份的平均模式；不帶 → 目前檢視月份（自動排班／UI 用）
+function isSplitBalance(dateStr){ return dateStr ? splitCfgForDate(dateStr).bal : curSplitCfg().bal; }
 
 // 工具列兩個切割點下拉、「平均」勾選與 state 同步
 function _syncSplitSelects(){
-  const bal=isSplitBalance();
-  const a=document.getElementById('default-split'); if(a){ a.value=state.defaultSplit; a.disabled=bal; a.style.opacity=bal?'.4':''; }
-  const b=document.getElementById('holiday-split'); if(b){ b.value=state.holidaySplit; b.disabled=bal; b.style.opacity=bal?'.4':''; }
+  const cfg=curSplitCfg();
+  const bal=cfg.bal;
+  const t=document.getElementById('split-title'); if(t) t.textContent=`${state.month+1}月切割點：`;
+  const a=document.getElementById('default-split'); if(a){ a.value=cfg.d; a.disabled=bal; a.style.opacity=bal?'.4':''; }
+  const b=document.getElementById('holiday-split'); if(b){ b.value=cfg.h; b.disabled=bal; b.style.opacity=bal?'.4':''; }
   const c=document.getElementById('split-balance'); if(c) c.checked=bal;
   for(const id of ['split-wk-lbl','split-hol-lbl']){
     const e=document.getElementById(id); if(e) e.style.opacity=bal?'.4':'';
@@ -1407,44 +1448,37 @@ function _syncSplitSelects(){
   const l=document.getElementById('split-bal-lbl');
   if(l){ l.style.background=bal?'#5e35b1':'#f3e9ff'; l.style.color=bal?'#fff':'#5e35b1'; }
 }
-// 工具列「預設切割點」有守門的變更入口（兩個下拉 + 「平均」勾選共用）。
-// 這幾個設定都是「全域」的（跨所有月份），會改變已完成月份的時數與點值 → 影響薪資 CSV，
-// 所以不是用 blockIfCompleted() 單擋當月，而是「只要存在任何已完成月份」就列出並要求確認。
-function _splitSettingGuard(){
-  if(!_completedMonths.size) return true;
-  const list=[..._completedMonths].map(k=>{
-    const p=k.split('-'); return `${p[0]}年${(parseInt(p[1],10)+1)}月`;
-  }).sort().join('、');
-  return confirm(
-      '⚠️ 「預設切割點」是全域設定，會一併改變已完成（唯讀）月份的時數與點值計算，\n'+
-      '匯出的醫師時數 CSV／薪資試算也會跟著變動。\n\n'+
-      '目前已完成的月份：'+list+'\n\n確定要修改嗎？'
-  );
-}
+// 工具列切割點的變更入口（兩個下拉 + 「平均」勾選共用）。
+// 2026-09-12 起這三個設定是「逐月」的，只寫進目前檢視的月份 → 不再影響其他（尤其已完成）月份，
+// 因此守門也從「列出所有已完成月份」簡化成一般的 blockIfCompleted()（本月已完成即唯讀擋下）。
 function changeSplitSetting(which,val){
   if(blockIfViewOnly()){ _syncSplitSelects(); return; }
+  if(blockIfCompleted()){ _syncSplitSelects(); return; }
   const v=clampSplit(parseInt(val,10));
-  if(!_splitSettingGuard()){ _syncSplitSelects(); return; }
-  if(which==='holiday') state.holidaySplit=v; else state.defaultSplit=v;
+  setCurMonthSplit(which==='holiday' ? {h:v} : {d:v});
   _syncSplitSelects();
   autoSave(); renderCalendar();
+  showToast(`🔪 ${state.month+1}月${which==='holiday'?'假日':'平日'}切割點設為 ${String(v).padStart(2,'0')}:00（僅此月份）`);
 }
 // 「⚖ 平均」勾選：不分平假日，每天的切割點由系統在 16/17/18/20 之間依各醫師時數均衡挑選。
 // 只影響「自動排班」與尚未指定切割點的日子；已存檔的 ds.split（含手動指定、鎖定日）不會被動到。
 function toggleSplitBalance(checked){
   if(blockIfViewOnly()){ _syncSplitSelects(); return; }
-  if(!_splitSettingGuard()){ _syncSplitSelects(); return; }
-  state.splitBalance=!!checked;
+  if(blockIfCompleted()){ _syncSplitSelects(); return; }
+  setCurMonthSplit({bal:!!checked});
   _syncSplitSelects();
   autoSave(); renderCalendar();
+  const mm=state.month+1;
   showToast(checked
-    ? '⚖ 已開啟「平均」切割點：不分平假日，下次自動排班會在 16/17/18/20 之間依時數均衡挑選。'
-    : '已關閉「平均」切割點，恢復平日／假日預設值。');
+    ? `⚖ ${mm}月已開啟「平均」切割點：不分平假日，下次自動排班會在 16/17/18/20 之間依時數均衡挑選（僅此月份）。`
+    : `${mm}月已關閉「平均」切割點，恢復該月的平日／假日設定。`);
 }
-// 預設切割點：平日 20:00、假日 17:00（可於工具列調整）；平均模式不分平假日，統一用中性基準
+// 切割點：依「該日期所屬月份」的設定（出廠值平日 20:00／假日 17:00，可於工具列逐月調整）；
+// 平均模式不分平假日，統一用中性基準。跨月查前/後一天時也會自動套用那一天所屬月份的設定。
 function defaultSplitFor(dateStr){
-  if(isSplitBalance()) return SPLIT_BAL_BASE;
-  return clampSplit(isHoliday(dateStr) ? (state.holidaySplit||17) : (state.defaultSplit||20));
+  const c=splitCfgForDate(dateStr);
+  if(c.bal) return SPLIT_BAL_BASE;
+  return clampSplit(isHoliday(dateStr) ? c.h : c.d);
 }
 function getDaySplit(dateStr){
   return (state.schedule[dateStr]&&state.schedule[dateStr].split) || defaultSplitFor(dateStr);
@@ -2009,7 +2043,7 @@ function computeNightQuotas(y,m,dates){
 function bestSplitForPair(earlyId, lateId, date, sched){
   const earlyDoc = earlyId ? state.doctors.find(d=>d.id===earlyId) : null;
   const lateDoc  = lateId  ? state.doctors.find(d=>d.id===lateId)  : null;
-  const bal = isSplitBalance();            // 「平均」模式：不分平假日，純靠時數決定
+  const bal = isSplitBalance(date);        // 「平均」模式（依該日所屬月份）：不分平假日，純靠時數決定
   const dayDefault = defaultSplitFor(date); // 平日20:00 / 假日17:00（平均模式為中性基準 18:00）
   if(!earlyDoc && !lateDoc) return dayDefault;
 
@@ -2699,6 +2733,7 @@ function countEmpty(sched){
 function renderCalendar(){
   const y=state.year, m=state.month;
   const ml=document.getElementById('month-label'); if(ml) ml.textContent=`${y}年${m+1}月`;
+  _syncSplitSelects(); // 切割點是逐月設定 → 換月份時工具列要跟著換
 
   document.getElementById('doc-legend').innerHTML=
     `<span class="legend-item" onclick="toggleDocFilter(null)" style="cursor:pointer;padding:2px 7px;border-radius:10px;border:1px solid ${!_filterDocId?'#1a4a7a':'#ccc'};background:${!_filterDocId?'#e8f0fb':'transparent'};color:${!_filterDocId?'#1a4a7a':'#999'};font-weight:${!_filterDocId?'700':'400'}">全部</span>`+
@@ -4751,6 +4786,7 @@ function applyCloudData(data){
   state.defaultSplit=clampSplit(data.defaultSplit||20);
   state.holidaySplit=clampSplit(data.holidaySplit||17);
   state.splitBalance=!!data.splitBalance;
+  state.monthSplit=_sanitizeMonthSplit(data.monthSplit);
   state.avoidPairs=data.avoidPairs||[];
   if(data.idCnt) _idCnt=data.idCnt;
   _lockedMonths.clear(); (data.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -4765,7 +4801,7 @@ function applyCloudData(data){
   try{ localStorage.setItem(LS_KEY,JSON.stringify({
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]
   }));}catch(e){}
 }
@@ -4778,7 +4814,7 @@ function cloudSave(){
   const data={
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,avoidPairs:state.avoidPairs||[],
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},avoidPairs:state.avoidPairs||[],
     idCnt:_idCnt,lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths],_ts:Date.now(),_client:_clientId
   };
   const myTs=data._ts;
@@ -4867,7 +4903,7 @@ function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
       holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
       lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
     localStorage.setItem(LS_KEY,JSON.stringify(data));
     const ind=document.getElementById('_autosave_ind');
@@ -4891,6 +4927,7 @@ function autoLoad(){
     state.defaultSplit=clampSplit(d.defaultSplit||20);
     state.holidaySplit=clampSplit(d.holidaySplit||17);
     state.splitBalance=!!d.splitBalance;
+    state.monthSplit=_sanitizeMonthSplit(d.monthSplit);
     state.avoidPairs=d.avoidPairs||[];
     if(d.idCnt) _idCnt=d.idCnt;
     _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -4902,7 +4939,7 @@ function autoLoad(){
 function saveData(){
   const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -4936,6 +4973,7 @@ function loadData(){
         state.defaultSplit=clampSplit(d.defaultSplit||20);
         state.holidaySplit=clampSplit(d.holidaySplit||17);
         state.splitBalance=!!d.splitBalance;
+        state.monthSplit=_sanitizeMonthSplit(d.monthSplit);
         state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
         _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
