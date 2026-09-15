@@ -4272,7 +4272,7 @@ function renderStats(){
     totW816+=s.w816; totH816+=s.h816; totW1602+=s.w1602; totH1602+=s.h1602;
     totW028+=s.w028; totH028+=s.h028; totPts+=s.pts; totIcuPts+=s.icuPts; totPerfPts+=s.perfPts;
     return `<tr>
-      <td style="text-align:left"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
+      <td style="text-align:left;white-space:nowrap"><span class="color-dot" style="background:${doc.color};vertical-align:middle;margin-right:4px"></span>${doc.name}</td>
       <td style="${WD}">${s.w816||'-'}</td><td style="${HD}">${s.h816||'-'}</td>
       <td style="${WD}">${s.w1602||'-'}</td><td style="${HD}">${s.h1602||'-'}</td>
       <td style="${WD}">${s.w028||'-'}</td><td style="${HD}">${s.h028||'-'}</td>
@@ -4287,7 +4287,7 @@ function renderStats(){
   });
   const totH=totW816+totH816+totW1602+totH1602+totW028+totH028;
   const totRow=`<tr style="background:#f0fdf4;font-weight:bold;border-top:2px solid #666">
-    <td style="text-align:left">📊 當月合計</td>
+    <td style="text-align:left;white-space:nowrap">📊 當月合計</td>
     <td style="${WD}">${totW816||'-'}</td><td style="${HD}">${totH816||'-'}</td>
     <td style="${WD}">${totW1602||'-'}</td><td style="${HD}">${totH1602||'-'}</td>
     <td style="${WD}">${totW028||'-'}</td><td style="${HD}">${totH028||'-'}</td>
@@ -5478,7 +5478,7 @@ function generatePDF(){
     const s=st[doc.id];
     const totalH=s.w816+s.h816+s.w1602+s.h1602+s.w028+s.h028;
     return `<tr>
-      <td style="text-align:left">${doc.name}</td>
+      <td style="text-align:left;white-space:nowrap">${doc.name}</td>
       <td style="background:#dbeafe">${s.w816||'-'}</td><td style="background:#fef9c3">${s.h816||'-'}</td>
       <td style="background:#dbeafe">${s.w1602||'-'}</td><td style="background:#fef9c3">${s.h1602||'-'}</td>
       <td style="background:#dbeafe">${s.w028||'-'}</td><td style="background:#fef9c3">${s.h028||'-'}</td>
