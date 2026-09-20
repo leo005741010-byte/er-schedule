@@ -118,6 +118,14 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 #header #btn-finish-lock.on{background:#b3261e;border-color:#e05a52;color:#fff;box-shadow:0 0 0 2px rgba(239,83,80,.35);}
 #header #btn-complete-month.on{background:#1b7f3b;border-color:#3fa863;color:#fff;box-shadow:0 0 0 2px rgba(76,175,80,.35);}
 #header #btn-view-toggle.on{background:#00695c;border-color:#26a69a;color:#fff;}
+/* 草稿模式（手動發布）：開啟＝橘色實心；有未發布變更時發布鈕亮起 */
+#header #btn-draft-mode{min-width:104px;justify-content:center;}
+#header #btn-draft-mode.on{background:#b26a00;border-color:#e08a1e;color:#fff;box-shadow:0 0 0 2px rgba(255,167,38,.35);}
+#header #btn-publish{min-width:118px;justify-content:center;background:#e67e22;border-color:#f39c12;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);}
+#header #btn-publish:hover{background:#f39c12;border-color:#f7b955;}
+#header #btn-publish:disabled{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.2);color:#c7d3e0;box-shadow:none;}
+/* 用 class 而非 inline style 控制顯示：initViewMode() 會把 [data-pwa-hide] 的 inline display 清掉 */
+#header .tb-hidden{display:none !important;}
 /* 分組分隔線 */
 .tb-sep{width:1px;height:18px;background:rgba(255,255,255,.20);margin:0 1px;flex-shrink:0;}
 /* 月份切換膠囊：◀ 年月 ▶ 一體成型 */
@@ -395,6 +403,8 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
   <button class="action-btn tb-data" data-pwa-hide onclick="saveData()" title="下載完整JSON備份（含所有月份班表/醫師/預假）">💾 備份</button>
   <button class="action-btn tb-data" data-pwa-hide onclick="loadData()" title="從JSON備份檔還原（會覆蓋現有資料）">📂 還原備份</button>
   <button class="action-btn tb-data" data-pwa-hide onclick="openCloudSettings()">☁️ 雲端設定</button>
+  <button id="btn-draft-mode" class="action-btn tb-data" data-pwa-hide onclick="toggleDraftMode()" title="開啟後排班只存這台裝置，不會自動上傳雲端，等你按「發布」才同步給大家">📝 草稿模式</button>
+  <button id="btn-publish" class="action-btn tb-hidden" data-pwa-hide onclick="publishToCloud()" disabled>✅ 已發布</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
   <span id="_cloud_status" data-pwa-hide style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
   <span id="_pwa-badge" style="display:none;font-size:11px;color:#a5d6a7;font-weight:700">📱 檢視模式</span>
@@ -5371,6 +5381,24 @@ let _cloudReady=false;
 let _lastKnownTs=0;
 let _cloudConflict=false;
 
+// ===== 草稿模式（排班期間先不發布）=====
+// 主任排一份班要改很多輪，過程中不希望每動一格就推給所有人看。
+// 開啟草稿模式後：一切照常存在這台裝置（localStorage / 備份 / PDF 都不受影響），
+// 但「不」寫入雲端，直到按下「🚀 發布到雲端」為止。
+// 期間若別台裝置寫了雲端，也不會套用進來蓋掉草稿（先擱著，狀態列提示）。
+const DRAFT_MODE_KEY='tienSheng_erSched_draftMode';
+const DRAFT_DIRTY_KEY='tienSheng_erSched_draftDirty';
+let _draftMode=false,_draftDirty=false;
+try{
+  _draftMode=localStorage.getItem(DRAFT_MODE_KEY)==='1';
+  // 未發布狀態也要記住：關掉瀏覽器隔天再開，草稿還沒發布這件事不能消失
+  _draftDirty=_draftMode&&localStorage.getItem(DRAFT_DIRTY_KEY)==='1';
+}catch(e){}
+let _cloudIncoming=null;          // 草稿期間收到、刻意沒套用的雲端資料
+let _publishing=false;
+let _lastPublishAt='';
+let _cloudStat={ok:false,msg:''}; // 記住最後一次雲端狀態，草稿列重畫時要用
+
 // 內建共用雲端網址：每台裝置（含手機 App）開啟即自動連線，不需手動設定
 const DEFAULT_CLOUD_URL='https://tenchener-488d2-default-rtdb.firebaseio.com/';
 function getCloudUrl(){ return localStorage.getItem(CLOUD_URL_KEY)||DEFAULT_CLOUD_URL; }
@@ -5394,10 +5422,15 @@ async function initCloud(url){
         updateCloudStatus(true);
         return;
       }
-      if(typeof data._ts==='number') _lastKnownTs=data._ts;
+      const mine=(data._client===_clientId);
+      // 草稿模式＋有未發布變更：別台裝置的更新一律不套用（會蓋掉草稿），
+      // 也刻意不推進 _lastKnownTs —— 這樣按「發布」時才偵測得出「雲端被別人動過」。
+      const hold=(_draftMode&&_draftDirty&&!mine);
+      if(typeof data._ts==='number'&&!hold) _lastKnownTs=data._ts;
       _cloudReady=true;                       // 收到第一個 snapshot 才開放寫入
       updateCloudStatus(true);                // 真正拿到資料才顯示「已連線」
-      if(data._client===_clientId) return;    // 自己寫入的回音，略過
+      if(mine) return;                        // 自己寫入的回音，略過
+      if(hold){ _cloudIncoming=data; updateDraftUI(); return; }
       _cloudConflict=false;                   // 已收到對方最新資料，衝突解除
       applyCloudData(data);
     }, err=>{
@@ -5452,17 +5485,24 @@ function applyCloudData(data){
   }));}catch(e){}
 }
 
-function cloudSave(){
-  if(!_fbRef) return;
-  // 尚未收到第一個 snapshot：本機 state 可能只是「空白預設」，絕不可整份覆蓋雲端
-  if(!_cloudReady){ updateCloudStatus(false,'雲端載入中，尚未同步'); return; }
-  if(_cloudConflict){ updateCloudStatus(false,'偵測到衝突，未同步'); return; }
-  const data={
+// 上雲用的整份資料（cloudSave 自動同步與 publishToCloud 手動發布共用，避免日後加欄位漏掉一邊）
+function _cloudPayload(){
+  return {
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
     defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},reporters:state.reporters||{},avoidPairs:state.avoidPairs||[],
     idCnt:_idCnt,lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths],_ts:Date.now(),_client:_clientId
   };
+}
+
+function cloudSave(){
+  // 草稿模式：只留在這台裝置，標記「有未發布變更」，等使用者按「🚀 發布到雲端」
+  if(_draftMode){ _setDraftDirty(true); return; }
+  if(!_fbRef) return;
+  // 尚未收到第一個 snapshot：本機 state 可能只是「空白預設」，絕不可整份覆蓋雲端
+  if(!_cloudReady){ updateCloudStatus(false,'雲端載入中，尚未同步'); return; }
+  if(_cloudConflict){ updateCloudStatus(false,'偵測到衝突，未同步'); return; }
+  const data=_cloudPayload();
   const myTs=data._ts;
   // 寫入前比對雲端 _ts：比「本機已知」新 → 別台裝置在我們之後寫過，中止本次整份覆蓋
   _fbRef.child('_ts').once('value').then(s=>{
@@ -5481,10 +5521,120 @@ function cloudSave(){
 }
 
 function updateCloudStatus(ok,msg=''){
+  _cloudStat={ok:!!ok,msg:msg||''};
+  _paintCloudStatus();
+}
+
+function _paintCloudStatus(){
   const el=document.getElementById('_cloud_status');
   if(!el) return;
-  el.textContent=ok?'☁️ 已連線':('☁️ '+(msg||'未連線'));
-  el.style.color=ok?'#a5d6a7':'#ef9a9a';
+  if(_draftMode){
+    let t,c;
+    if(_draftDirty){ t='📝 草稿未發布'; c='#ffcc80'; }
+    else { t=_cloudStat.ok?'📝 草稿模式（已連線）':('📝 草稿模式（'+(_cloudStat.msg||'未連線')+'）'); c=_cloudStat.ok?'#a5d6a7':'#ef9a9a'; }
+    if(_cloudIncoming){ t+='｜☁️ 雲端有別台的新版本（未套用）'; c='#ffcc80'; }
+    el.textContent=t; el.style.color=c;
+    return;
+  }
+  el.textContent=_cloudStat.ok?'☁️ 已連線':('☁️ '+(_cloudStat.msg||'未連線'));
+  el.style.color=_cloudStat.ok?'#a5d6a7':'#ef9a9a';
+}
+
+function _setDraftDirty(v,force){
+  v=!!v;
+  if(_draftDirty===v&&!force) return;   // autoSave 每次都會呼叫，值沒變就不重畫
+  _draftDirty=v;
+  try{ if(v) localStorage.setItem(DRAFT_DIRTY_KEY,'1'); else localStorage.removeItem(DRAFT_DIRTY_KEY); }catch(e){}
+  updateDraftUI();
+}
+
+function updateDraftUI(){
+  const bd=document.getElementById('btn-draft-mode');
+  if(bd){
+    bd.classList.toggle('on',_draftMode);
+    bd.textContent=_draftMode?'📝 草稿模式：開':'📝 草稿模式';
+    bd.title=_draftMode
+      ?'目前的修改只存在這台裝置。按「🚀 發布到雲端」才會同步給大家；點此可切回即時同步。'
+      :'開啟後排班只存這台裝置，不會自動上傳雲端，等你按「發布」才同步給大家';
+  }
+  const bp=document.getElementById('btn-publish');
+  if(bp){
+    bp.classList.toggle('tb-hidden',!_draftMode);
+    if(_publishing){
+      bp.disabled=true; bp.textContent='🚀 發布中…'; bp.title='';
+    }else{
+      bp.disabled=!_draftDirty;
+      bp.textContent=_draftDirty?'🚀 發布到雲端':('✅ 已發布'+(_lastPublishAt?' '+_lastPublishAt:''));
+      bp.title=_draftDirty?'把這台裝置的草稿整份同步到雲端，大家（含手機看板）就會看到這一版':'目前沒有未發布的變更';
+    }
+  }
+  _paintCloudStatus();
+}
+
+function toggleDraftMode(){
+  if(!_draftMode){
+    _draftMode=true;
+    try{ localStorage.setItem(DRAFT_MODE_KEY,'1'); }catch(e){}
+    updateDraftUI();
+    showToast('📝 已進入草稿模式：之後的修改只留在這台裝置，按「🚀 發布到雲端」才會同步給大家','ok');
+    return;
+  }
+  // 要離開草稿模式
+  if(_draftDirty){
+    if(!confirm('你還有未發布的排班變更。\n\n按「確定」＝立刻發布到雲端，並切回即時同步\n按「取消」＝留在草稿模式（繼續改，改完再按發布）')) return;
+    publishToCloud({then:_exitDraftMode});   // 發布成功才切回
+    return;
+  }
+  _exitDraftMode();
+}
+
+function _exitDraftMode(){
+  _draftMode=false;
+  try{ localStorage.removeItem(DRAFT_MODE_KEY); localStorage.removeItem(DRAFT_DIRTY_KEY); }catch(e){}
+  _draftDirty=false;
+  if(_cloudIncoming){
+    const d=_cloudIncoming; _cloudIncoming=null;
+    if(typeof d._ts==='number') _lastKnownTs=d._ts;
+    _cloudConflict=false;
+    applyCloudData(d);                        // 草稿期間擱著的別台更新，這時才補套用
+    showToast('☁️ 已切回即時同步，並載入雲端最新版本','ok');
+  }else{
+    showToast('☁️ 已切回即時同步：之後每次修改都會自動上傳','ok');
+  }
+  updateDraftUI();
+}
+
+// 手動發布：把這台裝置的草稿整份寫上雲端（草稿模式專用的那顆鍵）
+function publishToCloud(opts){
+  opts=opts||{};
+  if(_publishing) return;
+  if(!_fbRef){ showToast('☁️ 尚未連線雲端，無法發布（請先按「☁️ 雲端設定」）','warn'); return; }
+  if(!_cloudReady){ showToast('☁️ 雲端資料還在載入中，請幾秒後再按一次發布','warn'); return; }
+  const data=_cloudPayload();
+  const myTs=data._ts;
+  _publishing=true; updateDraftUI();
+  const finish=ok=>{ _publishing=false; updateDraftUI(); if(ok&&typeof opts.then==='function') opts.then(); };
+  _fbRef.child('_ts').once('value').then(s=>{
+    const remoteTs=s.val();
+    // 草稿期間雲端被別台寫過 → 整份覆蓋會蓋掉對方那次的變更，讓使用者自己決定
+    if(typeof remoteTs==='number'&&remoteTs>_lastKnownTs){
+      const d=new Date(remoteTs),p=n=>String(n).padStart(2,'0');
+      const when=`${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      if(!confirm('⚠️ 你在草稿期間，雲端被其他裝置更新過（'+when+'）。\n\n按「確定」＝用這台裝置的草稿整份覆蓋雲端（對方那次的變更會不見）\n按「取消」＝先不要發布')){
+        showToast('已取消發布，草稿仍留在這台裝置','warn');
+        finish(false); return;
+      }
+    }
+    _lastKnownTs=myTs;
+    return _fbRef.set(data).then(()=>{
+      _cloudConflict=false; _cloudIncoming=null;
+      const d=new Date(),p=n=>String(n).padStart(2,'0');
+      _lastPublishAt=`${p(d.getHours())}:${p(d.getMinutes())}`;
+      _setDraftDirty(false,true);
+      showToast('🚀 已發布到雲端：大家（含手機看板）現在看到的就是這一版','ok');
+      finish(true);
+    });
+  }).catch(e=>{ showToast('☁️ 發布失敗: '+e.message+'（草稿仍在本機，可再按一次發布）','warn'); finish(false); });
 }
 
 function openCloudSettings(){
@@ -6261,7 +6411,13 @@ window.onload=()=>{
     renderCalendar();
     updateLockBtn(); updateCompleteBtn(); updateUndoBtn(); updateRedoBtn();
     initViewMode(); // 依裝置/使用者設定套用看板檢視模式
+    updateDraftUI();
     if(restored&&!_viewOnly) showToast('已自動還原上次排班資料');
+    if(_draftMode&&_draftDirty&&!_viewOnly) setTimeout(()=>showToast('📝 這台裝置還有「未發布」的排班草稿，確認後請按「🚀 發布到雲端」','warn'),1200);
+    // 有未發布草稿時關掉分頁會很可惜，離開前提醒一下（瀏覽器統一文案）
+    window.addEventListener('beforeunload',e=>{
+      if(_draftMode&&_draftDirty&&!_viewOnly){ e.preventDefault(); e.returnValue=''; return ''; }
+    });
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
     let _rzT; window.addEventListener('resize',()=>{ clearTimeout(_rzT); _rzT=setTimeout(_syncScheduleViewMode,150); });
