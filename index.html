@@ -158,6 +158,8 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 .badge-today{font-size:9px;background:#1a4a7a;color:#fff;padding:1px 6px;border-radius:9px;font-weight:700;letter-spacing:.5px;}
 .cal-day.day-locked{border:2px solid #d4a017;box-shadow:0 0 0 2px rgba(212,160,23,.25);}
 .cal-day.day-locked:hover{border-color:#b8860b;}
+.badge-report{font-size:9px;background:#00695c;color:#fff;padding:1px 4px;border-radius:3px;cursor:pointer;font-weight:700;}
+.badge-report:hover{background:#00897b;}
 .badge-daylock{font-size:9px;background:#d4a017;color:#fff;padding:1px 4px;border-radius:2px;font-weight:700;}
 /* 個別班別鎖定：班別列左側的小鎖 */
 .slot-lock{font-size:9px;margin-right:2px;}
@@ -185,6 +187,7 @@ body.mobile-view #header #btn-view-toggle{position:absolute;right:10px;bottom:7p
 .ms-dow{font-size:12px;font-weight:700;color:#8a94a6;}
 .ms-dow.wk{color:#c0392b;}
 .ms-today-chip{margin-left:auto;font-size:10px;font-weight:700;color:#fff;background:#1a4a7a;padding:2px 8px;border-radius:10px;}
+.ms-rep-chip{font-size:10px;font-weight:700;color:#fff;background:#00695c;padding:2px 8px;border-radius:10px;margin-left:6px;}
 .ms-row{display:flex;align-items:center;gap:8px;padding:4px 0;}
 .ms-slot{font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;min-width:42px;text-align:center;flex-shrink:0;}
 .ms-time{font-size:11px;color:#98a2b3;font-variant-numeric:tabular-nums;min-width:82px;flex-shrink:0;}
@@ -435,6 +438,10 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
             ⚖ 平均
           </label>
         </div>
+        <button class="action-btn" data-pwa-hide onclick="openReportModal()"
+                title="指派本月第1、3週四晨會報告的醫師（每個報告日各一位，每月可換人）"
+                style="background:#00695c;color:#fff">📢 晨會報告</button>
+        <span id="report-toolbar-info" data-pwa-hide style="font-size:11px;color:#00695c"></span>
       </div>
       <div id="doc-legend"></div>
     </div>
@@ -505,6 +512,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
               <input type="hidden" id="pr-type" value="OFF">
             </div>
           </div>
+          <div id="pr-limit-hint" style="display:none;font-size:11px;margin-top:5px;padding:4px 7px;border-radius:4px;line-height:1.5"></div>
           <div class="pr-field" id="custom-div" style="display:none">
             <div class="pr-lbl">自訂時段 (HH-HH)</div>
             <input type="text" id="pr-custom" placeholder="例: 08-17 或 17-02">
@@ -743,6 +751,12 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <div class="man-step"><div class="man-sn">3</div><div class="man-sb">如需加班醫師，點「＋ 新增醫師」填入時段（格式：<code>HH-HH</code>，例如 <code>8-20</code>）並選醫師。</div></div>
     <div class="man-step"><div class="man-sn">4</div><div class="man-sb">點「確認」儲存，系統自動存檔。</div></div>
     <p>點擊月曆上方的醫師徽章可篩選顯示單一醫師的班別，點「全部」恢復全顯示。切割點可選 16:00 / 17:00 / 18:00 / 20:00（已取消 19:00）；勾選「⚖ 平均」則由系統依時數自動在這四個切點之間逐日挑選。切割點與「⚖ 平均」都是<strong>每月獨立</strong>，切換月份時工具列會自動顯示該月的設定。</p>
+    <h4>📢 晨會報告（每月指派報告人）</h4>
+    <p>晨會報告在<strong>每月第 1、3 個週四 08:00</strong>，報告人每個月（甚至同月兩次）可以不同。按排班表工具列的「📢 晨會報告」，即可<strong>逐一指派</strong>本月兩個報告日各由誰報告；工具列右邊會即時顯示本月指派結果，月曆對應那天也會出現綠色「📢 姓名」標記（點它可直接修改）。</p>
+    <div class="man-step"><div class="man-sn">1</div><div class="man-sb">切到要排的月份 → 按「📢 晨會報告」→ 兩個報告日各選一位醫師 →「✔ 確認」。</div></div>
+    <div class="man-step"><div class="man-sn">2</div><div class="man-sb">懶得想輪到誰：按「⏭ 接續輪替」，系統會從<strong>上一次有指派的報告人</strong>往下接著輪（可再手動調整）。視窗內也會列出上個月是誰、以及每位醫師最近一次報告的月份。</div></div>
+    <div class="man-step"><div class="man-sn">3</div><div class="man-sb">指派完再按「⚡ 自動排班」，系統會確保被指派的人當天排到<strong>主白／早班</strong>，或前一天<strong>大夜</strong>（可接早上的晨會）。</div></div>
+    <div class="man-note"><strong>💡 說明</strong> 指派是<strong>每個報告日各自獨立</strong>的，改這個月不會動到其他月份（含已完成月份）。沒有指派過的月份，沿用「醫師設定」裡勾選「晨會報告」的醫師＝舊行為；要退回該模式，可在視窗內按「↩ 沿用醫師偏好」。統計報表的違規檢查也只針對<strong>當月被指派的人</strong>。</div>
     <h4>📌 當日備註</h4>
     <p>在「當日排班」視窗最下方有「📌 當日備註」欄，可填當日行政事務（例：晨會、器材檢查、教學活動）。填寫後月曆該日會顯示黃色備註列，滑鼠移上去可看完整內容。</p>
     <h4>🏥 楊天 / ICU / 病房（額外項目）</h4>
@@ -774,7 +788,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>不排白班</td><td>勾選後僅排小夜或大夜</td></tr>
         <tr><td>可 N OFF D</td><td>解除該醫師的「大夜 → 休一天 → 白班」禁令。<strong>不勾（預設）</strong>＝維持鐵律，自動排班不會排、手動排到會列入違規事項；<strong>勾選</strong>＝允許這樣接班，也不再報違規。12 小時休息與其他規則不受影響。</td></tr>
         <tr><td>醫務會議</td><td><strong>強制</strong>每月至少排一個週四主白/早班供簽到（僅在整月週四皆預假/鎖定時例外，統計會警告）</td></tr>
-        <tr><td>晨會報告</td><td>系統確認報告週四當天有主白/早班，或前天有大夜</td></tr>
+        <tr><td>晨會報告</td><td>系統確認報告週四當天有主白/早班，或前天有大夜。<strong>這是預設值</strong>：某月若已用排班表的「📢 晨會報告」指派報告人，該月一律以指派為準，不看這個勾選</td></tr>
       </tbody>
     </table>
   </div>
@@ -968,6 +982,30 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
   </div>
 </div>
 
+<!-- ======= 晨會報告（每個報告日各指派一位醫師，逐月輪替）======= -->
+<div id="report-modal" class="modal-overlay">
+  <div class="modal" style="max-width:560px">
+    <h2 id="report-modal-title">📢 晨會報告</h2>
+    <div id="report-ro-note" style="display:none;background:#fff3cd;border:1px solid #ffe08a;color:#8a6d00;border-radius:5px;padding:6px 10px;font-size:12px;margin-bottom:8px">
+      ✅ 本月已標記「完成」，晨會報告指派為唯讀。要修改請先按「完成本月」取消。
+    </div>
+    <div style="font-size:11px;color:#667;margin-bottom:10px;line-height:1.6">
+      指派每個<strong>報告日</strong>（第 1、3 個週四 08:00）由誰報告。自動排班會確保被指派的人當天排到<strong>主白／早班</strong>，或前一天<strong>大夜</strong>；統計報表也只對被指派的人檢查。<br>
+      指派<strong>每個報告日各自獨立</strong>，所以隔月換人只要每月設一次即可。沒有設定過的月份，沿用「醫師設定」裡勾選晨會報告的醫師（＝舊行為）。
+    </div>
+    <div id="report-list"></div>
+    <div id="report-hint" style="margin-top:10px"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button id="report-rotate-btn" class="action-btn btn-blue" onclick="_repRotate()" title="依醫師清單順序，接續上一次有指派的報告人往下輪">⏭ 接續輪替</button>
+      <button id="report-default-btn" class="action-btn" onclick="_repUseDefault()" style="background:#eceff1;color:#37474f;border:1px solid #b0bec5" title="清除本月指派，改回沿用『醫師設定』裡的晨會報告勾選">↩ 沿用醫師偏好</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeReportModal()">取消</button>
+      <button id="report-save-btn" class="btn-primary" onclick="saveReportModal()">✔ 確認</button>
+    </div>
+  </div>
+</div>
+
 <div id="doctor-modal" class="modal-overlay">
   <div class="modal">
     <h2 id="doc-modal-title">醫師設定</h2>
@@ -995,7 +1033,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <div class="check-row"><input type="checkbox" id="pref-cluster"><label for="pref-cluster">大夜班集中 (大夜盡量連上，避免上1休1上1)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-noffd"><label for="pref-noffd">可 N OFF D (大夜休一天即可接白班；不勾＝維持「大夜→OFF→白班」禁令)</label></div>
     <div class="check-row"><input type="checkbox" id="pref-medMeeting"><label for="pref-medMeeting">醫務會議 (每週四13:30-14:30，本月需至少一次主白/早班)</label></div>
-    <div class="check-row"><input type="checkbox" id="pref-morningReport"><label for="pref-morningReport">晨會報告 (第1、3週四08:00，需排主白/早班或週三大夜)</label></div>
+    <div class="check-row"><input type="checkbox" id="pref-morningReport"><label for="pref-morningReport">晨會報告 (第1、3週四08:00，需排主白/早班或週三大夜)<br><span style="font-size:11px;color:#777">※ 這裡是「沒有逐月指派的月份」才套用的預設；每月輪流報告請用排班表的「📢 晨會報告」逐月指定</span></label></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('doctor-modal')">取消</button>
       <button class="btn-primary" onclick="saveDoc()">儲存</button>
@@ -1039,6 +1077,9 @@ let state = {
   // 每月的「績效點值」項目（2026-09-12）：key="YYYY-M"(月份 0-based)，
   // 值 = [{id,name,pts,docs:[醫師id]}]；勾到的醫師該月各加 pts 點，併入統計報表的總點值。
   perfItems: {},
+  // 晨會報告的報告人（2026-09-20）：key="YYYY-MM-DD"（該月第1／第3個週四），值＝醫師id（''＝當日不指派）。
+  // 報告人是逐月（甚至同月兩次）輪替的，所以指派掛在「報告日」上，不再靠醫師的固定偏好。
+  reporters: {},
   schedule: {},
   preRequests: {},
   avoidPairs: [],
@@ -1360,6 +1401,54 @@ function getFirstThirdThursdays(y,m){
   return result;
 }
 
+// ===== 晨會報告：逐「報告日」指派報告人（2026-09-20）=====
+// 報告人每個月（甚至同月兩次）都可能不同 → 指派掛在報告日上：
+//   state.reporters["YYYY-MM-DD"] = 醫師id（''＝該日不指派）
+// 只要某月「任一」報告週四有紀錄，該月就整月走逐日指派（modal 存檔時兩天一起寫，不會半套）；
+// 完全沒紀錄的月份 fallback 回 doc.prefs.morningReport ＝ 改版前行為，舊備份／已完成月份結果不變。
+// ⚠ 排班加分(scoreDoc)、強制排班 pass、統計硬規則、月曆徽章都只能從 reportersOn() 取名單，勿各自判斷。
+const _repDaysCache=new Map(); // 報告日只由年月決定（純函數）→ 可永久快取；scoreDoc 每次評分都會查
+function _repDaysOf(y,m){
+  const k=y+'-'+m;
+  let v=_repDaysCache.get(k);
+  if(!v){ v=getFirstThirdThursdays(y,m); _repDaysCache.set(k,v); }
+  return v;
+}
+function _repHasMonth(y,m){
+  const R=state.reporters;
+  if(!R||typeof R!=='object') return false;
+  return _repDaysOf(y,m).some(d=>Object.prototype.hasOwnProperty.call(R,d));
+}
+// 某日應到場報告的醫師 id 陣列；非報告日一律空陣列。
+// 逐日指派模式最多 1 人；fallback 模式（沿用醫師偏好）可能多人。
+function reportersOn(dateStr){
+  const p=String(dateStr||'').split('-');
+  if(p.length<3) return [];
+  const y=parseInt(p[0],10), m=parseInt(p[1],10)-1;
+  if(isNaN(y)||isNaN(m)) return [];
+  if(!_repDaysOf(y,m).includes(dateStr)) return [];
+  if(_repHasMonth(y,m)){
+    const id=(state.reporters||{})[dateStr];
+    return (id&&state.doctors.some(d=>d.id===id))?[id]:[];
+  }
+  return state.doctors.filter(d=>d.type==='full'&&d.prefs.morningReport).map(d=>d.id);
+}
+function isReporterOn(docId,dateStr){ return reportersOn(dateStr).includes(docId); }
+// 從雲端／備份讀進來時洗乾淨，避免壞資料讓整份設定爆掉
+function _sanitizeReporters(o){
+  const out={};
+  if(o&&typeof o==='object'){
+    for(const k in o){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
+      const _p=k.split('-'), _mm=parseInt(_p[1],10), _dd=parseInt(_p[2],10);
+      if(_mm<1||_mm>12||_dd<1||_dd>31) continue;      // 擋掉 2026-13-99 這種格式對但不存在的日期
+      const v=o[k];
+      out[k]=(typeof v==='string')?v:'';
+    }
+  }
+  return out;
+}
+
 // ============================================================
 // SLOT / SHIFT HELPERS
 // ============================================================
@@ -1673,6 +1762,36 @@ function getNextExtra(docId, afterDate, sched){
   return null;
 }
 
+// ===== 班別限制型預班（2026-09-20）=====
+// 既有預班只有兩類：OFF*（當天整天不排班）與 WORK_*（強制指派某一格）。
+// 這三種是第三類「當天照排，但限制不能排哪些班別」：
+//   LIMIT_NO_DAY   不白班   → 當天不排 主白/早班（不限天數）
+//   LIMIT_ONLY_DAY 只能白班 → 當天不排 小夜/大夜（仍可放假，不保證一定有白班）每月上限 3 天
+//   LIMIT_NO_BIG   不大夜   → 當天不排 大夜，每月上限 3 天
+// ⚠ 型別名稱刻意不以 WORK_ 開頭（多處用 startsWith('WORK_') 判「強制指派」），
+//   也刻意不加進 OFF 清單（那會變成整天都不能排班）。
+// ⚠ 與預假同級的鐵律：三支 canWork* 都要擋，checkConstraints／renderStats 也要抓人工調班。
+const PR_LIMIT_CAP=3;                                     // 有上限的型別：每人每月天數
+const PR_LIMIT_CAPPED={LIMIT_ONLY_DAY:'只能白班',LIMIT_NO_BIG:'不大夜'};
+function isPRLimitType(t){ return t==='LIMIT_NO_DAY'||t==='LIMIT_ONLY_DAY'||t==='LIMIT_NO_BIG'; }
+// 單筆限制型預班是否禁止某班別 —— 唯一判定入口，各處勿自己展開
+function prLimitBlocks(type,slot){
+  if(type==='LIMIT_NO_DAY')   return slot==='主白'||slot==='早班';
+  if(type==='LIMIT_ONLY_DAY') return slot==='小夜'||slot==='大夜';
+  if(type==='LIMIT_NO_BIG')   return slot==='大夜';
+  return false;
+}
+// 某醫師某月已用掉幾「天」某型別（同日同型別只算一次）
+function countDocLimitDays(docId,type,y,m){
+  const prefix=`${y}-${String(m+1).padStart(2,'0')}-`;
+  let n=0;
+  for(const[date,prs] of Object.entries(state.preRequests)){
+    if(!date.startsWith(prefix)) continue;
+    if(prs.some(pr=>pr.docId===docId&&pr.type===type)) n++;
+  }
+  return n;
+}
+
 function canWork(docId, date, slot, sched){
   const doc=state.doctors.find(d=>d.id===docId);
   if(!doc||doc.type==='part') return false;
@@ -1682,6 +1801,7 @@ function canWork(docId, date, slot, sched){
   const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
   for(const pr of prs){
     if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;
+    if(prLimitBlocks(pr.type,slot)) return false; // 不白班／只能白班／不大夜（與預假同級，三支都要擋）
   }
   const last=getLastAssigned(docId,date,sched);
   if(last){
@@ -1761,7 +1881,10 @@ function canWorkRelaxed(docId, date, slot, sched){
   const ds=sched[date]||{};
   if(SLOTS.some(s=>ds[s]===docId) || getExtraForDoc(ds,docId)) return false;
   const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
-  for(const pr of prs){if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;}
+  for(const pr of prs){
+    if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;
+    if(prLimitBlocks(pr.type,slot)) return false; // 不白班／只能白班／不大夜（鐵律，不得放寬）
+  }
   // 隔天有「OFF+前天不大夜/不夜班」的預假 → 今天不可排對應夜班（與 canWork/canWorkForce 一致；預假為鐵律不得放寬）
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
   for(const pr of nextDayPRs){
@@ -1837,7 +1960,10 @@ function canWorkForce(docId, date, slot, sched){
     if(_c>=(doc.prefs.maxConsec||6)+2) return false;
   }
   const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
-  for(const pr of prs){if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;}
+  for(const pr of prs){
+    if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;
+    if(prLimitBlocks(pr.type,slot)) return false; // 不白班／只能白班／不大夜（鐵律，不得放寬）
+  }
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
   for(const pr of nextDayPRs){
     if((pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')&&slot==='大夜') return false;
@@ -2102,16 +2228,10 @@ function scoreDoc(docId, date, slot, sched, _pre){
     });
     if(!hasThuCover) score+=20;
   }
-  // 晨會報告: boost report-Thursday 主白/早班, or Wednesday 大夜 before a report Thursday
-  if(doc.prefs.morningReport){
-    const reportThus=getFirstThirdThursdays(state.year,state.month);
-    const dow=getDOW(date);
-    if(reportThus.includes(date)&&(slot==='主白'||slot==='早班')) score+=25;
-    if(dow===2&&slot==='大夜'){// Wednesday大夜 covers next-day Thursday morning
-      const nextDay=addDays(date,1);
-      if(reportThus.includes(nextDay)) score+=25;
-    }
-  }
+  // 晨會報告: 只加分給「該報告日被指派到的人」（逐日指派 → 每月可換人，見 reportersOn）
+  if((slot==='主白'||slot==='早班')&&isReporterOn(docId,date)) score+=25;
+  // 週三大夜可涵蓋隔天週四早上的晨會
+  if(slot==='大夜'&&getDOW(date)===2&&isReporterOn(docId,addDays(date,1))) score+=25;
   return score;
 }
 
@@ -2315,10 +2435,10 @@ function _generateOnce(y,m,dates){
     }
   }
 
-  // Priority pass: enforce morningReport (1st & 3rd Thu) before greedy
+  // Priority pass: 確保每個報告日被指派的醫師排得到班（逐日指派，見 reportersOn）
   const reportThus=getFirstThirdThursdays(y,m);
-  for(const doc of state.doctors.filter(d=>d.type==='full'&&d.prefs.morningReport)){
-    for(const thu of reportThus){
+  for(const thu of reportThus){
+    for(const doc of reportersOn(thu).map(id=>state.doctors.find(d=>d.id===id)).filter(d=>d&&d.type==='full')){
       const wed=addDays(thu,-1);
       const covered=(fullSched[thu]||{})['主白']===doc.id||(fullSched[thu]||{})['早班']===doc.id
                    ||(fullSched[wed]||{})['大夜']===doc.id;
@@ -2836,6 +2956,7 @@ function renderCalendar(){
   const y=state.year, m=state.month;
   const ml=document.getElementById('month-label'); if(ml) ml.textContent=`${y}年${m+1}月`;
   _syncSplitSelects(); // 切割點是逐月設定 → 換月份時工具列要跟著換
+  _syncReportInfo();   // 晨會報告也是逐月指派 → 換月份時摘要跟著換
 
   document.getElementById('doc-legend').innerHTML=
     `<span class="legend-item" onclick="toggleDocFilter(null)" style="cursor:pointer;padding:2px 7px;border-radius:10px;border:1px solid ${!_filterDocId?'#1a4a7a':'#ccc'};background:${!_filterDocId?'#e8f0fb':'transparent'};color:${!_filterDocId?'#1a4a7a':'#999'};font-weight:${!_filterDocId?'700':'400'}">全部</span>`+
@@ -2881,6 +3002,11 @@ function renderCalendar(){
     else badges+=`<span style="font-size:9px;color:#c0392b">${dowNames[dow]}</span>`;
     // （切割點徽章已應使用者要求不在月曆格上顯示，改到「當日排班」視窗內查看／修改）
     if(isDayLocked) badges+=` <span class="badge-daylock" title="當日已鎖定，自動排班不會更動（點日期格於視窗內解鎖）">🔒鎖定</span>`;
+    // 晨會報告日（第1、3週四）標出報告人；未指派只標「未指派」提醒
+    if(_repDaysOf(y,m).includes(dateStr)){
+      const _repNames=reportersOn(dateStr).map(getDocName).join('、');
+      badges+=` <span class="badge-report" onclick="openReportModal(event)" title="晨會報告（週四 08:00）${_repNames?'：'+_repNames:'：尚未指派報告人'}　點此指派">📢${_repNames||'未指派'}</span>`;
+    }
 
     cell.innerHTML=`<div class="day-header"><span class="day-num${isWknd?' weekend-num':''}">${day}</span><div class="day-badges">${badges}</div></div>`;
 
@@ -3077,6 +3203,11 @@ function _msScrollToToday(){
 }
 
 // 手機直式看板：一天一張卡，僅上下捲動
+// 手機看板的晨會報告標記（只在有指派／有偏好者時顯示）
+function _msRepChip(dateStr){
+  const ns=reportersOn(dateStr).map(getDocName).join('、');
+  return ns?`<span class="ms-rep-chip" title="晨會報告">📢${ns}</span>`:'';
+}
 function renderMobileSchedule(){
   const wrap=document.getElementById('mobile-schedule'); if(!wrap) return;
   const y=state.year,m=state.month;
@@ -3143,7 +3274,7 @@ function renderMobileSchedule(){
     const isToday=d===todayStr;
     const noteHtml=(ds.note&&!filt)?`<div class="ms-note">📌 ${ds.note.replace(/</g,'&lt;')}</div>`:'';
     html+=`<div class="ms-card${hol?' hol':''}${isToday?' today':''}" data-date="${d}">
-      <div class="ms-head"><span class="ms-date">${m+1}/${day}</span><span class="ms-dow${dow>=5||hol?' wk':''}">週${dowNames[dow]}${hol?'・假日':''}</span>${isToday?'<span class="ms-today-chip">今天</span>':''}</div>
+      <div class="ms-head"><span class="ms-date">${m+1}/${day}</span><span class="ms-dow${dow>=5||hol?' wk':''}">週${dowNames[dow]}${hol?'・假日':''}</span>${isToday?'<span class="ms-today-chip">今天</span>':''}${_msRepChip(d)}</div>
       ${bodyHtml}${exHtml}${noteHtml}
     </div>`;
   }
@@ -3504,6 +3635,14 @@ function checkConstraints(dateStr){
     for(const sl of SLOTS) if(ds[sl]===pr.docId) issues.push(`${nm} 當天已預假（${prLabel(pr)}）卻排了${sl}`);
     for(const ex of (ds.extras||[])) if(ex.docId===pr.docId) issues.push(`${nm} 當天已預假（${prLabel(pr)}）卻排了額外班次${kindInfo(ex.kind).name}`);
   }
+  // 手動改班踩到限制型預班（不白班／只能白班／不大夜）——自動排班不會產生，人工調班會
+  for(const pr of (state.preRequests[dateStr]||[])){
+    if(!isPRLimitType(pr.type)) continue;
+    for(const sl of SLOTS){
+      if(ds[sl]===pr.docId&&prLimitBlocks(pr.type,sl))
+        issues.push(`${getDocName(pr.docId)} 當天預班「${prLabel(pr)}」卻排了${sl}`);
+    }
+  }
   return issues;
 }
 
@@ -3764,6 +3903,7 @@ function renderPRCal(){
       selEl.textContent=`已選 ${sorted.length} 天（${sorted[0].slice(5)} ～ ${sorted[sorted.length-1].slice(5)}）`;
     }
   }
+  _updatePRLimitHint();
 }
 
 function prCellClick(ds){
@@ -3789,6 +3929,21 @@ function _selectPRDoc(id,name){
   document.getElementById('pr-doc-label').textContent=name||'── 請先選擇醫師 ──';
   document.getElementById('pr-doc-label').style.color=id?'#222':'#999';
   document.getElementById('pr-doc-list').style.display='none';
+  _updatePRLimitHint();
+}
+// 選到「只能白班／不大夜」時，顯示該醫師在小月曆當前月份已用幾天（上限 3 天）
+function _updatePRLimitHint(){
+  const box=document.getElementById('pr-limit-hint'); if(!box) return;
+  const tEl=document.getElementById('pr-type'), dEl=document.getElementById('pr-doc');
+  const type=tEl?tEl.value:'', docId=dEl?dEl.value:'';
+  const nm=PR_LIMIT_CAPPED[type];
+  if(!nm||!docId){ box.style.display='none'; return; }
+  const used=countDocLimitDays(docId,type,prCal.year,prCal.month);
+  const left=Math.max(0,PR_LIMIT_CAP-used), full=left===0;
+  box.style.display='block';
+  box.style.background=full?'#ffebee':'#e8f5e9';
+  box.style.color=full?'#c62828':'#2e7d32';
+  box.textContent=`${getDocName(docId)} ${prCal.month+1}月「${nm}」已用 ${used}/${PR_LIMIT_CAP} 天`+(full?'（已達上限）':`，還可再預 ${left} 天`);
 }
 
 function renderPRTab(){
@@ -3919,6 +4074,7 @@ function renderPRList(){
       <td><button class="btn-sm btn-del" onclick="${delCall}">刪除</button></td>
     </tr>`;
   }).join('');
+  _updatePRLimitHint();
 }
 
 function delPRRange(docId,type,custom,dateStart,dateEnd){
@@ -3952,13 +4108,39 @@ function addPR(){
   {
     const isOff=t=>['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(t);
     const isWork=t=>t.startsWith('WORK_');
+    const isLim=t=>isPRLimitType(t);
+    // 限制型預班的矛盾：①擋掉同日已指定的那一格 ②與整天預假並存沒有意義 ③兩個限制加起來把四格全擋光
+    const limBad=(a,b)=>{
+      if(isLim(a)&&isWork(b)) return prLimitBlocks(a,b.replace('WORK_',''));
+      if(isWork(a)&&isLim(b)) return prLimitBlocks(b,a.replace('WORK_',''));
+      if((isLim(a)&&isOff(b))||(isOff(a)&&isLim(b))) return true;
+      if(isLim(a)&&isLim(b)) return a!==b&&SLOTS.every(sl=>prLimitBlocks(a,sl)||prLimitBlocks(b,sl));
+      return false;
+    };
     const conflicts=[];
     for(const ds of [...prCal.selected].sort()){
       const others=(state.preRequests[ds]||[]).filter(r=>r.docId===docId&&!(r.type===type&&(r.custom||'')===(custom||'')));
-      const bad=others.find(r=>(isOff(type)&&isWork(r.type))||(isWork(type)&&isOff(r.type))||(isWork(type)&&isWork(r.type)));
+      const bad=others.find(r=>(isOff(type)&&isWork(r.type))||(isWork(type)&&isOff(r.type))||(isWork(type)&&isWork(r.type))||limBad(type,r.type));
       if(bad) conflicts.push(`${fmtShort(ds)}（已有：${prLabel(bad)}）`);
     }
     if(conflicts.length&&!confirm(`⚠ 以下日期與現有預假/預班衝突：\n${conflicts.join('、')}\n\n同一人同一天出現矛盾設定，自動排班可能無法正確處理。仍要新增嗎？`)) return;
+  }
+
+  // 「只能白班」「不大夜」每人每月上限 3 天 → 超過直接擋下（選取可能跨月，逐月分開算）
+  const monthsSel={};
+  for(const ds of prCal.selected){ const k=ds.slice(0,7); (monthsSel[k]=monthsSel[k]||[]).push(ds); }
+  if(PR_LIMIT_CAPPED[type]){
+    for(const mk of Object.keys(monthsSel).sort()){
+      const y=parseInt(mk.slice(0,4),10), m=parseInt(mk.slice(5),10)-1;
+      const used=countDocLimitDays(docId,type,y,m);
+      // 已選日期中原本就有同型別的不重複計（存檔是取代而非新增）
+      const dup=monthsSel[mk].filter(ds=>(state.preRequests[ds]||[]).some(r=>r.docId===docId&&r.type===type)).length;
+      if(used-dup+monthsSel[mk].length>PR_LIMIT_CAP){
+        const left=Math.max(0,PR_LIMIT_CAP-(used-dup));
+        showToast(`${getDocName(docId)} ${m+1}月「${PR_LIMIT_CAPPED[type]}」最多 ${PR_LIMIT_CAP} 天：已用 ${used} 天，只能再預 ${left} 天（這次選了 ${monthsSel[mk].length} 天）`,'warn');
+        return;
+      }
+    }
   }
 
   let count=0;
@@ -3971,7 +4153,14 @@ function addPR(){
   prCal.selected.clear(); renderPRCal();
   autoSave();
   renderPRList(); renderCalendar();
-  showToast(`已新增 ${count} 筆預假/預班`);
+  let _tail='';
+  if(PR_LIMIT_CAPPED[type]){
+    _tail='（'+Object.keys(monthsSel).sort().map(mk=>{
+      const y=parseInt(mk.slice(0,4),10), m=parseInt(mk.slice(5),10)-1;
+      return `${m+1}月「${PR_LIMIT_CAPPED[type]}」已用 ${countDocLimitDays(docId,type,y,m)}/${PR_LIMIT_CAP} 天`;
+    }).join('、')+'）';
+  }
+  showToast(`已新增 ${count} 筆預假/預班${_tail}`);
 }
 function delPR(date,docId,type,custom){
   if(blockIfCompleted()) return;
@@ -3989,6 +4178,9 @@ const _PR_TYPES=[
   {v:'OFF',l:'當天OFF'},
   {v:'OFF_NO_BIG',l:'當天OFF + 前天不排大夜'},
   {v:'OFF_NO_NIGHT',l:'當天OFF + 前天不排小夜/大夜'},
+  {v:'LIMIT_NO_DAY',l:'不白班（當天不排主白/早班）'},
+  {v:'LIMIT_ONLY_DAY',l:'只能白班（不排小夜/大夜・上限3天/月）'},
+  {v:'LIMIT_NO_BIG',l:'不大夜（當天不排大夜・上限3天/月）'},
   {v:'WORK_主白',l:'預上班 - 主白(08-20)'},
   {v:'WORK_早班',l:'預上班 - 早班'},
   {v:'WORK_小夜',l:'預上班 - 小夜'},
@@ -4020,16 +4212,20 @@ function _selectPRType(val,label){
 function onPRTypeChange(){
   document.getElementById('custom-div').style.display=
     document.getElementById('pr-type').value==='WORK_CUSTOM'?'block':'none';
+  _updatePRLimitHint();
 }
 function prLabel(pr){
   if(pr.type==='WORK_CUSTOM') return `自訂班 ${pr.custom||''}`;
   const m={OFF:'當天OFF',OFF_NO_BIG:'OFF+前天不大夜',OFF_NO_NIGHT:'OFF+前天不夜班',
+    LIMIT_NO_DAY:'不白班',LIMIT_ONLY_DAY:'只能白班',LIMIT_NO_BIG:'不大夜',
     WORK_主白:'排主白(08-20)',WORK_早班:'排早班',WORK_小夜:'排小夜',WORK_大夜:'排大夜(20-08)'};
   return m[pr.type]||pr.type;
 }
 function prShortLabel(pr){
   if(pr.type==='WORK_CUSTOM') return `自(${pr.custom||'?'})`;
-  const m={OFF:'假',OFF_NO_BIG:'假+',OFF_NO_NIGHT:'假++',WORK_主白:'主',WORK_早班:'早',WORK_小夜:'小',WORK_大夜:'大'};
+  const m={OFF:'假',OFF_NO_BIG:'假+',OFF_NO_NIGHT:'假++',
+    LIMIT_NO_DAY:'不白',LIMIT_ONLY_DAY:'只白',LIMIT_NO_BIG:'不大',
+    WORK_主白:'主',WORK_早班:'早',WORK_小夜:'小',WORK_大夜:'大'};
   return m[pr.type]||'?';
 }
 // 連續預假只在第一天標 +／++（中段的「前一天」本來就休假，標記無意義）
@@ -4204,6 +4400,143 @@ function savePerfModal(){
   showToast(`🏆 ${_statsYear}年${_statsMonth+1}月績效點值已儲存：${list.length} 個項目、${n} 位醫師有加點`);
 }
 
+// ============================================================
+// 晨會報告指派（每個報告日一位；跟著「排班表的檢視月份」走）
+// 編輯採 draft：改的都是 _repDraft，按「確認」才寫回 state.reporters。
+// ============================================================
+let _repDraft=null, _repReadonly=false;
+function _repMD(d){ const p=d.split('-'); return `${parseInt(p[1],10)}/${parseInt(p[2],10)}`; }
+function _repDateLabel(d){ return `${_repMD(d)}（週四）`; }
+// 工具列摘要：本月報告日各是誰
+function _syncReportInfo(){
+  const el=document.getElementById('report-toolbar-info'); if(!el) return;
+  const days=_repDaysOf(state.year,state.month);
+  if(!days.length){ el.textContent=''; return; }
+  el.textContent=days.map(d=>`${_repMD(d)} ${reportersOn(d).map(getDocName).join('、')||'未指派'}`).join('　');
+}
+function openReportModal(ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  if(blockIfViewOnly()) return;
+  const y=state.year, m=state.month;
+  _repReadonly=isCurrentMonthCompleted(); // 晨會報告跟排班檢視月份走
+  const days=_repDaysOf(y,m);
+  const own=_repHasMonth(y,m);
+  _repDraft={};
+  for(const d of days){
+    if(own) _repDraft[d]=(state.reporters||{})[d]||'';
+    else {
+      const ids=reportersOn(d);              // 沿用偏好；剛好一人時帶入當底稿
+      _repDraft[d]=ids.length===1?ids[0]:'';
+    }
+  }
+  document.getElementById('report-modal-title').textContent=`📢 晨會報告 — ${y}年${m+1}月`;
+  document.getElementById('report-ro-note').style.display=_repReadonly?'block':'none';
+  document.getElementById('report-rotate-btn').style.display=_repReadonly?'none':'';
+  document.getElementById('report-default-btn').style.display=(_repReadonly||!own)?'none':'';
+  document.getElementById('report-save-btn').style.display=_repReadonly?'none':'';
+  _renderRepDraft();
+  document.getElementById('report-modal').classList.add('show');
+}
+function closeReportModal(){
+  document.getElementById('report-modal').classList.remove('show');
+  _repDraft=null;
+}
+function _repSet(dateStr,docId){ if(_repDraft) _repDraft[dateStr]=docId||''; _renderRepHint(); }
+function _renderRepDraft(){
+  const box=document.getElementById('report-list');
+  const days=_repDaysOf(state.year,state.month);
+  const ro=_repReadonly?' disabled':'';
+  if(!days.length){ box.innerHTML='<div style="color:#8a94a6;font-size:12px">本月沒有報告日</div>'; return; }
+  // 名單＝專任醫師；已被指派但現在不是專任（改兼任／離職未刪）的人仍列出，免得「看不到卻排得到」
+  const pool=docsOrdered().filter(d=>d.type==='full');
+  const seen=new Set(pool.map(d=>d.id));
+  for(const d of days){
+    const id=_repDraft[d];
+    if(id&&!seen.has(id)){ const doc=state.doctors.find(x=>x.id===id); if(doc){ pool.push(doc); seen.add(id); } }
+  }
+  box.innerHTML=days.map(d=>{
+    const cur=_repDraft[d]||'';
+    const opts=['<option value="">— 不指派 —</option>']
+      .concat(pool.map(doc=>`<option value="${doc.id}"${cur===doc.id?' selected':''}>${_escHtml(doc.name)}${doc.type==='part'?'（兼）':''}</option>`))
+      .join('');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;background:#f8f9fa;border:1px solid #e3e7ee;border-radius:6px">
+      <span style="font-size:13px;font-weight:700;color:#00695c;min-width:96px">${_repDateLabel(d)}</span>
+      <select onchange="_repSet('${d}',this.value)"${ro} style="flex:1;padding:4px 6px;border:1px solid #ccd;border-radius:4px;font-size:13px">${opts}</select>
+    </div>`;
+  }).join('');
+  _renderRepHint();
+}
+// 提示：上個月是誰報告的（方便輪替）＋ 每位醫師最近一次報告的月份
+function _renderRepHint(){
+  const box=document.getElementById('report-hint'); if(!box) return;
+  const pm=state.month===0?11:state.month-1, py=state.month===0?state.year-1:state.year;
+  const prev=_repDaysOf(py,pm).map(d=>`${_repMD(d)} ${reportersOn(d).map(getDocName).join('、')||'未指派'}`).join('　');
+  const last=_repLastByDoc();
+  const chips=docsOrdered().filter(d=>d.type==='full').map(doc=>{
+    const l=last[doc.id];
+    return `<span style="display:inline-block;margin:0 6px 4px 0;padding:2px 8px;border-radius:10px;background:#fff;border:1px solid ${doc.color};font-size:11px">
+      <span class="color-dot" style="background:${doc.color}"></span>${_escHtml(doc.name)} <span style="color:#78909c">${l?l:'無紀錄'}</span></span>`;
+  }).join('');
+  box.innerHTML=`<div style="background:#e0f2f1;border:1px solid #b2dfdb;border-radius:6px;padding:8px 10px;font-size:11px;color:#00695c;line-height:1.7">
+    <div><strong>上個月（${py}年${pm+1}月）：</strong>${prev||'—'}</div>
+    <div style="margin-top:5px"><strong>各醫師最近一次報告：</strong></div>
+    <div style="margin-top:3px">${chips}</div>
+  </div>`;
+}
+// 掃 state.reporters 找每位醫師最後一次被指派的日期 → 顯示成「年/月」
+function _repLastByDoc(){
+  const last={};
+  for(const d in (state.reporters||{})){
+    const id=state.reporters[d]; if(!id) continue;
+    if(!last[id]||d>last[id]) last[id]=d;
+  }
+  const res={};
+  for(const id in last){ const p=last[id].split('-'); res[id]=`${parseInt(p[0],10)}/${parseInt(p[1],10)}`; }
+  return res;
+}
+// 接續輪替：以醫師清單順序為環，從「最近一次有指派的報告人」的下一位開始往下填
+function _repRotate(){
+  if(_repReadonly) return;
+  const pool=docsOrdered().filter(d=>d.type==='full');
+  if(!pool.length){ showToast('沒有專任醫師可輪替','warn'); return; }
+  const days=_repDaysOf(state.year,state.month);
+  let last=null;
+  outer:
+  for(let back=1;back<=24;back++){                       // 往回找最多 24 個月
+    const dt=new Date(state.year,state.month-back,1);
+    const dd=_repDaysOf(dt.getFullYear(),dt.getMonth()).slice().reverse();
+    for(const d of dd){ const id=(state.reporters||{})[d]; if(id){ last=id; break outer; } }
+  }
+  let idx=last?pool.findIndex(x=>x.id===last):-1;
+  for(const d of days){ idx=(idx+1)%pool.length; _repDraft[d]=pool[idx].id; }
+  _renderRepDraft();
+  showToast(`⏭ 已接續輪替：${days.map(d=>getDocName(_repDraft[d])).join('、')}（可再手動調整）`);
+}
+// 清除本月指派 → 改回沿用「醫師設定」裡的晨會報告勾選
+function _repUseDefault(){
+  if(_repReadonly) return;
+  if(!confirm('清除本月的晨會報告指派，改回沿用「醫師設定」裡勾選晨會報告的醫師？')) return;
+  if(state.reporters) for(const d of _repDaysOf(state.year,state.month)) delete state.reporters[d];
+  autoSave();
+  closeReportModal();
+  renderCalendar();
+  const ns=_repDaysOf(state.year,state.month).map(d=>reportersOn(d).map(getDocName).join('、')||'無').join('　');
+  showToast(`↩ ${state.year}年${state.month+1}月改為沿用醫師偏好：${ns}`);
+}
+function saveReportModal(){
+  if(_repReadonly){ closeReportModal(); return; }
+  if(blockIfCompleted()) return;
+  if(!state.reporters||typeof state.reporters!=='object') state.reporters={};
+  const days=_repDaysOf(state.year,state.month);
+  // 兩個報告日一次寫齊（沒選就寫空字串）→ 該月從此走「逐日指派」，不會半套 fallback
+  for(const d of days) state.reporters[d]=_repDraft[d]||'';
+  autoSave();
+  closeReportModal();
+  renderCalendar();
+  const named=days.map(d=>`${_repMD(d)} ${state.reporters[d]?getDocName(state.reporters[d]):'不指派'}`).join('　');
+  showToast(`📢 ${state.year}年${state.month+1}月晨會報告已設定：${named}`);
+}
+
 function renderStats(){
   document.getElementById('stats-month').textContent=`${_statsYear}年${_statsMonth+1}月`;
   const dates=monthDates(_statsYear,_statsMonth);
@@ -4340,15 +4673,14 @@ function renderStats(){
       });
       if(!hasThu) hard.push(`${doc.name} 醫務會議：本月無週四主白/早班可簽到`);
     }
-    // 晨會報告: each report Thursday needs 主白/早班 that day OR 大夜 on preceding Wednesday
-    if(doc.prefs.morningReport){
-      for(const thu of reportThus){
-        const wed=addDays(thu,-1);
-        const thuDs=state.schedule[thu]||{};
-        const wedDs=state.schedule[wed]||{};
-        const covered=(thuDs['主白']===doc.id||thuDs['早班']===doc.id)||wedDs['大夜']===doc.id;
-        if(!covered) hard.push(`${doc.name} 晨會報告：${thu} 無法出席(需當天主白/早班或前天大夜)`);
-      }
+    // 晨會報告: 被指派到的報告日，當天需有主白/早班，或前一天大夜
+    for(const thu of reportThus){
+      if(!isReporterOn(doc.id,thu)) continue;
+      const wed=addDays(thu,-1);
+      const thuDs=state.schedule[thu]||{};
+      const wedDs=state.schedule[wed]||{};
+      const covered=(thuDs['主白']===doc.id||thuDs['早班']===doc.id)||wedDs['大夜']===doc.id;
+      if(!covered) hard.push(`${doc.name} 晨會報告：${thu} 無法出席(需當天主白/早班或前天大夜)`);
     }
   }
   // 手動改班違反預假：該醫師當天有預假(OFF／OFF+前天不大夜／OFF+前天不夜班)卻被排了班。
@@ -4365,6 +4697,18 @@ function renderStats(){
       }
       for(const ex of (ds.extras||[])){
         if(ex.docId===pr.docId) hard.push(`${nm} ${d} 排了額外班次${kindInfo(ex.kind).name}，但當天已預假（${lbl}）`);
+      }
+    }
+  }
+  // 手動改班踩到限制型預班（不白班／只能白班／不大夜）；兼任醫師也一起檢查
+  for(const d of dates){
+    const ds=state.schedule[d]||{};
+    for(const pr of (state.preRequests[d]||[])){
+      if(!isPRLimitType(pr.type)) continue;
+      const lbl=prLabel(pr)+(pr.note?`／${pr.note}`:'');
+      for(const sl of SLOTS){
+        if(ds[sl]===pr.docId&&prLimitBlocks(pr.type,sl))
+          hard.push(`${getDocName(pr.docId)} ${d} 排了${sl}，但當天預班「${lbl}」`);
       }
     }
   }
@@ -4606,6 +4950,17 @@ function importDoctorData(){
         if(doc.name!=='陳孝綱') doc.prefs.wkNight=false;
         // Merge pre-requests (replace this doctor's entries for the given month)
         const monthStr=`${d.year}-${String(d.month+1).padStart(2,'0')}`;
+        // 限制型預班每月上限：匯入資料超額時提示排班者決定，不靜默丟棄
+        {
+          const over=[];
+          for(const t in PR_LIMIT_CAPPED){
+            let n=0;
+            for(const[date,prs] of Object.entries(d.preRequests||{}))
+              if(date.startsWith(monthStr)&&prs.some(p=>p.type===t)) n++;
+            if(n>PR_LIMIT_CAP) over.push(`「${PR_LIMIT_CAPPED[t]}」${n} 天`);
+          }
+          if(over.length&&!confirm(`⚠ ${doc.name} ${d.year}年${d.month+1}月 預了 ${over.join('、')}，超過每月 ${PR_LIMIT_CAP} 天上限。\n\n仍要照原樣匯入嗎？`)) return;
+        }
         // Remove old PRs for this doctor in this month
         for(const date of Object.keys(state.preRequests)){
           if(!date.startsWith(monthStr)) continue;
@@ -4670,6 +5025,9 @@ function initPersonalView(encoded){
                 <option value="OFF">當天OFF</option>
                 <option value="OFF_NO_BIG">OFF + 前天不大夜</option>
                 <option value="OFF_NO_NIGHT">OFF + 前天不夜班</option>
+                <option value="LIMIT_NO_DAY">不白班（不排主白/早班）</option>
+                <option value="LIMIT_ONLY_DAY">只能白班（上限3天/月）</option>
+                <option value="LIMIT_NO_BIG">不大夜（上限3天/月）</option>
                 <option value="WORK_主白">排主白 (08-20)</option>
                 <option value="WORK_早班">排早班</option>
                 <option value="WORK_小夜">排小夜</option>
@@ -4775,15 +5133,30 @@ function initPersonalView(encoded){
       const note=document.getElementById('pv-note').value.trim();
       const custom=type==='WORK_CUSTOM'?document.getElementById('pv-custom').value.trim():'';
       if(!ds){showToast('請選擇日期','warn');return;}
-      let cur=ds,cnt=0;
-      while(cur<=de&&cnt<62){
+      const days=[]; { let cur=ds; while(cur<=de&&days.length<62){ days.push(cur); cur=addDays(cur,1); } }
+      // 「只能白班」「不大夜」每人每月上限 3 天（與管理端同一規則）
+      if(PR_LIMIT_CAPPED[type]){
+        const byMonth={};
+        for(const dd of days){ const k=dd.slice(0,7); (byMonth[k]=byMonth[k]||[]).push(dd); }
+        for(const mk of Object.keys(byMonth).sort()){
+          let used=0;
+          for(const[dt,prs] of Object.entries(pvState.preRequests))
+            if(dt.startsWith(mk+'-')&&prs.some(r=>r.type===type)) used++;
+          const dup=byMonth[mk].filter(dd=>(pvState.preRequests[dd]||[]).some(r=>r.type===type)).length;
+          if(used-dup+byMonth[mk].length>PR_LIMIT_CAP){
+            const left=Math.max(0,PR_LIMIT_CAP-(used-dup));
+            showToast(`${parseInt(mk.slice(5),10)}月「${PR_LIMIT_CAPPED[type]}」最多 ${PR_LIMIT_CAP} 天：已用 ${used} 天，只能再預 ${left} 天`,'warn');
+            return;
+          }
+        }
+      }
+      for(const cur of days){
         if(!pvState.preRequests[cur]) pvState.preRequests[cur]=[];
         pvState.preRequests[cur]=pvState.preRequests[cur].filter(r=>!(r.docId===pvState.docId&&r.type===type));
         pvState.preRequests[cur].push({docId:pvState.docId,type,note,custom});
-        cur=addDays(cur,1);cnt++;
       }
       pvRenderPRList();
-      showToast(`已新增 ${cnt} 筆`);
+      showToast(`已新增 ${days.length} 筆`);
     };
 
     window.pvDelPR=function(date,type,custom){
@@ -5059,6 +5432,7 @@ function applyCloudData(data){
   state.splitBalance=!!data.splitBalance;
   state.monthSplit=_sanitizeMonthSplit(data.monthSplit);
   state.perfItems=_sanitizePerfItems(data.perfItems);
+  state.reporters=_sanitizeReporters(data.reporters);
   state.avoidPairs=data.avoidPairs||[];
   if(data.idCnt) _idCnt=data.idCnt;
   _lockedMonths.clear(); (data.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -5073,7 +5447,7 @@ function applyCloudData(data){
   try{ localStorage.setItem(LS_KEY,JSON.stringify({
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},reporters:state.reporters||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]
   }));}catch(e){}
 }
@@ -5086,7 +5460,7 @@ function cloudSave(){
   const data={
     doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},avoidPairs:state.avoidPairs||[],
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},reporters:state.reporters||{},avoidPairs:state.avoidPairs||[],
     idCnt:_idCnt,lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths],_ts:Date.now(),_client:_clientId
   };
   const myTs=data._ts;
@@ -5175,7 +5549,7 @@ function autoSave(){
   try{
     const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
       holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+      defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},reporters:state.reporters||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
       lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
     localStorage.setItem(LS_KEY,JSON.stringify(data));
     const ind=document.getElementById('_autosave_ind');
@@ -5201,6 +5575,7 @@ function autoLoad(){
     state.splitBalance=!!d.splitBalance;
     state.monthSplit=_sanitizeMonthSplit(d.monthSplit);
     state.perfItems=_sanitizePerfItems(d.perfItems);
+    state.reporters=_sanitizeReporters(d.reporters);
     state.avoidPairs=d.avoidPairs||[];
     if(d.idCnt) _idCnt=d.idCnt;
     _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
@@ -5212,7 +5587,7 @@ function autoLoad(){
 function saveData(){
   const data={doctors:state.doctors,schedule:state.schedule,preRequests:state.preRequests,
     holidays:[...state.holidays],lockedDays:[...state.lockedDays],lockedSlots:[...(state.lockedSlots||[])],year:state.year,month:state.month,
-    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
+    defaultSplit:state.defaultSplit,holidaySplit:state.holidaySplit,splitBalance:!!state.splitBalance,monthSplit:state.monthSplit||{},perfItems:state.perfItems||{},reporters:state.reporters||{},avoidPairs:state.avoidPairs||[],idCnt:_idCnt,
     lockedMonths:[..._lockedMonths],completedMonths:[..._completedMonths]};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -5248,6 +5623,7 @@ function loadData(){
         state.splitBalance=!!d.splitBalance;
         state.monthSplit=_sanitizeMonthSplit(d.monthSplit);
         state.perfItems=_sanitizePerfItems(d.perfItems);
+        state.reporters=_sanitizeReporters(d.reporters);
         state.avoidPairs=d.avoidPairs||[];
         if(d.idCnt) _idCnt=d.idCnt;
         _lockedMonths.clear(); (d.lockedMonths||[]).forEach(k=>_lockedMonths.add(k));
