@@ -512,6 +512,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
               <input type="hidden" id="pr-type" value="OFF">
             </div>
           </div>
+          <div id="pr-limit-hint" style="display:none;font-size:11px;margin-top:5px;padding:4px 7px;border-radius:4px;line-height:1.5"></div>
           <div class="pr-field" id="custom-div" style="display:none">
             <div class="pr-lbl">自訂時段 (HH-HH)</div>
             <input type="text" id="pr-custom" placeholder="例: 08-17 或 17-02">
@@ -1761,6 +1762,36 @@ function getNextExtra(docId, afterDate, sched){
   return null;
 }
 
+// ===== 班別限制型預班（2026-09-20）=====
+// 既有預班只有兩類：OFF*（當天整天不排班）與 WORK_*（強制指派某一格）。
+// 這三種是第三類「當天照排，但限制不能排哪些班別」：
+//   LIMIT_NO_DAY   不白班   → 當天不排 主白/早班（不限天數）
+//   LIMIT_ONLY_DAY 只能白班 → 當天不排 小夜/大夜（仍可放假，不保證一定有白班）每月上限 3 天
+//   LIMIT_NO_BIG   不大夜   → 當天不排 大夜，每月上限 3 天
+// ⚠ 型別名稱刻意不以 WORK_ 開頭（多處用 startsWith('WORK_') 判「強制指派」），
+//   也刻意不加進 OFF 清單（那會變成整天都不能排班）。
+// ⚠ 與預假同級的鐵律：三支 canWork* 都要擋，checkConstraints／renderStats 也要抓人工調班。
+const PR_LIMIT_CAP=3;                                     // 有上限的型別：每人每月天數
+const PR_LIMIT_CAPPED={LIMIT_ONLY_DAY:'只能白班',LIMIT_NO_BIG:'不大夜'};
+function isPRLimitType(t){ return t==='LIMIT_NO_DAY'||t==='LIMIT_ONLY_DAY'||t==='LIMIT_NO_BIG'; }
+// 單筆限制型預班是否禁止某班別 —— 唯一判定入口，各處勿自己展開
+function prLimitBlocks(type,slot){
+  if(type==='LIMIT_NO_DAY')   return slot==='主白'||slot==='早班';
+  if(type==='LIMIT_ONLY_DAY') return slot==='小夜'||slot==='大夜';
+  if(type==='LIMIT_NO_BIG')   return slot==='大夜';
+  return false;
+}
+// 某醫師某月已用掉幾「天」某型別（同日同型別只算一次）
+function countDocLimitDays(docId,type,y,m){
+  const prefix=`${y}-${String(m+1).padStart(2,'0')}-`;
+  let n=0;
+  for(const[date,prs] of Object.entries(state.preRequests)){
+    if(!date.startsWith(prefix)) continue;
+    if(prs.some(pr=>pr.docId===docId&&pr.type===type)) n++;
+  }
+  return n;
+}
+
 function canWork(docId, date, slot, sched){
   const doc=state.doctors.find(d=>d.id===docId);
   if(!doc||doc.type==='part') return false;
@@ -1770,6 +1801,7 @@ function canWork(docId, date, slot, sched){
   const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
   for(const pr of prs){
     if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;
+    if(prLimitBlocks(pr.type,slot)) return false; // 不白班／只能白班／不大夜（與預假同級，三支都要擋）
   }
   const last=getLastAssigned(docId,date,sched);
   if(last){
@@ -1849,7 +1881,10 @@ function canWorkRelaxed(docId, date, slot, sched){
   const ds=sched[date]||{};
   if(SLOTS.some(s=>ds[s]===docId) || getExtraForDoc(ds,docId)) return false;
   const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
-  for(const pr of prs){if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;}
+  for(const pr of prs){
+    if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;
+    if(prLimitBlocks(pr.type,slot)) return false; // 不白班／只能白班／不大夜（鐵律，不得放寬）
+  }
   // 隔天有「OFF+前天不大夜/不夜班」的預假 → 今天不可排對應夜班（與 canWork/canWorkForce 一致；預假為鐵律不得放寬）
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
   for(const pr of nextDayPRs){
@@ -1925,7 +1960,10 @@ function canWorkForce(docId, date, slot, sched){
     if(_c>=(doc.prefs.maxConsec||6)+2) return false;
   }
   const prs=(state.preRequests[date]||[]).filter(r=>r.docId===docId);
-  for(const pr of prs){if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;}
+  for(const pr of prs){
+    if(['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(pr.type)) return false;
+    if(prLimitBlocks(pr.type,slot)) return false; // 不白班／只能白班／不大夜（鐵律，不得放寬）
+  }
   const nextDayPRs=(state.preRequests[addDays(date,1)]||[]).filter(r=>r.docId===docId);
   for(const pr of nextDayPRs){
     if((pr.type==='OFF_NO_BIG'||pr.type==='OFF_NO_NIGHT')&&slot==='大夜') return false;
@@ -3597,6 +3635,14 @@ function checkConstraints(dateStr){
     for(const sl of SLOTS) if(ds[sl]===pr.docId) issues.push(`${nm} 當天已預假（${prLabel(pr)}）卻排了${sl}`);
     for(const ex of (ds.extras||[])) if(ex.docId===pr.docId) issues.push(`${nm} 當天已預假（${prLabel(pr)}）卻排了額外班次${kindInfo(ex.kind).name}`);
   }
+  // 手動改班踩到限制型預班（不白班／只能白班／不大夜）——自動排班不會產生，人工調班會
+  for(const pr of (state.preRequests[dateStr]||[])){
+    if(!isPRLimitType(pr.type)) continue;
+    for(const sl of SLOTS){
+      if(ds[sl]===pr.docId&&prLimitBlocks(pr.type,sl))
+        issues.push(`${getDocName(pr.docId)} 當天預班「${prLabel(pr)}」卻排了${sl}`);
+    }
+  }
   return issues;
 }
 
@@ -3857,6 +3903,7 @@ function renderPRCal(){
       selEl.textContent=`已選 ${sorted.length} 天（${sorted[0].slice(5)} ～ ${sorted[sorted.length-1].slice(5)}）`;
     }
   }
+  _updatePRLimitHint();
 }
 
 function prCellClick(ds){
@@ -3882,6 +3929,21 @@ function _selectPRDoc(id,name){
   document.getElementById('pr-doc-label').textContent=name||'── 請先選擇醫師 ──';
   document.getElementById('pr-doc-label').style.color=id?'#222':'#999';
   document.getElementById('pr-doc-list').style.display='none';
+  _updatePRLimitHint();
+}
+// 選到「只能白班／不大夜」時，顯示該醫師在小月曆當前月份已用幾天（上限 3 天）
+function _updatePRLimitHint(){
+  const box=document.getElementById('pr-limit-hint'); if(!box) return;
+  const tEl=document.getElementById('pr-type'), dEl=document.getElementById('pr-doc');
+  const type=tEl?tEl.value:'', docId=dEl?dEl.value:'';
+  const nm=PR_LIMIT_CAPPED[type];
+  if(!nm||!docId){ box.style.display='none'; return; }
+  const used=countDocLimitDays(docId,type,prCal.year,prCal.month);
+  const left=Math.max(0,PR_LIMIT_CAP-used), full=left===0;
+  box.style.display='block';
+  box.style.background=full?'#ffebee':'#e8f5e9';
+  box.style.color=full?'#c62828':'#2e7d32';
+  box.textContent=`${getDocName(docId)} ${prCal.month+1}月「${nm}」已用 ${used}/${PR_LIMIT_CAP} 天`+(full?'（已達上限）':`，還可再預 ${left} 天`);
 }
 
 function renderPRTab(){
@@ -4012,6 +4074,7 @@ function renderPRList(){
       <td><button class="btn-sm btn-del" onclick="${delCall}">刪除</button></td>
     </tr>`;
   }).join('');
+  _updatePRLimitHint();
 }
 
 function delPRRange(docId,type,custom,dateStart,dateEnd){
@@ -4045,13 +4108,39 @@ function addPR(){
   {
     const isOff=t=>['OFF','OFF_NO_BIG','OFF_NO_NIGHT'].includes(t);
     const isWork=t=>t.startsWith('WORK_');
+    const isLim=t=>isPRLimitType(t);
+    // 限制型預班的矛盾：①擋掉同日已指定的那一格 ②與整天預假並存沒有意義 ③兩個限制加起來把四格全擋光
+    const limBad=(a,b)=>{
+      if(isLim(a)&&isWork(b)) return prLimitBlocks(a,b.replace('WORK_',''));
+      if(isWork(a)&&isLim(b)) return prLimitBlocks(b,a.replace('WORK_',''));
+      if((isLim(a)&&isOff(b))||(isOff(a)&&isLim(b))) return true;
+      if(isLim(a)&&isLim(b)) return a!==b&&SLOTS.every(sl=>prLimitBlocks(a,sl)||prLimitBlocks(b,sl));
+      return false;
+    };
     const conflicts=[];
     for(const ds of [...prCal.selected].sort()){
       const others=(state.preRequests[ds]||[]).filter(r=>r.docId===docId&&!(r.type===type&&(r.custom||'')===(custom||'')));
-      const bad=others.find(r=>(isOff(type)&&isWork(r.type))||(isWork(type)&&isOff(r.type))||(isWork(type)&&isWork(r.type)));
+      const bad=others.find(r=>(isOff(type)&&isWork(r.type))||(isWork(type)&&isOff(r.type))||(isWork(type)&&isWork(r.type))||limBad(type,r.type));
       if(bad) conflicts.push(`${fmtShort(ds)}（已有：${prLabel(bad)}）`);
     }
     if(conflicts.length&&!confirm(`⚠ 以下日期與現有預假/預班衝突：\n${conflicts.join('、')}\n\n同一人同一天出現矛盾設定，自動排班可能無法正確處理。仍要新增嗎？`)) return;
+  }
+
+  // 「只能白班」「不大夜」每人每月上限 3 天 → 超過直接擋下（選取可能跨月，逐月分開算）
+  const monthsSel={};
+  for(const ds of prCal.selected){ const k=ds.slice(0,7); (monthsSel[k]=monthsSel[k]||[]).push(ds); }
+  if(PR_LIMIT_CAPPED[type]){
+    for(const mk of Object.keys(monthsSel).sort()){
+      const y=parseInt(mk.slice(0,4),10), m=parseInt(mk.slice(5),10)-1;
+      const used=countDocLimitDays(docId,type,y,m);
+      // 已選日期中原本就有同型別的不重複計（存檔是取代而非新增）
+      const dup=monthsSel[mk].filter(ds=>(state.preRequests[ds]||[]).some(r=>r.docId===docId&&r.type===type)).length;
+      if(used-dup+monthsSel[mk].length>PR_LIMIT_CAP){
+        const left=Math.max(0,PR_LIMIT_CAP-(used-dup));
+        showToast(`${getDocName(docId)} ${m+1}月「${PR_LIMIT_CAPPED[type]}」最多 ${PR_LIMIT_CAP} 天：已用 ${used} 天，只能再預 ${left} 天（這次選了 ${monthsSel[mk].length} 天）`,'warn');
+        return;
+      }
+    }
   }
 
   let count=0;
@@ -4064,7 +4153,14 @@ function addPR(){
   prCal.selected.clear(); renderPRCal();
   autoSave();
   renderPRList(); renderCalendar();
-  showToast(`已新增 ${count} 筆預假/預班`);
+  let _tail='';
+  if(PR_LIMIT_CAPPED[type]){
+    _tail='（'+Object.keys(monthsSel).sort().map(mk=>{
+      const y=parseInt(mk.slice(0,4),10), m=parseInt(mk.slice(5),10)-1;
+      return `${m+1}月「${PR_LIMIT_CAPPED[type]}」已用 ${countDocLimitDays(docId,type,y,m)}/${PR_LIMIT_CAP} 天`;
+    }).join('、')+'）';
+  }
+  showToast(`已新增 ${count} 筆預假/預班${_tail}`);
 }
 function delPR(date,docId,type,custom){
   if(blockIfCompleted()) return;
@@ -4082,6 +4178,9 @@ const _PR_TYPES=[
   {v:'OFF',l:'當天OFF'},
   {v:'OFF_NO_BIG',l:'當天OFF + 前天不排大夜'},
   {v:'OFF_NO_NIGHT',l:'當天OFF + 前天不排小夜/大夜'},
+  {v:'LIMIT_NO_DAY',l:'不白班（當天不排主白/早班）'},
+  {v:'LIMIT_ONLY_DAY',l:'只能白班（不排小夜/大夜・上限3天/月）'},
+  {v:'LIMIT_NO_BIG',l:'不大夜（當天不排大夜・上限3天/月）'},
   {v:'WORK_主白',l:'預上班 - 主白(08-20)'},
   {v:'WORK_早班',l:'預上班 - 早班'},
   {v:'WORK_小夜',l:'預上班 - 小夜'},
@@ -4113,16 +4212,20 @@ function _selectPRType(val,label){
 function onPRTypeChange(){
   document.getElementById('custom-div').style.display=
     document.getElementById('pr-type').value==='WORK_CUSTOM'?'block':'none';
+  _updatePRLimitHint();
 }
 function prLabel(pr){
   if(pr.type==='WORK_CUSTOM') return `自訂班 ${pr.custom||''}`;
   const m={OFF:'當天OFF',OFF_NO_BIG:'OFF+前天不大夜',OFF_NO_NIGHT:'OFF+前天不夜班',
+    LIMIT_NO_DAY:'不白班',LIMIT_ONLY_DAY:'只能白班',LIMIT_NO_BIG:'不大夜',
     WORK_主白:'排主白(08-20)',WORK_早班:'排早班',WORK_小夜:'排小夜',WORK_大夜:'排大夜(20-08)'};
   return m[pr.type]||pr.type;
 }
 function prShortLabel(pr){
   if(pr.type==='WORK_CUSTOM') return `自(${pr.custom||'?'})`;
-  const m={OFF:'假',OFF_NO_BIG:'假+',OFF_NO_NIGHT:'假++',WORK_主白:'主',WORK_早班:'早',WORK_小夜:'小',WORK_大夜:'大'};
+  const m={OFF:'假',OFF_NO_BIG:'假+',OFF_NO_NIGHT:'假++',
+    LIMIT_NO_DAY:'不白',LIMIT_ONLY_DAY:'只白',LIMIT_NO_BIG:'不大',
+    WORK_主白:'主',WORK_早班:'早',WORK_小夜:'小',WORK_大夜:'大'};
   return m[pr.type]||'?';
 }
 // 連續預假只在第一天標 +／++（中段的「前一天」本來就休假，標記無意義）
@@ -4597,6 +4700,18 @@ function renderStats(){
       }
     }
   }
+  // 手動改班踩到限制型預班（不白班／只能白班／不大夜）；兼任醫師也一起檢查
+  for(const d of dates){
+    const ds=state.schedule[d]||{};
+    for(const pr of (state.preRequests[d]||[])){
+      if(!isPRLimitType(pr.type)) continue;
+      const lbl=prLabel(pr)+(pr.note?`／${pr.note}`:'');
+      for(const sl of SLOTS){
+        if(ds[sl]===pr.docId&&prLimitBlocks(pr.type,sl))
+          hard.push(`${getDocName(pr.docId)} ${d} 排了${sl}，但當天預班「${lbl}」`);
+      }
+    }
+  }
   // 手動排班把關：休息不足12h／N-OFF-D／同日重複（自動排班不會產生，人工調班可能）
   // 額外班次(楊天/ICU/病房)也算進 prev 時間軸——同一人不可能同時分身，也不能無視休息時間銜接。
   for(const doc of state.doctors){
@@ -4835,6 +4950,17 @@ function importDoctorData(){
         if(doc.name!=='陳孝綱') doc.prefs.wkNight=false;
         // Merge pre-requests (replace this doctor's entries for the given month)
         const monthStr=`${d.year}-${String(d.month+1).padStart(2,'0')}`;
+        // 限制型預班每月上限：匯入資料超額時提示排班者決定，不靜默丟棄
+        {
+          const over=[];
+          for(const t in PR_LIMIT_CAPPED){
+            let n=0;
+            for(const[date,prs] of Object.entries(d.preRequests||{}))
+              if(date.startsWith(monthStr)&&prs.some(p=>p.type===t)) n++;
+            if(n>PR_LIMIT_CAP) over.push(`「${PR_LIMIT_CAPPED[t]}」${n} 天`);
+          }
+          if(over.length&&!confirm(`⚠ ${doc.name} ${d.year}年${d.month+1}月 預了 ${over.join('、')}，超過每月 ${PR_LIMIT_CAP} 天上限。\n\n仍要照原樣匯入嗎？`)) return;
+        }
         // Remove old PRs for this doctor in this month
         for(const date of Object.keys(state.preRequests)){
           if(!date.startsWith(monthStr)) continue;
@@ -4899,6 +5025,9 @@ function initPersonalView(encoded){
                 <option value="OFF">當天OFF</option>
                 <option value="OFF_NO_BIG">OFF + 前天不大夜</option>
                 <option value="OFF_NO_NIGHT">OFF + 前天不夜班</option>
+                <option value="LIMIT_NO_DAY">不白班（不排主白/早班）</option>
+                <option value="LIMIT_ONLY_DAY">只能白班（上限3天/月）</option>
+                <option value="LIMIT_NO_BIG">不大夜（上限3天/月）</option>
                 <option value="WORK_主白">排主白 (08-20)</option>
                 <option value="WORK_早班">排早班</option>
                 <option value="WORK_小夜">排小夜</option>
@@ -5004,15 +5133,30 @@ function initPersonalView(encoded){
       const note=document.getElementById('pv-note').value.trim();
       const custom=type==='WORK_CUSTOM'?document.getElementById('pv-custom').value.trim():'';
       if(!ds){showToast('請選擇日期','warn');return;}
-      let cur=ds,cnt=0;
-      while(cur<=de&&cnt<62){
+      const days=[]; { let cur=ds; while(cur<=de&&days.length<62){ days.push(cur); cur=addDays(cur,1); } }
+      // 「只能白班」「不大夜」每人每月上限 3 天（與管理端同一規則）
+      if(PR_LIMIT_CAPPED[type]){
+        const byMonth={};
+        for(const dd of days){ const k=dd.slice(0,7); (byMonth[k]=byMonth[k]||[]).push(dd); }
+        for(const mk of Object.keys(byMonth).sort()){
+          let used=0;
+          for(const[dt,prs] of Object.entries(pvState.preRequests))
+            if(dt.startsWith(mk+'-')&&prs.some(r=>r.type===type)) used++;
+          const dup=byMonth[mk].filter(dd=>(pvState.preRequests[dd]||[]).some(r=>r.type===type)).length;
+          if(used-dup+byMonth[mk].length>PR_LIMIT_CAP){
+            const left=Math.max(0,PR_LIMIT_CAP-(used-dup));
+            showToast(`${parseInt(mk.slice(5),10)}月「${PR_LIMIT_CAPPED[type]}」最多 ${PR_LIMIT_CAP} 天：已用 ${used} 天，只能再預 ${left} 天`,'warn');
+            return;
+          }
+        }
+      }
+      for(const cur of days){
         if(!pvState.preRequests[cur]) pvState.preRequests[cur]=[];
         pvState.preRequests[cur]=pvState.preRequests[cur].filter(r=>!(r.docId===pvState.docId&&r.type===type));
         pvState.preRequests[cur].push({docId:pvState.docId,type,note,custom});
-        cur=addDays(cur,1);cnt++;
       }
       pvRenderPRList();
-      showToast(`已新增 ${cnt} 筆`);
+      showToast(`已新增 ${days.length} 筆`);
     };
 
     window.pvDelPR=function(date,type,custom){
