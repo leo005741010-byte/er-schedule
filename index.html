@@ -702,7 +702,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>🔓 結束自動排班<br>🔒 已鎖定</td><td>鎖定/解鎖本月，僅擋「自動排班/清空」，仍可手動改；鎖定後按鈕變紅字「🔒 已鎖定」，再點一次可解鎖。需管理密碼（請洽主管）</td></tr>
         <tr><td>✅ 完成本月<br>✅ 已完成</td><td>完成本月後<strong>整月唯讀，任何更動都無法進行</strong>；按鈕變綠底「✅ 已完成」，再點一次可取消。需管理密碼（請洽主管）</td></tr>
         <tr><td>🗑 清空</td><td>清除本月所有班別（需密碼）</td></tr>
-        <tr><td>📝 草稿模式<br>🚀 發布到雲端</td><td>開啟後排班只存在這台裝置，<strong>不會自動上傳雲端</strong>，其他人看到的仍是上一版；改好後按「🚀 發布到雲端」才同步給大家。再點「📝 草稿模式：開」切回即時同步。開啟需草稿模式密碼（主任專用）</td></tr>
+        <tr><td>📝 草稿模式<br>🚀 發布到雲端</td><td>開啟後改到的月份會存成草稿、只留在這台裝置，<strong>不會上傳雲端</strong>，其他人看到的仍是上一版；改好後按「🚀 發布到雲端」才同步給大家。再點「📝 草稿模式：開」切回即時同步：<strong>不會發布</strong>，草稿月份照樣不上雲，其他月份的修改則恢復即時同步。醫師設定不分月份，一律即時同步。開啟需草稿模式密碼（主任專用）</td></tr>
         <tr><td>↩ 還原 / ↪ 重做</td><td>步驟式還原或重做操作</td></tr>
         <tr><td>🖨 生成 PDF</td><td>輸出月曆＋統計報表＋預假預班清單</td></tr>
         <tr><td>🖨 PDF 醫務</td><td>輸出醫務行政格式 PDF（標楷體、民國年）</td></tr>
@@ -5382,23 +5382,185 @@ let _cloudReady=false;
 let _lastKnownTs=0;
 let _cloudConflict=false;
 
-// ===== 草稿模式（排班期間先不發布）=====
+// ===== 草稿模式（逐月草稿，按「發布」才上雲）=====
 // 主任排一份班要改很多輪，過程中不希望每動一格就推給所有人看。
-// 開啟草稿模式後：一切照常存在這台裝置（localStorage / 備份 / PDF 都不受影響），
-// 但「不」寫入雲端，直到按下「🚀 發布到雲端」為止。
-// 期間若別台裝置寫了雲端，也不會套用進來蓋掉草稿（先擱著，狀態列提示）。
+// 草稿模式下改到的「月份」會被標成草稿月份（_heldMonths），只存在這台裝置；
+// 草稿月份在雲端一律維持上次發布的版本，直到在草稿模式按「🚀 發布到雲端」為止。
+// 切回即時同步「不會」發布：草稿月份照樣留在本機不上雲，其他月份的修改則即時同步
+// （主任要一邊排下個月的草稿、一邊改這個月的班）。醫師設定這類不分月份的資料一律即時同步。
 const DRAFT_MODE_KEY='tienSheng_erSched_draftMode';
-const DRAFT_DIRTY_KEY='tienSheng_erSched_draftDirty';
-let _draftMode=false,_draftDirty=false;
+const DRAFT_HELD_KEY='tienSheng_erSched_draftHeld';        // {held:[月份key], base:{月份key:雲端版指紋}, conflict:[月份key]}
+const DRAFT_DIRTY_KEY_OLD='tienSheng_erSched_draftDirty';  // 舊版「整份草稿」旗標，升級用
+let _draftMode=false;
+let _heldMonths=new Set();      // 草稿月份 'YYYY-M'（月份 0-based，同 _lockedMonths）
+let _heldBaseHash={};           // 各草稿月份開始草稿時雲端版本的指紋：之後雲端那個月變了＝別台改過
+let _heldConflict=new Set();    // 草稿期間在雲端被別台改過的草稿月份（發布前提醒）
+let _legacyDraft=false;         // 舊版草稿不知道改了哪幾個月 → 第一次收到雲端資料時，凡跟雲端不同的月份都當草稿
 try{
   _draftMode=localStorage.getItem(DRAFT_MODE_KEY)==='1';
-  // 未發布狀態也要記住：關掉瀏覽器隔天再開，草稿還沒發布這件事不能消失
-  _draftDirty=_draftMode&&localStorage.getItem(DRAFT_DIRTY_KEY)==='1';
+  const h=JSON.parse(localStorage.getItem(DRAFT_HELD_KEY)||'null');
+  if(h&&Array.isArray(h.held)){
+    _heldMonths=new Set(h.held.filter(k=>typeof k==='string'));
+    _heldBaseHash=(h.base&&typeof h.base==='object')?h.base:{};
+    _heldConflict=new Set((h.conflict||[]).filter(k=>_heldMonths.has(k)));
+  }
+  _legacyDraft=_draftMode&&localStorage.getItem(DRAFT_DIRTY_KEY_OLD)==='1';
 }catch(e){}
-let _cloudIncoming=null;          // 草稿期間收到、刻意沒套用的雲端資料
+let _cloudBase=null;            // 目前雲端上的版本（正規化後的深拷貝）；null＝還沒收到
+let _cloudBaseSigs={},_cloudBaseGSig='';
+let _localAtInit=null;          // 開始連雲端那一刻本機各月的指紋（抓「雲端載入中」那一兩秒在草稿模式改的月份）
 let _publishing=false;
 let _lastPublishAt='';
-let _cloudStat={ok:false,msg:''}; // 記住最後一次雲端狀態，草稿列重畫時要用
+let _cloudStat={ok:false,msg:''}; // 記住最後一次雲端狀態，狀態列重畫時要用
+
+// ---- 逐月切割／比對 ----
+const _DRAFT_DATE_OBJ=['schedule','preRequests','reporters'];   // key 是 'YYYY-MM-DD'
+const _DRAFT_DATE_ARR=['holidays','lockedDays','lockedSlots'];  // 值開頭是 'YYYY-MM-DD'
+const _DRAFT_MK_OBJ=['monthSplit','perfItems'];                 // key 是 'YYYY-M'
+const _DRAFT_MK_ARR=['lockedMonths','completedMonths'];         // 值是 'YYYY-M'
+const _DRAFT_GLOBAL=['doctors','avoidPairs','defaultSplit','holidaySplit','splitBalance'];  // 不分月份 → 一律即時同步
+function _mkOfDate(s){ const m=/^(\d{4})-(\d{2})/.exec(String(s)); return m?`${+m[1]}-${+m[2]-1}`:'?'; }
+// 比對用的正規化：Firebase 會丟掉 null／空陣列／空物件；純值陣列（假日、鎖定日、達成醫師…）順序不重要
+function _normV(v){
+  if(v===null||v===undefined) return undefined;
+  if(Array.isArray(v)){
+    const a=v.map(_normV).filter(x=>x!==undefined);
+    if(!a.length) return undefined;
+    return a.every(x=>typeof x!=='object')?a.sort():a;
+  }
+  if(typeof v==='object'){
+    const o={}; let n=0;
+    for(const k of Object.keys(v).sort()){ const x=_normV(v[k]); if(x!==undefined){ o[k]=x; n++; } }
+    return n?o:undefined;
+  }
+  return v;
+}
+// 整份資料 → {月份key: 該月所有資料的指紋字串}
+function _monthSigs(d){
+  const g={};
+  const put=(mk,f,k,v)=>{ const b=g[mk]||(g[mk]={}); if(k===null)(b[f]||(b[f]=[])).push(v); else (b[f]||(b[f]={}))[k]=v; };
+  if(d){
+    for(const f of _DRAFT_DATE_OBJ){ const o=d[f]; if(o&&typeof o==='object') for(const k of Object.keys(o)) put(_mkOfDate(k),f,k,o[k]); }
+    for(const f of _DRAFT_DATE_ARR){ const a=d[f]; if(Array.isArray(a)) for(const v of a) put(_mkOfDate(v),f,null,v); }
+    for(const f of _DRAFT_MK_OBJ){ const o=d[f]; if(o&&typeof o==='object') for(const k of Object.keys(o)) put(String(k),f,k,o[k]); }
+    for(const f of _DRAFT_MK_ARR){ const a=d[f]; if(Array.isArray(a)) for(const v of a) put(String(v),f,null,v); }
+  }
+  const out={};
+  for(const mk of Object.keys(g)){ const n=_normV(g[mk]); if(n!==undefined) out[mk]=JSON.stringify(n); }
+  return out;
+}
+function _globalSig(d){ const o={}; for(const f of _DRAFT_GLOBAL) o[f]=d?d[f]:undefined; return JSON.stringify(_normV(o)||null); }
+function _sigHash(str){ str=str||''; let h=5381; for(let i=0;i<str.length;i++) h=((h<<5)+h+str.charCodeAt(i))|0; return (h>>>0).toString(36)+'.'+str.length; }
+function _diffKeys(a,b){ const r=[]; for(const k of new Set([...Object.keys(a),...Object.keys(b)])) if((a[k]||'')!==(b[k]||'')) r.push(k); return r; }
+// 把 dst 裡「months 這幾個月」的資料整包換成 src 的版本（回傳新物件，不改動 dst／src 原本的物件）
+function _swapMonths(dst,src,months){
+  const out=Object.assign({},dst);
+  if(!months||!months.size) return out;
+  const inM=mk=>months.has(mk);
+  const objF=(f,mkOf)=>{
+    const o={},a=dst[f],b=src&&src[f];
+    if(a&&typeof a==='object') for(const k of Object.keys(a)) if(!inM(mkOf(k))) o[k]=a[k];
+    if(b&&typeof b==='object') for(const k of Object.keys(b)) if(inM(mkOf(k))) o[k]=b[k];
+    out[f]=o;
+  };
+  const arrF=(f,mkOf)=>{
+    const a=Array.isArray(dst[f])?dst[f].filter(v=>!inM(mkOf(v))):[];
+    if(src&&Array.isArray(src[f])) for(const v of src[f]) if(inM(mkOf(v))&&a.indexOf(v)<0) a.push(v);
+    out[f]=a;
+  };
+  for(const f of _DRAFT_DATE_OBJ) objF(f,_mkOfDate);
+  for(const f of _DRAFT_DATE_ARR) arrF(f,_mkOfDate);
+  for(const f of _DRAFT_MK_OBJ) objF(f,String);
+  for(const f of _DRAFT_MK_ARR) arrF(f,String);
+  return out;
+}
+// 雲端資料 →「套用到本機後會長成的樣子」的深拷貝（與本機比對時才不會因升級／清理規則誤判有改）
+function _asBase(d){
+  d=migrateData(JSON.parse(JSON.stringify(d||{})));
+  return {
+    doctors:d.doctors||[],schedule:d.schedule||{},preRequests:d.preRequests||{},
+    holidays:[...new Set(d.holidays||[])],lockedDays:[...new Set(d.lockedDays||[])],lockedSlots:[...new Set(d.lockedSlots||[])],
+    defaultSplit:clampSplit(d.defaultSplit||20),holidaySplit:clampSplit(d.holidaySplit||17),splitBalance:!!d.splitBalance,
+    monthSplit:_sanitizeMonthSplit(d.monthSplit),perfItems:_sanitizePerfItems(d.perfItems),reporters:_sanitizeReporters(d.reporters),
+    avoidPairs:d.avoidPairs||[],idCnt:d.idCnt||0,
+    lockedMonths:[...new Set(d.lockedMonths||[])],completedMonths:[...new Set(d.completedMonths||[])]
+  };
+}
+function _setBase(b){ _cloudBase=b; _cloudBaseSigs=_monthSigs(b); _cloudBaseGSig=_globalSig(b); }
+function _saveHeld(){
+  try{
+    if(_heldMonths.size) localStorage.setItem(DRAFT_HELD_KEY,JSON.stringify({held:[..._heldMonths],base:_heldBaseHash,conflict:[..._heldConflict]}));
+    else localStorage.removeItem(DRAFT_HELD_KEY);
+  }catch(e){}
+}
+// 重新判定草稿月份：草稿模式下「跟雲端不一樣的月份」都算草稿；
+// 即時同步模式下只會減少（草稿月份改回跟雲端一樣就自動解除），不會新增
+function _refreshHeld(){
+  if(!_cloudBase) return;
+  if(!_draftMode&&!_heldMonths.size) return;
+  const loc=_monthSigs(_cloudPayload());
+  const cand=_draftMode?_diffKeys(loc,_cloudBaseSigs):[..._heldMonths];
+  const next=new Set();
+  for(const k of cand){
+    if((loc[k]||'')===(_cloudBaseSigs[k]||'')) continue;
+    next.add(k);
+    if(!_heldBaseHash[k]) _heldBaseHash[k]=_sigHash(_cloudBaseSigs[k]);
+  }
+  for(const k of Object.keys(_heldBaseHash)) if(!next.has(k)) delete _heldBaseHash[k];
+  for(const k of [..._heldConflict]) if(!next.has(k)) _heldConflict.delete(k);
+  _heldMonths=next;
+  _saveHeld();
+}
+// 即時同步要寫上雲的內容：本機整份，但草稿月份換回雲端現有的版本
+function _livePayload(){
+  const pl=_cloudPayload();
+  return _heldMonths.size?_swapMonths(pl,_cloudBase,_heldMonths):pl;
+}
+function _sameAsBase(pl){
+  if(!_cloudBase) return false;
+  if(_diffKeys(_monthSigs(pl),_cloudBaseSigs).length) return false;
+  return _globalSig(pl)===_cloudBaseGSig;
+}
+function _mkLabel(k){
+  const a=String(k).split('-').map(Number);
+  if(a.length!==2||!(a[1]>=0)) return String(k);
+  return (a[0]!==new Date().getFullYear()?a[0]+'年':'')+(a[1]+1)+'月';
+}
+function _heldLabel(set){
+  return [...(set||_heldMonths)].sort((x,y)=>{const a=x.split('-').map(Number),b=y.split('-').map(Number);return (a[0]-b[0])||(a[1]-b[1]);}).map(_mkLabel).join('、');
+}
+// 收到雲端版本（別台寫的，或剛連上時的第一份）：草稿月份保留本機版本，其餘月份用雲端的
+function _receiveRemote(data){
+  const first=(_cloudBase===null);
+  const nb=_asBase(data);
+  const nSigs=_monthSigs(nb);
+  const local=_cloudPayload();
+  if(first&&_draftMode){
+    const loc=_monthSigs(local);
+    // 雲端載入中那一兩秒在草稿模式下改到的月份
+    if(_localAtInit) for(const k of _diffKeys(loc,_localAtInit)) _heldMonths.add(k);
+    // 舊版草稿不知道改了哪幾個月：凡是跟雲端不同的月份都當草稿（寧可多留，不可蓋掉）
+    if(_legacyDraft) for(const k of _diffKeys(loc,nSigs)) _heldMonths.add(k);
+  }
+  // 草稿月份在雲端被別台改過 → 記下來，發布時提醒
+  for(const k of _heldMonths){
+    const hh=_sigHash(nSigs[k]);
+    if(!_heldBaseHash[k]) _heldBaseHash[k]=hh;
+    else if(_heldBaseHash[k]!==hh) _heldConflict.add(k);
+  }
+  const keepGlobals=first&&_legacyDraft;
+  if(_legacyDraft){ _legacyDraft=false; try{ localStorage.removeItem(DRAFT_DIRTY_KEY_OLD); }catch(e){} }
+  _setBase(nb);
+  if(data){
+    const merged=_heldMonths.size?_swapMonths(data,local,_heldMonths):Object.assign({},data);
+    if(keepGlobals) for(const f of _DRAFT_GLOBAL) merged[f]=local[f];
+    merged.idCnt=Math.max(local.idCnt||0,data.idCnt||0);   // 草稿月份裡的新項目用的是本機編號，不可倒退
+    applyCloudData(merged);
+  }
+  _refreshHeld();
+  _saveHeld();
+  updateDraftUI();
+}
 
 // 內建共用雲端網址：每台裝置（含手機 App）開啟即自動連線，不需手動設定
 const DEFAULT_CLOUD_URL='https://tenchener-488d2-default-rtdb.firebaseio.com/';
@@ -5411,6 +5573,8 @@ async function initCloud(url){
     if(_fbRef){ _fbRef.off(); _fbRef=null; }
     if(_fbApp){ try{ await firebase.app('erSched').delete(); }catch(e){} _fbApp=null; }
     _cloudReady=false; _lastKnownTs=0; _cloudConflict=false;
+    _cloudBase=null; _cloudBaseSigs={}; _cloudBaseGSig='';
+    _localAtInit=_monthSigs(_cloudPayload());
     _fbApp=firebase.initializeApp({apiKey:'AIzaSyB6w2D8gaqSBHoDmtWsWGWGY-DQtDEcyFY',authDomain:'tenchener-488d2.firebaseapp.com',databaseURL:url.trim()},'erSched');
     await firebase.auth(_fbApp).signInAnonymously();
     _fbRef=firebase.database(_fbApp).ref('erScheduleData');
@@ -5420,20 +5584,16 @@ async function initCloud(url){
       if(!data){
         // 雲端節點確實不存在／為空 → 明確確認過了，允許本機資料上傳
         _cloudReady=true; _lastKnownTs=0; _cloudConflict=false;
+        _receiveRemote(null);
         updateCloudStatus(true);
         return;
       }
-      const mine=(data._client===_clientId);
-      // 草稿模式＋有未發布變更：別台裝置的更新一律不套用（會蓋掉草稿），
-      // 也刻意不推進 _lastKnownTs —— 這樣按「發布」時才偵測得出「雲端被別人動過」。
-      const hold=(_draftMode&&_draftDirty&&!mine);
-      if(typeof data._ts==='number'&&!hold) _lastKnownTs=data._ts;
+      if(typeof data._ts==='number') _lastKnownTs=data._ts;
       _cloudReady=true;                       // 收到第一個 snapshot 才開放寫入
       updateCloudStatus(true);                // 真正拿到資料才顯示「已連線」
-      if(mine) return;                        // 自己寫入的回音，略過
-      if(hold){ _cloudIncoming=data; updateDraftUI(); return; }
+      if(data._client===_clientId) return;    // 自己寫入的回音，略過（_cloudBase 在寫入成功時已更新）
       _cloudConflict=false;                   // 已收到對方最新資料，衝突解除
-      applyCloudData(data);
+      _receiveRemote(data);                   // 草稿月份保留本機版本，其餘月份套用雲端
     }, err=>{
       // 原本沒有 error callback：權限被拒/斷線時會完全無聲
       _cloudReady=false;
@@ -5497,13 +5657,16 @@ function _cloudPayload(){
 }
 
 function cloudSave(){
-  // 草稿模式：只留在這台裝置，標記「有未發布變更」，等使用者按「🚀 發布到雲端」
-  if(_draftMode){ _setDraftDirty(true); return; }
-  if(!_fbRef) return;
+  _refreshHeld();
+  if(!_fbRef){ updateDraftUI(); return; }
   // 尚未收到第一個 snapshot：本機 state 可能只是「空白預設」，絕不可整份覆蓋雲端
   if(!_cloudReady){ updateCloudStatus(false,'雲端載入中，尚未同步'); return; }
   if(_cloudConflict){ updateCloudStatus(false,'偵測到衝突，未同步'); return; }
-  const data=_cloudPayload();
+  // 草稿月份換回雲端現有版本才上傳 → 草稿不會外流；其他月份與醫師設定照常即時同步
+  const data=_livePayload();
+  updateDraftUI();
+  if(_sameAsBase(data)) return;            // 只改到草稿月份 → 雲端不用動
+  const baseAfter=_asBase(data);           // 趁現在拷貝（寫入期間 state 可能又被改）
   const myTs=data._ts;
   // 寫入前比對雲端 _ts：比「本機已知」新 → 別台裝置在我們之後寫過，中止本次整份覆蓋
   _fbRef.child('_ts').once('value').then(s=>{
@@ -5517,7 +5680,7 @@ function cloudSave(){
     }
     // 樂觀更新：先推進 _lastKnownTs，避免自己連續存檔時把自己的寫入誤判為衝突
     _lastKnownTs=myTs;
-    return _fbRef.set(data);
+    return _fbRef.set(data).then(()=>_setBase(baseAfter));
   }).catch(e=>{ showToast('☁️ 雲端儲存失敗: '+e.message,'warn'); });
 }
 
@@ -5529,24 +5692,20 @@ function updateCloudStatus(ok,msg=''){
 function _paintCloudStatus(){
   const el=document.getElementById('_cloud_status');
   if(!el) return;
+  const held=_heldMonths.size?_heldLabel():'';
+  const warn=_heldConflict.size?' ⚠️':'';
+  let t,c;
   if(_draftMode){
-    let t,c;
-    if(_draftDirty){ t='📝 草稿未發布'; c='#ffcc80'; }
+    if(held){ t='📝 '+held+'草稿未發布'+warn; c='#ffcc80'; }
     else { t=_cloudStat.ok?'📝 草稿模式（已連線）':('📝 草稿模式（'+(_cloudStat.msg||'未連線')+'）'); c=_cloudStat.ok?'#a5d6a7':'#ef9a9a'; }
-    if(_cloudIncoming){ t+='｜☁️ 雲端有別台的新版本（未套用）'; c='#ffcc80'; }
-    el.textContent=t; el.style.color=c;
-    return;
+  }else{
+    t=_cloudStat.ok?'☁️ 已連線':('☁️ '+(_cloudStat.msg||'未連線'));
+    c=_cloudStat.ok?'#a5d6a7':'#ef9a9a';
+    if(held){ t+='｜📝 '+held+'草稿未發布（不上雲）'+warn; if(_cloudStat.ok) c='#ffcc80'; }
   }
-  el.textContent=_cloudStat.ok?'☁️ 已連線':('☁️ '+(_cloudStat.msg||'未連線'));
-  el.style.color=_cloudStat.ok?'#a5d6a7':'#ef9a9a';
-}
-
-function _setDraftDirty(v,force){
-  v=!!v;
-  if(_draftDirty===v&&!force) return;   // autoSave 每次都會呼叫，值沒變就不重畫
-  _draftDirty=v;
-  try{ if(v) localStorage.setItem(DRAFT_DIRTY_KEY,'1'); else localStorage.removeItem(DRAFT_DIRTY_KEY); }catch(e){}
-  updateDraftUI();
+  el.textContent=t; el.style.color=c;
+  el.title=held?(held+'的草稿只存在這台裝置，雲端仍是上次發布的版本。要發布請開「📝 草稿模式」再按「🚀 發布到雲端」'
+    +(_heldConflict.size?'\n⚠️ '+_heldLabel(_heldConflict)+'在雲端被其他裝置改過，發布時會再確認':'')):'';
 }
 
 function updateDraftUI(){
@@ -5555,8 +5714,8 @@ function updateDraftUI(){
     bd.classList.toggle('on',_draftMode);
     bd.textContent=_draftMode?'📝 草稿模式：開':'📝 草稿模式';
     bd.title=_draftMode
-      ?'目前的修改只存在這台裝置。按「🚀 發布到雲端」才會同步給大家；點此可切回即時同步。'
-      :'開啟後排班只存這台裝置，不會自動上傳雲端，等你按「發布」才同步給大家（需草稿模式密碼）';
+      ?'改到的月份會先存成草稿、不上雲；按「🚀 發布到雲端」才同步給大家。點此切回即時同步（不會發布，草稿照樣保留）'
+      :'開啟後改到的月份只存這台裝置，不會自動上傳雲端，等你按「發布」才同步給大家（需草稿模式密碼）';
   }
   const bp=document.getElementById('btn-publish');
   if(bp){
@@ -5564,9 +5723,10 @@ function updateDraftUI(){
     if(_publishing){
       bp.disabled=true; bp.textContent='🚀 發布中…'; bp.title='';
     }else{
-      bp.disabled=!_draftDirty;
-      bp.textContent=_draftDirty?'🚀 發布到雲端':('✅ 已發布'+(_lastPublishAt?' '+_lastPublishAt:''));
-      bp.title=_draftDirty?'把這台裝置的草稿整份同步到雲端，大家（含手機看板）就會看到這一版':'目前沒有未發布的變更';
+      const has=_heldMonths.size>0;
+      bp.disabled=!has;
+      bp.textContent=has?('🚀 發布到雲端（'+_heldLabel()+'）'):('✅ 已發布'+(_lastPublishAt?' '+_lastPublishAt:''));
+      bp.title=has?('把 '+_heldLabel()+' 的草稿同步到雲端，大家（含手機看板）就會看到這一版'):'目前沒有未發布的草稿';
     }
   }
   _paintCloudStatus();
@@ -5580,66 +5740,55 @@ function toggleDraftMode(){
     if(pwd!=='03200320'){showToast('❌ 密碼錯誤','warn');return;}
     _draftMode=true;
     try{ localStorage.setItem(DRAFT_MODE_KEY,'1'); }catch(e){}
-    updateDraftUI();
-    showToast('📝 已進入草稿模式：之後的修改只留在這台裝置，按「🚀 發布到雲端」才會同步給大家','ok');
+    _refreshHeld(); updateDraftUI();
+    showToast('📝 已進入草稿模式：接下來改到的月份都先存成草稿、不上雲，按「🚀 發布到雲端」才同步給大家','ok');
     return;
   }
-  // 要離開草稿模式
-  if(_draftDirty){
-    if(!confirm('你還有未發布的排班變更。\n\n按「確定」＝立刻發布到雲端，並切回即時同步\n按「取消」＝留在草稿模式（繼續改，改完再按發布）')) return;
-    publishToCloud({then:_exitDraftMode});   // 發布成功才切回
-    return;
-  }
-  _exitDraftMode();
-}
-
-function _exitDraftMode(){
+  // 切回即時同步「不發布」：草稿月份照樣留在本機不上雲，其他月份恢復即時同步
   _draftMode=false;
-  try{ localStorage.removeItem(DRAFT_MODE_KEY); localStorage.removeItem(DRAFT_DIRTY_KEY); }catch(e){}
-  _draftDirty=false;
-  if(_cloudIncoming){
-    const d=_cloudIncoming; _cloudIncoming=null;
-    if(typeof d._ts==='number') _lastKnownTs=d._ts;
-    _cloudConflict=false;
-    applyCloudData(d);                        // 草稿期間擱著的別台更新，這時才補套用
-    showToast('☁️ 已切回即時同步，並載入雲端最新版本','ok');
-  }else{
-    showToast('☁️ 已切回即時同步：之後每次修改都會自動上傳','ok');
-  }
-  updateDraftUI();
+  try{ localStorage.removeItem(DRAFT_MODE_KEY); }catch(e){}
+  _refreshHeld(); updateDraftUI();
+  if(_heldMonths.size) showToast('☁️ 已切回即時同步（沒有發布）：'+_heldLabel()+'草稿仍留在這台裝置、不上雲；其他月份的修改會即時同步。要發布時再開草稿模式按「🚀 發布」','ok');
+  else showToast('☁️ 已切回即時同步：之後每次修改都會自動上傳','ok');
 }
 
-// 手動發布：把這台裝置的草稿整份寫上雲端（草稿模式專用的那顆鍵）
-function publishToCloud(opts){
-  opts=opts||{};
+// 手動發布：把所有草稿月份寫上雲端（草稿模式專用的那顆鍵）
+function publishToCloud(){
   if(_publishing) return;
   if(!_fbRef){ showToast('☁️ 尚未連線雲端，無法發布（請先按「☁️ 雲端設定」）','warn'); return; }
   if(!_cloudReady){ showToast('☁️ 雲端資料還在載入中，請幾秒後再按一次發布','warn'); return; }
+  _refreshHeld();
+  if(!_heldMonths.size){ updateDraftUI(); showToast('目前沒有未發布的草稿','ok'); return; }
+  const label=_heldLabel();
+  const clash=_heldConflict.size?_heldLabel(_heldConflict):'';
+  // 本機整份＝其他月份（本來就跟雲端同步）＋所有草稿月份
   const data=_cloudPayload();
+  const baseAfter=_asBase(data);
   const myTs=data._ts;
   _publishing=true; updateDraftUI();
-  const finish=ok=>{ _publishing=false; updateDraftUI(); if(ok&&typeof opts.then==='function') opts.then(); };
+  const finish=()=>{ _publishing=false; updateDraftUI(); };
   _fbRef.child('_ts').once('value').then(s=>{
     const remoteTs=s.val();
-    // 草稿期間雲端被別台寫過 → 整份覆蓋會蓋掉對方那次的變更，讓使用者自己決定
     if(typeof remoteTs==='number'&&remoteTs>_lastKnownTs){
-      const d=new Date(remoteTs),p=n=>String(n).padStart(2,'0');
-      const when=`${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-      if(!confirm('⚠️ 你在草稿期間，雲端被其他裝置更新過（'+when+'）。\n\n按「確定」＝用這台裝置的草稿整份覆蓋雲端（對方那次的變更會不見）\n按「取消」＝先不要發布')){
-        showToast('已取消發布，草稿仍留在這台裝置','warn');
-        finish(false); return;
-      }
+      // 別台剛寫入、還沒同步進來：等它進來（非草稿月份會自動更新）再發布，才不會蓋掉
+      showToast('⚠️ 其他裝置剛更新了雲端，正在同步，請幾秒後再按一次發布','warn');
+      finish(); return;
+    }
+    if(clash&&!confirm('⚠️ 你草稿期間，'+clash+' 在雲端被其他裝置改過。\n\n按「確定」＝以這台裝置的草稿為準發布（對方在'+clash+'的修改會被蓋掉）\n按「取消」＝先不要發布')){
+      showToast('已取消發布，草稿仍留在這台裝置','warn');
+      finish(); return;
     }
     _lastKnownTs=myTs;
     return _fbRef.set(data).then(()=>{
-      _cloudConflict=false; _cloudIncoming=null;
+      _cloudConflict=false;
+      _setBase(baseAfter);
+      _heldMonths=new Set(); _heldBaseHash={}; _heldConflict=new Set(); _saveHeld();
       const d=new Date(),p=n=>String(n).padStart(2,'0');
       _lastPublishAt=`${p(d.getHours())}:${p(d.getMinutes())}`;
-      _setDraftDirty(false,true);
-      showToast('🚀 已發布到雲端：大家（含手機看板）現在看到的就是這一版','ok');
-      finish(true);
+      showToast('🚀 已發布 '+label+'：大家（含手機看板）現在看到的就是這一版','ok');
+      finish();
     });
-  }).catch(e=>{ showToast('☁️ 發布失敗: '+e.message+'（草稿仍在本機，可再按一次發布）','warn'); finish(false); });
+  }).catch(e=>{ showToast('☁️ 發布失敗: '+e.message+'（草稿仍在本機，可再按一次發布）','warn'); finish(); });
 }
 
 function openCloudSettings(){
@@ -6418,10 +6567,11 @@ window.onload=()=>{
     initViewMode(); // 依裝置/使用者設定套用看板檢視模式
     updateDraftUI();
     if(restored&&!_viewOnly) showToast('已自動還原上次排班資料');
-    if(_draftMode&&_draftDirty&&!_viewOnly) setTimeout(()=>showToast('📝 這台裝置還有「未發布」的排班草稿，確認後請按「🚀 發布到雲端」','warn'),1200);
-    // 有未發布草稿時關掉分頁會很可惜，離開前提醒一下（瀏覽器統一文案）
+    // 雲端第一份資料進來後草稿月份才確定（舊版草稿要比對過才知道是哪幾個月），晚一點再提醒
+    setTimeout(()=>{ if(_heldMonths.size&&!_viewOnly) showToast('📝 這台裝置還有 '+_heldLabel()+' 的草稿沒發布（雲端仍是上次發布的版本）。要發布請開「📝 草稿模式」按「🚀 發布到雲端」','warn'); },1800);
+    // 草稿模式中有未發布草稿時關分頁，提醒一下（草稿本身會保留在這台裝置，不會不見）
     window.addEventListener('beforeunload',e=>{
-      if(_draftMode&&_draftDirty&&!_viewOnly){ e.preventDefault(); e.returnValue=''; return ''; }
+      if(_draftMode&&_heldMonths.size&&!_viewOnly){ e.preventDefault(); e.returnValue=''; return ''; }
     });
     const savedCloudUrl=getCloudUrl();
     if(savedCloudUrl) initCloud(savedCloudUrl);
