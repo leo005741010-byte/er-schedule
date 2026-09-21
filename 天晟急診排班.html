@@ -1680,6 +1680,14 @@ function getShiftEndTime(slot, split, startDate){
   if(e<=24) return {date:startDate, hour:e};
   return {date:addDays(startDate,1), hour:e%24};
 }
+// 某天某班別「實際」的上下班時間：當日視窗該班別有填自訂時間（HH-HH）就用自訂的，否則照切割點。
+// 休息 12h 的判定都要走這支——只看切割點的話，自訂成 20-02 的小夜仍被當成 17:00 上班，
+// 月曆顯示的時間跟違規判定會對不起來（例：大夜 08:00 下班接 20:00 小夜被誤報休息 9h）。
+function slotSpan(ds,slot,dateStr,split){
+  if(split==null) split=(ds&&ds.split)||defaultSplitFor(dateStr);
+  const r=parseExtraRange(ds&&ds.customTimes&&ds.customTimes[slot])||slotRange(slot,split);
+  return {s:r.s, e:r.e, endDate:r.e<=24?dateStr:addDays(dateStr,1), endHour:r.e<=24?r.e:r.e%24};
+}
 
 function hoursBetween(d1,h1,d2,h2){
   const a=new Date(d1+'T00:00:00Z').getTime()+h1*3600000;
@@ -1734,8 +1742,8 @@ function getLastAssigned(docId, beforeDate, sched){
         const sl=SLOTS[j];
         if(ds[sl]===docId){
           const sp=ds.split||defaultSplitFor(cur);
-          const end=getShiftEndTime(sl,sp,cur);
-          return {date:cur,slot:sl,split:sp,endDate:end.date,endHour:end.hour};
+          const end=slotSpan(ds,sl,cur,sp);   // 有自訂時間就以自訂的下班時間為準
+          return {date:cur,slot:sl,split:sp,endDate:end.endDate,endHour:end.endHour};
         }
       }
       const ex=(ds.extras||[]).find(e=>e.docId===docId);
@@ -1817,7 +1825,7 @@ function canWork(docId, date, slot, sched){
   const last=getLastAssigned(docId,date,sched);
   if(last){
     const end={date:last.endDate,hour:last.endHour};
-    const startH=slotRange(slot,split).s;
+    const startH=slotSpan(sched[date],slot,date,split).s;
     const rest=hoursBetween(end.date,end.hour,date,startH);
     if(rest<12) return false;
   }
@@ -1825,7 +1833,7 @@ function canWork(docId, date, slot, sched){
   // 所以這裡要排的班若離那筆額外班次不足12小時休息，同樣要擋下來。
   const nextExtra=getNextExtra(docId,date,sched);
   if(nextExtra){
-    const {e:endH}=slotRange(slot,split);
+    const {e:endH}=slotSpan(sched[date],slot,date,split);
     const endDate2=endH<=24?date:addDays(date,1);
     if(hoursBetween(endDate2,endH%24,nextExtra.date,nextExtra.startHour)<12) return false;
   }
@@ -1905,12 +1913,12 @@ function canWorkRelaxed(docId, date, slot, sched){
   const last=getLastAssigned(docId,date,sched);
   if(last){
     const end={date:last.endDate,hour:last.endHour};
-    const startH=slotRange(slot,split).s;
+    const startH=slotSpan(sched[date],slot,date,split).s;
     if(hoursBetween(end.date,end.hour,date,startH)<12) return false;
   }
   const nextExtra=getNextExtra(docId,date,sched);
   if(nextExtra){
-    const {e:endH}=slotRange(slot,split);
+    const {e:endH}=slotSpan(sched[date],slot,date,split);
     const endDate2=endH<=24?date:addDays(date,1);
     if(hoursBetween(endDate2,endH%24,nextExtra.date,nextExtra.startHour)<12) return false;
   }
@@ -1986,12 +1994,12 @@ function canWorkForce(docId, date, slot, sched){
   const last=getLastAssigned(docId,date,sched);
   if(last){
     const end={date:last.endDate,hour:last.endHour};
-    if(hoursBetween(end.date,end.hour,date,slotRange(slot,split).s)<12) return false;
+    if(hoursBetween(end.date,end.hour,date,slotSpan(sched[date],slot,date,split).s)<12) return false;
   }
   {
     const nextExtra=getNextExtra(docId,date,sched);
     if(nextExtra){
-      const {e:endH}=slotRange(slot,split);
+      const {e:endH}=slotSpan(sched[date],slot,date,split);
       const endDate2=endH<=24?date:addDays(date,1);
       if(hoursBetween(endDate2,endH%24,nextExtra.date,nextExtra.startHour)<12) return false;
     }
@@ -3596,14 +3604,14 @@ function checkConstraints(dateStr){
     const last=getLastAssigned(docId,dateStr,state.schedule);
     if(last){
       const end={date:last.endDate,hour:last.endHour};
-      const startH=slotRange(slot,sp).s;
+      const startH=slotSpan(ds,slot,dateStr,sp).s;
       const rest=hoursBetween(end.date,end.hour,dateStr,startH);
       if(rest<12) issues.push(`${getDocName(docId)} 休息不足12h (${rest}h)`);
     }
     {
       const nextExtra=getNextExtra(docId,dateStr,state.schedule);
       if(nextExtra){
-        const {e:endH}=slotRange(slot,sp);
+        const {e:endH}=slotSpan(ds,slot,dateStr,sp);
         const endDate2=endH<=24?dateStr:addDays(dateStr,1);
         const rest2=hoursBetween(endDate2,endH%24,nextExtra.date,nextExtra.startHour);
         if(rest2<12) issues.push(`${getDocName(docId)} 與 ${nextExtra.date} 額外班次間休息不足12h (${rest2}h)`);
@@ -3619,13 +3627,14 @@ function checkConstraints(dateStr){
     }
     // Forward check: cross-midnight shift → next-day rest < 12h
     {
-      const {e:_e}=slotRange(slot,sp);
+      const {e:_e}=slotSpan(ds,slot,dateStr,sp);
       if(_e>24){
         const d1=addDays(dateStr,1),d1Sp=getDaySplit(d1),endHr=_e%24;
         for(const sl of SLOTS){
           const s1=state.schedule[d1]||{};
-          if(s1[sl]===docId&&slotRange(sl,d1Sp).s-endHr<12)
-            issues.push(`${getDocName(docId)} ${slot}${String(endHr).padStart(2,'0')}:00下班接隔日${String(slotRange(sl,d1Sp).s).padStart(2,'0')}:00上班（休息不足12h）`);
+          const nxS=slotSpan(s1,sl,d1,d1Sp).s;
+          if(s1[sl]===docId&&nxS-endHr<12)
+            issues.push(`${getDocName(docId)} ${slot}${String(endHr).padStart(2,'0')}:00下班接隔日${String(nxS).padStart(2,'0')}:00上班（休息不足12h）`);
         }
       }
     }
@@ -4744,11 +4753,11 @@ function renderStats(){
         if(ds[sl]!==doc.id) continue;
         if(prev){
           const end={date:prev.endDate,hour:prev.endHour};
-          const rest=hoursBetween(end.date,end.hour,d,slotRange(sl,sp).s);
+          const rest=hoursBetween(end.date,end.hour,d,slotSpan(ds,sl,d,sp).s);
           if(rest<12) hard.push(`${doc.name} ${prev.date} ${prev.slot||'額外班次'}→${d} ${sl} 休息不足12h（${rest}h）`);
         }
-        const endInfo=getShiftEndTime(sl,sp,d);
-        prev={date:d,slot:sl,split:sp,endDate:endInfo.date,endHour:endInfo.hour};
+        const endInfo=slotSpan(ds,sl,d,sp);
+        prev={date:d,slot:sl,split:sp,endDate:endInfo.endDate,endHour:endInfo.endHour};
       }
       if(ex){
         const r=parseExtraRange(ex.timeRange);
