@@ -403,7 +403,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
   <button class="action-btn tb-data" data-pwa-hide onclick="saveData()" title="下載完整JSON備份（含所有月份班表/醫師/預假）">💾 備份</button>
   <button class="action-btn tb-data" data-pwa-hide onclick="loadData()" title="從JSON備份檔還原（會覆蓋現有資料）">📂 還原備份</button>
   <button class="action-btn tb-data" data-pwa-hide onclick="openCloudSettings()">☁️ 雲端設定</button>
-  <button id="btn-draft-mode" class="action-btn tb-data" data-pwa-hide onclick="toggleDraftMode()" title="開啟後排班只存這台裝置，不會自動上傳雲端，等你按「發布」才同步給大家">📝 草稿模式</button>
+  <button id="btn-draft-mode" class="action-btn tb-data" data-pwa-hide onclick="toggleDraftMode()" title="開啟後排班只存這台裝置，不會自動上傳雲端，等你按「發布」才同步給大家（需草稿模式密碼）">📝 草稿模式</button>
   <button id="btn-publish" class="action-btn tb-hidden" data-pwa-hide onclick="publishToCloud()" disabled>✅ 已發布</button>
   <span id="_autosave_ind" style="font-size:11px;color:#a5d6a7;opacity:0;transition:opacity .4s">✓ 已自動存檔</span>
   <span id="_cloud_status" data-pwa-hide style="font-size:11px;color:#ef9a9a">☁️ 未連線</span>
@@ -702,6 +702,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>🔓 結束自動排班<br>🔒 已鎖定</td><td>鎖定/解鎖本月，僅擋「自動排班/清空」，仍可手動改；鎖定後按鈕變紅字「🔒 已鎖定」，再點一次可解鎖。需管理密碼（請洽主管）</td></tr>
         <tr><td>✅ 完成本月<br>✅ 已完成</td><td>完成本月後<strong>整月唯讀，任何更動都無法進行</strong>；按鈕變綠底「✅ 已完成」，再點一次可取消。需管理密碼（請洽主管）</td></tr>
         <tr><td>🗑 清空</td><td>清除本月所有班別（需密碼）</td></tr>
+        <tr><td>📝 草稿模式<br>🚀 發布到雲端</td><td>開啟後排班只存在這台裝置，<strong>不會自動上傳雲端</strong>，其他人看到的仍是上一版；改好後按「🚀 發布到雲端」才同步給大家。再點「📝 草稿模式：開」切回即時同步。開啟需草稿模式密碼（主任專用）</td></tr>
         <tr><td>↩ 還原 / ↪ 重做</td><td>步驟式還原或重做操作</td></tr>
         <tr><td>🖨 生成 PDF</td><td>輸出月曆＋統計報表＋預假預班清單</td></tr>
         <tr><td>🖨 PDF 醫務</td><td>輸出醫務行政格式 PDF（標楷體、民國年）</td></tr>
@@ -5555,7 +5556,7 @@ function updateDraftUI(){
     bd.textContent=_draftMode?'📝 草稿模式：開':'📝 草稿模式';
     bd.title=_draftMode
       ?'目前的修改只存在這台裝置。按「🚀 發布到雲端」才會同步給大家；點此可切回即時同步。'
-      :'開啟後排班只存這台裝置，不會自動上傳雲端，等你按「發布」才同步給大家';
+      :'開啟後排班只存這台裝置，不會自動上傳雲端，等你按「發布」才同步給大家（需草稿模式密碼）';
   }
   const bp=document.getElementById('btn-publish');
   if(bp){
@@ -5573,6 +5574,10 @@ function updateDraftUI(){
 
 function toggleDraftMode(){
   if(!_draftMode){
+    // 草稿模式只給主任用：密碼與一般管理密碼 0320 分開
+    const pwd=prompt('請輸入草稿模式密碼：');
+    if(pwd===null) return;
+    if(pwd!=='03200320'){showToast('❌ 密碼錯誤','warn');return;}
     _draftMode=true;
     try{ localStorage.setItem(DRAFT_MODE_KEY,'1'); }catch(e){}
     updateDraftUI();
