@@ -735,6 +735,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
       </tbody>
     </table>
     <div class="man-note"><strong>🔪 切割點</strong> 早班與小夜的交接時間。預設<strong>平日 20:00、假日 17:00</strong>（含週六日與自訂假日），可在排班表上方兩個下拉選單分別調整。<strong style="color:#c0392b">切割點是「每個月各自」的設定</strong>——工具列會顯示目前月份（例如「9月切割點：」），改它只影響該月，其他月份（含已完成的月份、薪資已結算的月份）完全不受影響；還沒設定過的月份沿用出廠預設（平日 20:00／假日 17:00）。單日若要調整，請在「當日排班」視窗直接修改該班別的<strong>時間欄（HH-HH）</strong>覆寫起訖時間。
+    <br>・<strong>本月已經排好班之後才改切割點</strong>：會詢問要不要把新切割點套用到已排好的日子。按「確定」只改早班／小夜的上下班時間、<strong>不換人</strong>（鎖定的日子／班別、有自訂時間的日子、會讓人休息不足 12 小時的日子不動；改完不滿意可按「↩ 還原」）；按「取消」則只改設定，下次自動排班才套用。因為不換人，<strong>早班／小夜的時數會跟著變</strong>（例：切割點從 20:00 改 16:00，每班小夜從 6 小時變 10 小時），套用後請看統計報表；想拉平可改勾「⚖ 平均」。
     <br>※ 唯一例外：若某人前一天上大夜、隔天接小夜，為滿足 12 小時休息，該日切割點會自動改為 20:00。</div>
     <div class="man-note" style="border-left-color:#6a1b9a"><strong>🏆 績效點值</strong> 統計報表上方的「🏆 績效點值」按鈕。可自行輸入任意筆<strong>績效內容</strong>（例如教學查房、論文發表、品質專案）與該項目的<strong>點值</strong>，再勾選有達成的<strong>專任醫師</strong>；勾到的人該月各加該項目的點值（同一項目每人點值相同，要給不同點數就分成兩個項目）。
     <br>・<strong>每個月各自獨立</strong>，切換統計月份就是在編輯那個月；項目清單空的時候會出現「⧉ 沿用上個月的項目」可一鍵帶入上月內容再修改。
@@ -743,7 +744,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
     <br>・該月按過「完成本月」後，績效點值一併變成唯讀（要改請先取消完成）。</div>
     <div class="man-note" style="border-left-color:#5e35b1"><strong>⚖ 平均（切割點自動均衡）</strong> 排班表上方切割點旁的勾選框，<strong>同樣是逐月設定</strong>（可以 8 月用平均、9 月固定 20:00）。勾選後該月<strong>不分平日／假日</strong>，兩個預設下拉會變灰停用，改由系統<strong>逐日</strong>在 <strong>16:00 / 17:00 / 18:00 / 20:00</strong> 四個切點中挑一個。
     <br>挑選依據是<strong>時數</strong>：早班＋小夜合計固定 18 小時，切割點等於把這 18 小時在兩人之間重新分配，所以系統會把切點往「離個人目標時數還差比較多的那位」偏，讓全科時數盡量拉平（個人目標＝全科平均＋時數偏好×10，仍尊重醫師設定裡的時數偏好）。
-    <br>套用時機：按「⚡ 自動排班」時計算，會連跑 3 輪讓月初、月底一起收斂。<strong>已鎖定的日子／班別、預班指定的自訂時段一律不動</strong>；「大夜隔天接小夜必須 20:00」的 12 小時休息鐵律仍優先於均衡。
+    <br>套用時機：按「⚡ 自動排班」時計算，會連跑 3 輪讓月初、月底一起收斂；本月已經排好班時勾選／取消勾選，也會詢問是否立刻套用到已排好的日子（不換人）。<strong>已鎖定的日子／班別、預班指定的自訂時段一律不動</strong>；「大夜隔天接小夜必須 20:00」的 12 小時休息鐵律仍優先於均衡。
     <br>每天實際的切點不會另外標示（畫面較清爽），要核對請直接看月曆每格顯示的班別起訖時間（例：早班 08:00-17:00 即代表當天切在 17:00）。取消勾選即恢復平日 20:00／假日 17:00 的原本規則。
     <br>※ 與兩個下拉一樣是<strong>全域設定</strong>（跨所有月份），若已有「已完成」月份，切換時會跳出確認視窗提醒時數／點值與薪資試算會跟著變動。</div>
     <h4>月曆顏色說明</h4>
@@ -812,7 +813,8 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
       <li><strong>預假</strong>：選擇醫師、假別（特休/事假/病假…）、日期 → 新增預假</li>
       <li><strong>預班</strong>：選擇醫師、指定班別、日期 → 新增預班</li>
     </ul>
-    <div class="man-note warn"><strong>⚠ 注意</strong> 預假與預班只在「自動排班」時自動套用；手動改班仍然改得動（不會被擋），但只要把有預假的醫師排上去，存檔時會跳提示，統計報表的紅色「違規事項」也會列出來。</div>
+    <div class="man-note warn"><strong>⚠ 注意</strong> 預假與預班只在「自動排班」時自動套用；手動改班仍然改得動（不會被擋），但只要把有預假的醫師排上去，存檔時會跳提示，統計報表的紅色「違規事項」也會列出來。
+    <br>自動排班為了補時數或醫務會議簽到而「擠掉」別人的班時，<strong>不會動到預上班的格子與晨會報告人的出席班</strong>。預上班最後若還是沒排成（例如兩人預同一格），排完會跳提示；手動改班改掉預上班也一樣會提示並列入違規事項。</div>
   </div>
 
   <!-- 6 假日設定 -->
@@ -842,6 +844,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
       </tbody>
     </table>
     <p>統計頁下方顯示違規事項（連班超標、時數不足、醫務會議無法出席等）。<strong>手動改班若把有預假的醫師排上去，也會列在紅色「違規事項」</strong>（存檔當下也會跳提示）。</p>
+    <p><strong>時數下限</strong>：每月 135 小時，<strong>依預假天數打折</strong>＝135 ×（當月天數 − 預假天數）÷ 當月天數。例：31 天的月份請 16 天假，下限約 65 小時。自動排班「強制補時數」那一步與統計報表的「時數不足」提醒都以這個下限為準，不會再為了替請長假的人補滿 135 小時，而去搶別人的預上班、晨會報告班，或用放寬的規則硬補。（排班時仍會「盡量」讓大家接近平均時數，這部分與以前相同。）</p>
   </div>
 
   <!-- 8 自動排班 -->
@@ -1648,21 +1651,109 @@ function changeSplitSetting(which,val){
   const v=clampSplit(parseInt(val,10));
   setCurMonthSplit(which==='holiday' ? {h:v} : {d:v});
   _syncSplitSelects();
+  const r=_applySplitToScheduled(which==='holiday'?'holiday':'weekday'); // 已排好的日子要不要一起改（會詢問）
   autoSave(); renderCalendar();
-  showToast(`🔪 ${state.month+1}月${which==='holiday'?'假日':'平日'}切割點設為 ${String(v).padStart(2,'0')}:00（僅此月份）`);
+  showToast(`🔪 ${state.month+1}月${which==='holiday'?'假日':'平日'}切割點設為 ${String(v).padStart(2,'0')}:00`+_splitApplyMsg(r,false));
+}
+// ===== 改了切割點 → 套用到本月「已排好的日子」（2026-09-22）=====
+// 自動排班會把每天的切割點存進 ds.split，所以只改工具列設定時，已排好的日子不會跟著變
+// （以前提示說改了、月曆卻沒變；當日視窗的切割點下拉又已拿掉 → 只能整月重排）。
+// 現在改設定時若本月已有排好的日子，會詢問要不要一併套用：只改早班／小夜的起訖時間，不換人。
+// 不動：整日鎖定、含鎖定班別的日子、早班／小夜有自訂時間、預班「自訂時段」指定了切割點的日子（同自動排班），
+//      以及新切割點會讓人休息不足 12h 的日子（例：前一天大夜、當天小夜必須 20:00 以後）。
+// scope：'weekday'｜'holiday'｜'all'。回傳 null＝沒有要改的已排日子；{cancel:true}＝使用者選只改設定。
+function _applySplitToScheduled(scope){
+  const y=state.year, m=state.month, dates=monthDates(y,m);
+  const bal=isSplitBalance();
+  const inScope=d=>scope==='all'||((scope==='holiday')===isHoliday(d));
+  const cand=dates.filter(d=>{
+    const ds=state.schedule[d];
+    if(!ds||ds.split==null||!inScope(d)) return false;
+    if(!SLOTS.some(s=>ds[s])) return false;              // 還沒排人的日子本來就照設定顯示
+    return bal||Number(ds.split)!==defaultSplitFor(d);
+  });
+  if(!cand.length) return null;
+  const what=bal?'用「⚖ 平均」重新挑選切割點':'改成新的切割點';
+  if(!confirm(`${m+1}月已經排好班了，要把已排好的 ${cand.length} 天${what}嗎？\n\n`+
+    `・只改早班／小夜的上下班時間，不會換人\n・鎖定的日子／班別、有自訂時間的日子不動\n・會讓人休息不足 12 小時的日子不動\n`+
+    (bal?'':`・早班／小夜的時數會跟著變（常上這兩班的人變動最大），套用後請看統計報表；想拉平時數可改勾「⚖ 平均」，一樣不換人\n`)+
+    `\n確定＝現在套用　　取消＝只改設定，下次自動排班才套用`)) return {cancel:true};
+  pushUndo();
+  const r={applied:0,lock:0,custom:0,rest:0};
+  const todo=[];
+  for(const d of cand){ const why=_splitApplySkip(d); if(why) r[why]++; else todo.push(d); }
+  if(bal){
+    // 與自動排班相同：只拿本月的班算時數（整份 state.schedule 會把其他月份也算進去），跑 3 輪收斂
+    const ms={}; for(const d of dates) if(state.schedule[d]) ms[d]=state.schedule[d];
+    const before={}; for(const d of todo) before[d]=state.schedule[d].split;
+    for(let p=0;p<3;p++){
+      for(const d of todo){
+        const ds=state.schedule[d];
+        const sp=bestSplitForPair(ds['早班'],ds['小夜'],d,ms);
+        if(sp!==ds.split&&_splitRestOK(d,sp)) ds.split=sp;
+      }
+    }
+    for(const d of todo) if(state.schedule[d].split!==before[d]) r.applied++;
+  } else {
+    for(const d of todo){
+      const sp=defaultSplitFor(d);
+      if(!_splitRestOK(d,sp)){ r.rest++; continue; }
+      state.schedule[d].split=sp; r.applied++;
+    }
+  }
+  return r;
+}
+function _splitApplySkip(d){
+  if((state.lockedDays&&state.lockedDays.has(d))||dayHasSlotLock(d)) return 'lock';
+  const ds=state.schedule[d]||{};
+  if(ds.customTimes&&(ds.customTimes['早班']||ds.customTimes['小夜'])) return 'custom';
+  if((state.preRequests[d]||[]).some(pr=>{
+    if(pr.type!=='WORK_CUSTOM'||!pr.custom) return false;
+    const p=parseCustomShift(pr.custom); return !!(p&&p.split!==null);
+  })) return 'custom';
+  return '';
+}
+// 這一天改用切割點 sp 後，小夜醫師（上班時間跟著變）與早班醫師（下班時間跟著變）的 12h 休息是否仍成立。
+// 與統計報表同一套判定（getLastAssigned／slotSpan／額外班次），主白與大夜的時間不受切割點影響。
+function _splitRestOK(d,sp){
+  const ds=state.schedule[d]||{};
+  const late=ds['小夜'];
+  if(late){
+    const last=getLastAssigned(late,d,state.schedule);
+    if(last&&hoursBetween(last.endDate,last.endHour,d,slotSpan(ds,'小夜',d,sp).s)<12) return false;
+  }
+  const early=ds['早班'];
+  if(early){
+    const e=slotSpan(ds,'早班',d,sp);
+    const nd=addDays(d,1), nds=state.schedule[nd]||{};
+    for(const sl of SLOTS){
+      if(nds[sl]===early&&hoursBetween(e.endDate,e.endHour,nd,slotSpan(nds,sl,nd).s)<12) return false;
+    }
+    const nx=getNextExtra(early,d,state.schedule);
+    if(nx&&hoursBetween(e.endDate,e.endHour,nx.date,nx.startHour)<12) return false;
+  }
+  return true;
+}
+function _splitApplyMsg(r,bal){
+  if(!r) return '（僅此月份）';
+  if(r.cancel) return '（只改設定；已排好的日子維持原樣，下次自動排班才套用）';
+  const skip=[r.lock&&`鎖定 ${r.lock} 天`,r.custom&&`自訂時間 ${r.custom} 天`,r.rest&&`休息不足12h ${r.rest} 天`].filter(Boolean);
+  return (bal?`，已排好的日子重新挑選完成（改了 ${r.applied} 天，不換人）`:`，已套用到已排好的 ${r.applied} 天（不換人）`)
+    +(skip.length?`；未改：${skip.join('、')}`:'');
 }
 // 「⚖ 平均」勾選：不分平假日，每天的切割點由系統在 16/17/18/20 之間依各醫師時數均衡挑選。
-// 只影響「自動排班」與尚未指定切割點的日子；已存檔的 ds.split（含手動指定、鎖定日）不會被動到。
+// 影響自動排班與尚未排班的日子；本月已排好的日子會詢問是否一併重新挑選（_applySplitToScheduled，鎖定日不動）。
 function toggleSplitBalance(checked){
   if(blockIfViewOnly()){ _syncSplitSelects(); return; }
   if(blockIfCompleted()){ _syncSplitSelects(); return; }
   setCurMonthSplit({bal:!!checked});
   _syncSplitSelects();
+  const r=_applySplitToScheduled('all'); // 已排好的日子要不要一起改（會詢問）
   autoSave(); renderCalendar();
   const mm=state.month+1;
-  showToast(checked
-    ? `⚖ ${mm}月已開啟「平均」切割點：不分平假日，下次自動排班會在 16/17/18/20 之間依時數均衡挑選（僅此月份）。`
-    : `${mm}月已關閉「平均」切割點，恢復該月的平日／假日設定。`);
+  showToast((checked
+    ? `⚖ ${mm}月已開啟「平均」切割點：不分平假日，在 16/17/18/20 之間依時數均衡挑選`
+    : `${mm}月已關閉「平均」切割點，恢復該月的平日／假日設定`)+_splitApplyMsg(r,!!checked));
 }
 // 切割點：依「該日期所屬月份」的設定（出廠值平日 20:00／假日 17:00，可於工具列逐月調整）；
 // 平均模式不分平假日，統一用中性基準。跨月查前/後一天時也會自動套用那一天所屬月份的設定。
@@ -2157,6 +2248,58 @@ function countDocOffDays(docId,y=state.year,m=state.month){
   return cnt;
 }
 
+// ===== 每月時數下限：135h 依預假天數打折（2026-09-22 使用者決定）=====
+// 原本 135h 對每位專任醫師一律適用，補時數那一步還寫「鐵則不豁免」：請長假的人會被逼到
+// 連上好幾天、甚至去搶別人的預上班與晨會報告班，最後仍補不到 135h（評分與統計報表卻早就有放寬，三處不一致）。
+// 下限 = 135 × (當月天數 − 預假天數) ÷ 當月天數；預假天數＝countDocOffDays（OFF 類預假，同一天只算一次）。
+// ⚠ 補時數（Pass A/B）、擠人時保護被擠者、時數再平衡、醫務會議擠人、評分（evaluateSchedule）、統計報表都只能從這支取，
+//   勿再寫死 135。唯一例外是 scoreDoc 的「135h 軟性拉力」（刻意維持固定值，原因見該處註解）。
+const MIN_HOURS_BASE=135;
+function minHoursFor(docId,y=state.year,m=state.month){
+  const dim=daysInMonth(y,m);
+  const off=Math.min(dim,countDocOffDays(docId,y,m));
+  return MIN_HOURS_BASE*(dim-off)/dim;
+}
+let _minHrs=null; // _generateOnce 開始時算好（排班過程中預假不會變），補時數／擠人／再平衡直接讀
+function _minH(docId){ return (_minHrs&&_minHrs[docId]!=null)?_minHrs[docId]:minHoursFor(docId); }
+function _fmtH(h){ return String(Math.round(h*10)/10); } // 顯示用：130.6、135
+
+// 預上班（WORK_*）指定的是哪一格；「自訂時段」依時間換算成班別。不是預上班回傳 null。
+function _prWorkSlot(pr){
+  if(!pr||typeof pr.type!=='string'||!pr.type.startsWith('WORK_')) return null;
+  if(pr.type==='WORK_CUSTOM'){ const p=parseCustomShift(pr.custom); return p?p.slot:null; }
+  const s=pr.type.slice(5);
+  return SLOTS.includes(s)?s:null;
+}
+// 自動排班「擠人補時數／搬班」時不可動的格子（2026-09-22）；回傳原因代碼，空字串＝可以動：
+//   work   該醫師當天預上班的就是這一格
+//   report 他是晨會報告人，拿掉這格報告日就無法出席（週四主白/早班，或週三大夜接晨會）
+//   med    勾醫務會議者本月唯一的週四白班
+// 原本只有「時數再平衡」擋預班格；補時數的擠人、醫務會議強制簽到的擠人都沒擋，
+// 請長假的月份會把別人的預上班、報告人的班整格搶走。sched 需能跨月查前後一天（自動排班傳 fullSched）。
+function _protectedSlotReason(sched,d,slot,occ){
+  if(!occ) return '';
+  for(const pr of (state.preRequests[d]||[])) if(pr.docId===occ&&_prWorkSlot(pr)===slot) return 'work';
+  if(slot==='主白'||slot==='早班'){
+    if(isReporterOn(occ,d)&&(sched[addDays(d,-1)]||{})['大夜']!==occ) return 'report';
+  } else if(slot==='大夜'){
+    const t=addDays(d,1);
+    if(isReporterOn(occ,t)){
+      const ts=sched[t]||{};
+      if(ts['主白']!==occ&&ts['早班']!==occ) return 'report';
+    }
+  }
+  if((slot==='主白'||slot==='早班')&&getDOW(d)===3){
+    const doc=state.doctors.find(x=>x.id===occ);
+    if(doc&&doc.prefs.medMeeting){
+      const p=d.split('-').map(Number);
+      const n=monthDates(p[0],p[1]-1).filter(x=>getDOW(x)===3&&((sched[x]||{})['主白']===occ||(sched[x]||{})['早班']===occ)).length;
+      if(n<=1) return 'med';
+    }
+  }
+  return '';
+}
+
 // 一批候選人共用的時數/點值快取。
 // 同一個 (日期,班別) 的所有候選人在評分當下看到的 sched 完全相同
 //（scoreDoc 內部的暫排會立即還原），因此把 calcDocHours/calcDocPoints/avgHours/avgPoints
@@ -2227,7 +2370,10 @@ function scoreDoc(docId, date, slot, sched, _pre){
   if(devH>0)  score-=devH*12;
   if(devH>10) score-=(devH-10)*30;
   if(myH<targetH-10) score+=10;
-  // 135h minimum: iron rule — always pull regardless of OFF days
+  // 135h 軟性拉力：排班時「盡量」把大家拉到 135h 以上（只影響挑誰，不會強迫、不會擠人）。
+  // ⚠ 這裡刻意維持固定 135、不跟著預假打折：2026-09-22 沙盒實測打折後，請假者前半月被分到的班變少，
+  //   回來時落後全科平均太多，月底被密集補班（10 月實際資料 15 次有 4 次排出 9 連班）；維持 135 則一般月份結果與改版前相同。
+  //   會強迫補班／擠人的「時數下限」在補時數那一步，那裡才依預假打折（minHoursFor）。
   if(myH<135) score+=(135-myH)*10;
   // 轉班懲罰：以「若排此班」後的整月實際轉班數計算（含前後雙向），目標≤3次
   if(sched[date]&&!sched[date][slot]){
@@ -2379,15 +2525,21 @@ function autoSchedule(){
   renderCalendar();
   switchTab('schedule');
   const empty=countEmpty(best);
-  showToast(empty>0
-    ?`排班完成，但有 ${empty} 個空缺，請手動補填。`
-    :'✅ 自動排班完成！',empty>0?'warn':'ok');
+  // 空缺之外，預上班沒排成／報告人沒排到也要講（例：兩人預同一格、休息規則擋住），這些只能人工處理
+  const probs=[];
+  if(empty>0) probs.push(`${empty} 個空缺`);
+  if(bestEval.prMiss) probs.push(`${bestEval.prMiss} 筆預上班沒排成`);
+  if(bestEval.repMiss) probs.push(`${bestEval.repMiss} 個晨會報告日的報告人沒排到`);
+  showToast(probs.length
+    ?`排班完成，但有 ${probs.join('、')}，請手動調整（統計報表的違規事項有明細）。`
+    :'✅ 自動排班完成！',probs.length?'warn':'ok');
 }
 
 function _generateOnce(y,m,dates){
   const newSched={};
   const LK=state.lockedDays||new Set(); // 已鎖定的日期，自動排班全程不更動
   _nightQuotas=computeNightQuotas(y,m,dates); // 夜班均衡配額（scoreDoc 讀取）
+  _minHrs={}; for(const doc of state.doctors) _minHrs[doc.id]=minHoursFor(doc.id,y,m); // 各人時數下限（依預假打折）
 
   for(const d of dates){
     const existing=state.schedule[d]||{};
@@ -2527,15 +2679,17 @@ function _generateOnce(y,m,dates){
     }
   }
 
-  // 4th pass: force doctors to 135h minimum (iron rule — no exemptions)
-  // First try empty slots; if still short, displace a doctor who is already over 135h
+  // 4th pass: 補到各人的時數下限（135h 依預假天數打折，見 minHoursFor；2026-09-22 前是一律 135h 不豁免）
+  // First try empty slots; if still short, displace a doctor who stays above his own minimum after giving up the slot
+  // 擠人時不動：預上班、晨會報告人的出席班、醫務會議唯一的週四白班（_protectedSlotReason）
   for(let attempt=0;attempt<10;attempt++){
     let anyProgress=false;
     const tryDates=attempt===0?[...dates]:shuffle([...dates]);
     for(const doc of state.doctors.filter(d=>d.type==='full')){
-      if(calcDocHours(doc.id,newSched)>=135) continue;
+      const need=_minH(doc.id);
+      if(calcDocHours(doc.id,newSched)>=need) continue;
       for(const d of tryDates){
-        if(calcDocHours(doc.id,newSched)>=135) break;
+        if(calcDocHours(doc.id,newSched)>=need) break;
         if(LK.has(d)) continue; // 鎖定日不動
         if(SLOTS.some(s=>newSched[d][s]===doc.id)) continue; // already working this day
         // Pass A: fill empty slot（優先挑「排下去後轉班數最少」的格子）
@@ -2558,15 +2712,16 @@ function _generateOnce(y,m,dates){
           newSched[d][candA[0].slot]=doc.id; anyProgress=true; filled=true;
         }
         if(filled) continue;
-        // Pass B: displace an over-135h occupant（同樣優先挑轉班數最少的格子）
+        // Pass B: displace an occupant who stays above his own minimum（同樣優先挑轉班數最少的格子）
         const candB=[];
         for(const slot of SLOTS){
           if(isSlotLocked(d,slot)) continue; // 鎖定格不擠人
           const occupant=newSched[d][slot];
           if(!occupant) continue;
+          if(_protectedSlotReason(fullSched,d,slot,occupant)) continue; // 預上班／報告人出席班／唯一醫務會議班不擠
           const sp=newSched[d].split||defaultSplitFor(d);
           const occupantH=calcDocHours(occupant,newSched);
-          if(occupantH-slotHours(slot,sp)<135) continue; // occupant would fall below 135h
+          if(occupantH-slotHours(slot,sp)<_minH(occupant)) continue; // occupant would fall below his own minimum
           newSched[d][slot]=null;
           const ok=canWork(doc.id,d,slot,fullSched)||canWorkRelaxed(doc.id,d,slot,fullSched)||canWorkForce(doc.id,d,slot,fullSched);
           if(ok){
@@ -2670,7 +2825,7 @@ function _generateOnce(y,m,dates){
           if(!newSched[thu][slot]&&!isSlotLocked(thu,slot)) tryOpt(thu,slot,null);
         }
       }
-      // 第二階段：擠掉別人（strict=不害對方<135h；放寬版本墊後）
+      // 第二階段：擠掉別人（strict=不害對方低於自己的時數下限；放寬版本墊後）
       for(const strict of [true,false]){
         for(const thu of usableThus){
           for(const slot of ['主白','早班']){
@@ -2679,9 +2834,10 @@ function _generateOnce(y,m,dates){
             if(!occ) continue;
             const occDoc=state.doctors.find(x=>x.id===occ);
             if(occDoc&&occDoc.prefs.medMeeting&&dayCoverCnt(occ)<=1) continue; // 不搶唯一簽到格
+            if(_protectedSlotReason(fullSched,thu,slot,occ)) continue;          // 不搶預上班／晨會報告人的出席班
             if(strict){
               const sp=newSched[thu].split||defaultSplitFor(thu);
-              if(calcDocHours(occ,newSched)-slotHours(slot,sp)<135) continue;
+              if(calcDocHours(occ,newSched)-slotHours(slot,sp)<_minH(occ)) continue;
             }
             if(!options.some(o=>o.thu===thu&&o.slot===slot)) tryOpt(thu,slot,occ);
           }
@@ -2697,6 +2853,7 @@ function _generateOnce(y,m,dates){
     }
   }
 
+  _minHrs=null; // 下限快取只在這一輪排班內有效
   return newSched;
 }
 
@@ -2763,7 +2920,7 @@ function _removeRestViolations(newSched,dates){
   return removed;
 }
 
-// 時數再平衡：把最超標者的班移給最不足者（守住所有鐵律：預假/鎖定/休息/135h/醫務會議/轉班≤3/不交替大夜）
+// 時數再平衡：把最超標者的班移給最不足者（守住所有鐵律：預假/鎖定/休息/時數下限/醫務會議/晨會報告/預上班/轉班≤3/不交替大夜）
 function _rebalanceHours(newSched,fullSched,dates){
   const LK=state.lockedDays||new Set();
   const full=state.doctors.filter(x=>x.type==='full');
@@ -2782,14 +2939,16 @@ function _rebalanceHours(newSched,fullSched,dates){
         if(sl==='大夜'&&(taker.doc.prefs['大夜']||0)<0) continue;
         // 不動預班格
         if((state.preRequests[d]||[]).some(pr=>pr.docId===giver.doc.id&&pr.type&&pr.type.startsWith('WORK'))) continue;
+        // 不動晨會報告人的出席班（與補時數擠人共用同一支判斷；唯一醫務會議班下面另有檢查）
+        if(_protectedSlotReason(fullSched,d,sl,giver.doc.id)) continue;
         // 不拆超標者唯一的醫務會議覆蓋
         if(giver.doc.prefs.medMeeting&&getDOW(d)===3&&(sl==='主白'||sl==='早班')){
           const cover=thursdays.filter(x=>newSched[x]['主白']===giver.doc.id||newSched[x]['早班']===giver.doc.id).length;
           if(cover<=1) continue;
         }
-        // 超標者移除後不可低於135h
+        // 超標者移除後不可低於自己的時數下限（135h 依預假打折）
         const sp=ds.split||defaultSplitFor(d);
-        if(giver.h-slotHours(sl,sp)<135) continue;
+        if(giver.h-slotHours(sl,sp)<_minH(giver.doc.id)) continue;
         // 搬走大夜不可讓原主人形成「夜-休-夜」交替（精確模擬移除前後比較）
         if(sl==='大夜'){
           const gAlt=()=>{let c=0;for(let i=0;i<dates.length-2;i++){const a=(newSched[dates[i]]||{})['大夜']===giver.doc.id,b=(newSched[dates[i+1]]||{})['大夜']===giver.doc.id,e=(newSched[dates[i+2]]||{})['大夜']===giver.doc.id;if(a&&!b&&e)c++;}return c;};
@@ -2883,7 +3042,7 @@ function evaluateSchedule(sched,dates){
   const pSd=sd(pts);
   // 時數偏好說了算：以「偏離個人目標(平均+htPref×10)」評分，而非拉平所有人
   let tgtDev=0, hardDev=0;
-  let turnTotal=0, turnExcess=0, consecViol=0, under135=0;
+  let turnTotal=0, turnExcess=0, consecViol=0, underMin=0;
   for(const doc of full){
     const rec=perDoc[doc.id];
     const offDays=countDocOffDays(doc.id,y,m);
@@ -2899,7 +3058,23 @@ function evaluateSchedule(sched,dates){
     if(rec.turn>3) turnExcess+=rec.turn-3; // 目標≤3次，超過部分重罰
     const maxC=doc.prefs.maxConsec||6;
     if(rec.consecMax>maxC) consecViol+=rec.consecMax-maxC;
-    if(rec.h<135&&offDays<=10) under135+=135-rec.h; // 預假多者不重罰
+    // 時數下限依預假天數打折（minHoursFor），取代原本「預假>10天就不罰」的特例
+    const minH=minHoursFor(doc.id,y,m);
+    if(rec.h<minH) underMin+=minH-rec.h;
+  }
+  // 預上班沒照排、晨會報告人沒排到：鐵則級（與空缺同重），10 次重排時優先挑沒有這類違規的版本
+  //（2026-09-22 實測：請長假的月份，原本「跑 10 次取最佳」反而偏好擠掉預上班的版本，因為時數比較平均）
+  let prMiss=0, repMiss=0;
+  for(const d of dates){
+    for(const pr of (state.preRequests[d]||[])){
+      const sl=_prWorkSlot(pr);
+      if(sl&&(sched[d]||{})[sl]!==pr.docId) prMiss++;
+    }
+  }
+  for(const thu of _repDaysOf(y,m)){
+    const wed=addDays(thu,-1);
+    const t=sched[thu]||{}, w=sched[wed]||state.schedule[wed]||{};
+    for(const id of reportersOn(thu)) if(t['主白']!==id&&t['早班']!==id&&w['大夜']!==id) repMiss++;
   }
   // 大夜「上1休1上1」交替：任一醫師 大夜(d)、休(d+1)、大夜(d+2) 記一次
   let altNight=0;
@@ -2952,10 +3127,12 @@ function evaluateSchedule(sched,dates){
   score-=turnExcess*200; // 轉班>3：鐵律級
   score-=turnTotal*1.5;
   score-=consecViol*120; // 連班超標：原本僅 8，10 次重排幾乎不會為此換版本；提高到僅次於空缺(300)
-  score-=under135*0.4;
+  score-=underMin*0.4;
+  score-=prMiss*300;     // 預上班沒照排：鐵律級
+  score-=repMiss*300;    // 晨會報告人沒排到：鐵律級
   // 分數僅供內部挑最佳比較，可為負值（勿再夾0：會讓所有候選同分、挑選退化成亂數）
   score=Math.round(score);
-  return {score,empty,hSd:Math.round(hSd*10)/10,pSd:Math.round(pSd*10)/10,turnTotal,consecViol};
+  return {score,empty,hSd:Math.round(hSd*10)/10,pSd:Math.round(pSd*10)/10,turnTotal,consecViol,prMiss,repMiss};
 }
 
 function shuffle(arr){
@@ -3662,6 +3839,11 @@ function checkConstraints(dateStr){
       if(ds[sl]===pr.docId&&prLimitBlocks(pr.type,sl))
         issues.push(`${getDocName(pr.docId)} 當天預班「${prLabel(pr)}」卻排了${sl}`);
     }
+  }
+  // 手動改班改掉了預上班（統計報表「違規事項」也會列出同一筆）
+  for(const pr of (state.preRequests[dateStr]||[])){
+    const sl=_prWorkSlot(pr); if(!sl||ds[sl]===pr.docId) continue;
+    issues.push(`${getDocName(pr.docId)} 預上班「${prLabel(pr)}」，但${sl}${ds[sl]?'排的是'+getDocName(ds[sl]):'是空的'}`);
   }
   return issues;
 }
@@ -4680,7 +4862,8 @@ function renderStats(){
       }
     }
     const offDays=countDocOffDays(doc.id,_statsYear,_statsMonth);
-    if(totalH<135) soft.push(`${doc.name} 時數不足135h（實際${totalH}h，預假${offDays}天）`);
+    const minH=minHoursFor(doc.id,_statsYear,_statsMonth); // 135h 依預假天數打折
+    if(totalH<minH) soft.push(`${doc.name} 時數不足下限 ${_fmtH(minH)}h（實際${totalH}h${offDays?`；預假${offDays}天，下限＝135×可上班天數÷當月天數`:''}）`);
     const availScale2=Math.max(0.25,1-offDays/30);
     const tgtH=avgHrs+(doc.prefs.htPref||0)*availScale2*10;
     if(offDays<=15&&Math.abs(totalH-tgtH)>20) soft.push(`${doc.name} 時數偏離目標(實際${totalH}h vs 目標${Math.round(tgtH)}h)`);
@@ -4730,6 +4913,16 @@ function renderStats(){
         if(ds[sl]===pr.docId&&prLimitBlocks(pr.type,sl))
           hard.push(`${getDocName(pr.docId)} ${d} 排了${sl}，但當天預班「${lbl}」`);
       }
+    }
+  }
+  // 預上班沒照排：自動排班沒排成（例：兩人預同一格）或手動改班改掉了——2026-09-22 前完全沒檢查。
+  // 整天都還沒排的日子跳過（屬「尚未排班」，空缺數已另計，不然還沒排的月份會整排洗版）
+  for(const d of dates){
+    const ds=state.schedule[d]||{};
+    if(!SLOTS.some(s=>ds[s])) continue;
+    for(const pr of (state.preRequests[d]||[])){
+      const sl=_prWorkSlot(pr); if(!sl||ds[sl]===pr.docId) continue;
+      hard.push(`${getDocName(pr.docId)} ${d} 預上班「${_escHtml(prLabel(pr))}」，但${sl}${ds[sl]?'排的是'+getDocName(ds[sl]):'是空缺'}`);
     }
   }
   // 手動排班把關：休息不足12h／N-OFF-D／同日重複（自動排班不會產生，人工調班可能）
