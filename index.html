@@ -6599,6 +6599,8 @@ function generateMedPDF(){
 // ============================================================
 // 加班單 PDF（天晟醫院 醫師加班申請表，每位主治醫師一張 A4）
 // ============================================================
+// 不產生加班單的醫師（依姓名比對；班表、統計、值班表照常顯示）
+const OT_EXCLUDE_NAMES=['謝見杰'];
 function generateOvertimePDF(){
   const y=state.year, m=state.month;
   const dates=monthDates(y,m);
@@ -6613,6 +6615,7 @@ function generateOvertimePDF(){
 
   let pages='';
   for(const doc of docsOrdered()){
+    if(OT_EXCLUDE_NAMES.includes((doc.name||'').trim())) continue; // 不需印加班單的醫師
     const rows=[];
     for(const d of dates){
       const ds=state.schedule[d]||{};
