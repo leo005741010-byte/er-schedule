@@ -790,7 +790,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>時數偏好</td><td><strong>僅 +1 / 0 / -1</strong>（每級 10 小時），目標＝全體平均 ± 10h；避免醫師間時數差距過大</td></tr>
         <tr><td>連班上限</td><td>連續上班天數最大值，超過觸發違規警告</td></tr>
         <tr><td>不排白班</td><td>勾選後僅排小夜或大夜</td></tr>
-        <tr><td>可 N OFF D</td><td>解除該醫師的「大夜 → 休一天 → 白班」禁令。<strong>不勾（預設）</strong>＝維持鐵律，自動排班不會排、手動排到會列入違規事項；<strong>勾選</strong>＝允許這樣接班，也不再報違規。12 小時休息與其他規則不受影響。</td></tr>
+        <tr><td>可 N OFF D</td><td>解除該醫師的「大夜 → 休一天 → 白班」禁令。<strong>不勾（預設）</strong>＝維持鐵律，自動排班不會排、手動排到會列入違規事項；<strong>勾選</strong>＝允許這樣接班，也不再報違規。休息時數與其他規則不受影響。</td></tr>
         <tr><td>醫務會議</td><td><strong>強制</strong>每月至少排一個週四主白/早班供簽到（僅在整月週四皆預假/鎖定時例外，統計會警告）</td></tr>
         <tr><td>晨會報告</td><td>系統確認報告週四當天有主白/早班，或前天有大夜。<strong>這是預設值</strong>：某月若已用排班表的「📢 晨會報告」指派報告人，該月一律以指派為準，不看這個勾選</td></tr>
       </tbody>
@@ -835,7 +835,7 @@ body.mobile-view .legend-item .color-dot{width:8px;height:8px;}
         <tr><td>📊 當月合計</td><td>所有醫師時數與點值加總（含 ICU 點值合計）</td></tr>
       </tbody>
     </table>
-    <p>統計頁下方顯示違規事項（連班超標、時數不足、醫務會議無法出席等）。<strong>手動改班若把有預假的醫師排上去，也會列在紅色「違規事項」</strong>（存檔當下也會跳提示）。</p>
+    <p>統計頁下方顯示違規事項（連班超標、時數不足、醫務會議無法出席等）。<strong>休息不足 10 小時</strong>才列違規（自動排班仍以 12 小時排）；同一天兩段班中間只休 2 小時內（例：楊天 12-19、休 1 小時、小夜 20-02）算同一段上班，不算違規。<strong>手動改班若把有預假的醫師排上去，也會列在紅色「違規事項」</strong>（存檔當下也會跳提示）。</p>
     <p><strong>時數下限</strong>：每月 135 小時，<strong>依預假天數打折</strong>＝135 ×（當月天數 − 預假天數）÷ 當月天數。例：31 天的月份請 16 天假，下限約 65 小時。自動排班「強制補時數」那一步與統計報表的「時數不足」提醒都以這個下限為準，不會再為了替請長假的人補滿 135 小時，而去搶別人的預上班、晨會報告班，或用放寬的規則硬補。（排班時仍會「盡量」讓大家接近平均時數，這部分與以前相同。）</p>
   </div>
 
@@ -3775,7 +3775,7 @@ function checkConstraints(dateStr){
       const end={date:last.endDate,hour:last.endHour};
       const startH=slotSpan(ds,slot,dateStr,sp).s;
       const rest=hoursBetween(end.date,end.hour,dateStr,startH);
-      if(rest<12) issues.push(`${getDocName(docId)} 休息不足12h (${rest}h)`);
+      if(rest<10) issues.push(`${getDocName(docId)} 休息不足10h (${rest}h)`);   // 違規以 10 小時判定（自動排班仍排 12 小時）
     }
     {
       const nextExtra=getNextExtra(docId,dateStr,state.schedule);
@@ -3783,7 +3783,7 @@ function checkConstraints(dateStr){
         const {e:endH}=slotSpan(ds,slot,dateStr,sp);
         const endDate2=endH<=24?dateStr:addDays(dateStr,1);
         const rest2=hoursBetween(endDate2,endH%24,nextExtra.date,nextExtra.startHour);
-        if(rest2<12) issues.push(`${getDocName(docId)} 與 ${nextExtra.date} 額外班次間休息不足12h (${rest2}h)`);
+        if(rest2<10) issues.push(`${getDocName(docId)} 與 ${nextExtra.date} 額外班次間休息不足10h (${rest2}h)`);
       }
     }
     const _cnDoc=state.doctors.find(x=>x.id===docId); // 勾「可 N OFF D」者不報 N-OFF-D
@@ -3794,7 +3794,7 @@ function checkConstraints(dateStr){
       if(s2['大夜']===docId&&!SLOTS.some(s=>s1[s]===docId))
         issues.push(`${getDocName(docId)} 違反 N-OFF-D（大夜休一天接08上班）`);
     }
-    // Forward check: cross-midnight shift → next-day rest < 12h
+    // Forward check: cross-midnight shift → next-day rest < 10h
     {
       const {e:_e}=slotSpan(ds,slot,dateStr,sp);
       if(_e>24){
@@ -3802,8 +3802,8 @@ function checkConstraints(dateStr){
         for(const sl of SLOTS){
           const s1=state.schedule[d1]||{};
           const nxS=slotSpan(s1,sl,d1,d1Sp).s;
-          if(s1[sl]===docId&&nxS-endHr<12)
-            issues.push(`${getDocName(docId)} ${slot}${String(endHr).padStart(2,'0')}:00下班接隔日${String(nxS).padStart(2,'0')}:00上班（休息不足12h）`);
+          if(s1[sl]===docId&&nxS-endHr<10)
+            issues.push(`${getDocName(docId)} ${slot}${String(endHr).padStart(2,'0')}:00下班接隔日${String(nxS).padStart(2,'0')}:00上班（休息不足10h）`);
         }
       }
     }
@@ -4917,43 +4917,44 @@ function renderStats(){
       hard.push(`${getDocName(pr.docId)} ${d} 預上班「${_escHtml(prLabel(pr))}」，但${sl}${ds[sl]?'排的是'+getDocName(ds[sl]):'是空缺'}`);
     }
   }
-  // 手動排班把關：休息不足12h／N-OFF-D／同日重複（自動排班不會產生，人工調班可能）
-  // 額外班次(楊天/ICU/病房)也算進 prev 時間軸——同一人不可能同時分身，也不能無視休息時間銜接。
+  // 手動排班把關：休息不足10h／N-OFF-D／同日重複（自動排班不會產生，人工調班可能）
+  // 主要班別與額外班次(楊天/ICU/病房/中天)依上班時間排成同一條時間軸——同一人不可能同時分身，也不能無視休息時間銜接。
+  // 休息不足 10 小時才算違規（自動排班仍以 12 小時排）。同一天兩段班中間只隔 2 小時內
+  // （例：楊天 12-19、休 1 小時、小夜 20-02）算同一段上班的中間休息，不算休息不足；
+  // 同一天兩段班真的時間重疊，由下方「同一醫師時段重疊」列出。
+  const REST_MIN_H=10, BREAK_MAX_H=2;
+  const absH=(date,h)=>Date.parse(date+'T00:00:00Z')/3600000+h;
   for(const doc of state.doctors){
     if(doc.type==='part') continue;
-    let prev=getLastAssigned(doc.id,dates[0],state.schedule); // 含上月月底的班，跨月違規也抓得到
+    const last=getLastAssigned(doc.id,dates[0],state.schedule); // 含上月月底的班，跨月違規也抓得到
+    let prev=last?{date:last.date,label:last.slot||'額外班次',end:absH(last.endDate,last.endHour)}:null;
     for(const d of dates){
       const ds=state.schedule[d]||{};
       const sp=ds.split||defaultSplitFor(d);
       const dayShifts=SLOTS.filter(sl=>ds[sl]===doc.id);
-      const ex=getExtraForDoc(ds,doc.id);
       if(dayShifts.length>1) hard.push(`${doc.name} ${d} 同日重複排班（${dayShifts.join('、')}）`);
-      if(ex&&dayShifts.length) hard.push(`${doc.name} ${d} 同日重複排班（${dayShifts.join('、')}與額外班次${kindInfo(ex.kind).name}重疊）`);
       if(ds['大夜']===doc.id&&!doc.prefs.nOffD){ // 勾「可 N OFF D」者允許大夜→休一天→白班
         const s1=state.schedule[addDays(d,1)]||{}, s2=state.schedule[addDays(d,2)]||{};
         if(!SLOTS.some(s=>s1[s]===doc.id)&&(s2['主白']===doc.id||s2['早班']===doc.id))
           hard.push(`${doc.name} ${d} 大夜休一天接白班（違反 N-OFF-D）`);
       }
-      for(const sl of SLOTS){
-        if(ds[sl]!==doc.id) continue;
-        if(prev){
-          const end={date:prev.endDate,hour:prev.endHour};
-          const rest=hoursBetween(end.date,end.hour,d,slotSpan(ds,sl,d,sp).s);
-          if(rest<12) hard.push(`${doc.name} ${prev.date} ${prev.slot||'額外班次'}→${d} ${sl} 休息不足12h（${rest}h）`);
-        }
-        const endInfo=slotSpan(ds,sl,d,sp);
-        prev={date:d,slot:sl,split:sp,endDate:endInfo.endDate,endHour:endInfo.endHour};
-      }
-      if(ex){
+      const segs=dayShifts.map(sl=>{ const t=slotSpan(ds,sl,d,sp); return {s:t.s,e:t.e,label:sl}; });
+      for(const ex of (ds.extras||[])){
+        if(ex.docId!==doc.id) continue;
         const r=parseExtraRange(ex.timeRange);
-        if(r){
-          if(prev){
-            const end={date:prev.endDate,hour:prev.endHour};
-            const rest=hoursBetween(end.date,end.hour,d,r.s);
-            if(rest<12) hard.push(`${doc.name} ${prev.date} ${prev.slot||'額外班次'}→${d} 額外班次(${kindInfo(ex.kind).name}) 休息不足12h（${rest}h）`);
-          }
-          prev={date:d,slot:null,split:null,endDate:(r.e<=24?d:addDays(d,1)),endHour:r.e%24};
+        if(r) segs.push({s:r.s,e:r.e,label:`額外班次(${kindInfo(ex.kind).name})`});
+      }
+      segs.sort((a,b)=>a.s-b.s);
+      for(const g of segs){
+        if(prev){
+          const rest=absH(d,g.s)-prev.end;
+          const sameDay=prev.date===d;
+          if(rest<0&&!sameDay) hard.push(`${doc.name} ${prev.date} ${prev.label}→${d} ${g.label} 時段重疊`);
+          else if(rest>=0&&rest<REST_MIN_H&&!(sameDay&&rest<=BREAK_MAX_H))
+            hard.push(`${doc.name} ${prev.date} ${prev.label}→${d} ${g.label} 休息不足10h（${rest}h）`);
         }
+        const end=absH(d,g.e);
+        if(!prev||end>prev.end) prev={date:d,label:g.label,end};
       }
     }
   }
